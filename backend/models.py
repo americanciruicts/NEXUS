@@ -102,6 +102,14 @@ class Traveler(Base):
     work_center = Column(String(20), nullable=False)
     status = Column(Enum(TravelerStatus), default=TravelerStatus.CREATED)
     notes = Column(Text)
+    specs = Column(Text)  # Specifications
+    specs_date = Column(String(20))  # Specifications date
+    from_stock = Column(String(100))  # From Stock location
+    to_stock = Column(String(100))  # To Stock location
+    ship_via = Column(String(100))  # Shipping method
+    comments = Column(Text)  # Comments section
+    due_date = Column(String(20))  # Due date
+    ship_date = Column(String(20))  # Ship date
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -128,6 +136,11 @@ class ProcessStep(Base):
     operation = Column(String(100), nullable=False)
     work_center_code = Column(String(20), ForeignKey("work_centers.code"), nullable=False)
     instructions = Column(Text, nullable=False)
+    quantity = Column(Integer)  # Quantity for this step
+    accepted = Column(Integer)  # Accepted quantity
+    rejected = Column(Integer)  # Rejected quantity
+    sign = Column(String(50))  # Signature/initials
+    completed_date = Column(String(20))  # Completion date
     estimated_time = Column(Integer)  # in minutes
     is_required = Column(Boolean, default=True)
     is_completed = Column(Boolean, default=False)

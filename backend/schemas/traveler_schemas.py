@@ -29,6 +29,11 @@ class ProcessStepBase(BaseModel):
     instructions: str
     estimated_time: Optional[int] = None
     is_required: bool = True
+    quantity: Optional[int] = None
+    accepted: Optional[int] = None
+    rejected: Optional[int] = None
+    sign: Optional[str] = Field(None, max_length=50)
+    completed_date: Optional[str] = Field(None, max_length=20)
 
 class ProcessStepCreate(ProcessStepBase):
     sub_steps: List[SubStepCreate] = []
@@ -73,6 +78,14 @@ class TravelerBase(BaseModel):
     priority: Priority = Priority.NORMAL
     work_center: str = Field(..., max_length=20)
     notes: Optional[str] = None
+    specs: Optional[str] = None
+    specs_date: Optional[str] = Field(None, max_length=20)
+    from_stock: Optional[str] = Field(None, max_length=100)
+    to_stock: Optional[str] = Field(None, max_length=100)
+    ship_via: Optional[str] = Field(None, max_length=100)
+    comments: Optional[str] = None
+    due_date: Optional[str] = Field(None, max_length=20)
+    ship_date: Optional[str] = Field(None, max_length=20)
 
 class TravelerCreate(TravelerBase):
     process_steps: List[ProcessStepCreate] = []
@@ -92,6 +105,14 @@ class TravelerUpdate(BaseModel):
     work_center: Optional[str] = Field(None, max_length=20)
     status: Optional[TravelerStatus] = None
     notes: Optional[str] = None
+    specs: Optional[str] = None
+    specs_date: Optional[str] = Field(None, max_length=20)
+    from_stock: Optional[str] = Field(None, max_length=100)
+    to_stock: Optional[str] = Field(None, max_length=100)
+    ship_via: Optional[str] = Field(None, max_length=100)
+    comments: Optional[str] = None
+    due_date: Optional[str] = Field(None, max_length=20)
+    ship_date: Optional[str] = Field(None, max_length=20)
 
 class Traveler(TravelerBase):
     id: int

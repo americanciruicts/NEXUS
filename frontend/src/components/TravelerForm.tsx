@@ -12,6 +12,8 @@ import {
 
 interface TravelerFormProps {
   mode?: 'create' | 'edit' | 'view';
+  initialData?: Record<string, unknown>;
+  travelerId?: string;
 }
 
 interface FormStep {
@@ -26,35 +28,37 @@ interface FormStep {
   date: string;
 }
 
-export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
+export default function TravelerForm({ mode = 'create', initialData, travelerId }: TravelerFormProps) {
   // Step 1: Select Traveler Type
-  const [selectedType, setSelectedType] = useState<TravelerType | ''>('');
-  const [showForm, setShowForm] = useState(false);
+  const [selectedType, setSelectedType] = useState<TravelerType | ''>(initialData?.traveler_type as TravelerType || '');
+  const [showForm, setShowForm] = useState(mode === 'edit' || false);
 
   const [formData, setFormData] = useState({
-    jobNumber: '',
-    workOrderNumber: '',
-    partNumber: '',
-    partDescription: '',
-    revision: '',
-    quantity: 0,
-    customerCode: '',
-    customerName: '',
-    priority: 'NORMAL' as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
-    notes: '',
+    jobNumber: initialData?.job_number || '',
+    workOrderNumber: initialData?.work_order_number || '',
+    partNumber: initialData?.part_number || '',
+    partDescription: initialData?.part_description || '',
+    revision: initialData?.revision || '',
+    quantity: initialData?.quantity || 0,
+    customerCode: initialData?.customer_code || '',
+    customerName: initialData?.customer_name || '',
+    priority: (initialData?.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+    notes: initialData?.notes || '',
     poNumber: '',
     operation: '',
     pageNumber: '1',
     totalPages: '1',
     partRev: '',
     drawingNumber: '',
-    specs: '',
-    fromStock: '',
-    toStock: '',
-    shipVia: '',
+    specs: initialData?.specs || '',
+    specsDate: '',
+    fromStock: initialData?.from_stock || '',
+    toStock: initialData?.to_stock || '',
+    shipVia: initialData?.ship_via || '',
     lot: '',
-    dueDate: '',
-    comments: ''
+    dueDate: initialData?.due_date || '',
+    shipDate: initialData?.ship_date || '',
+    comments: initialData?.comments || ''
   });
 
   const [formSteps, setFormSteps] = useState<FormStep[]>([]);
@@ -72,10 +76,24 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
   ];
 
   useEffect(() => {
-    if (selectedType) {
+    if (mode === 'edit' && initialData?.process_steps) {
+      // Load existing steps for edit mode
+      const existingSteps = (initialData.process_steps as Array<Record<string, unknown>>).map((step: Record<string, unknown>, index: number) => ({
+        id: String(step.id || index),
+        sequence: Number(step.step_number),
+        workCenter: String(step.operation),
+        instruction: String(step.instructions || ''),
+        quantity: Number(step.quantity || 0),
+        rejected: Number(step.rejected || 0),
+        accepted: Number(step.accepted || 0),
+        assign: String(step.sign || ''),
+        date: String(step.completed_date || '')
+      }));
+      setFormSteps(existingSteps);
+    } else if (selectedType) {
       loadDefaultSteps(selectedType);
     }
-  }, [selectedType]);
+  }, [selectedType, mode, initialData]);
 
   const loadDefaultSteps = (type: TravelerType) => {
     const defaultSteps: Record<TravelerType, FormStep[]> = {
@@ -197,9 +215,9 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
           `This barcode can be printed and attached to the traveler for tracking purposes.`);
   };
 
-  const handleSubmit = () => {
-    if (!formData.jobNumber || !formData.partNumber) {
-      alert('⚠️ Missing Required Fields\n\nPlease fill in the following required fields:\n• Job Number\n• Part Number');
+  const handleSubmit = async () => {
+    if (!formData.jobNumber || !formData.workOrderNumber || !formData.partNumber) {
+      alert('⚠️ Missing Required Fields\n\nPlease fill in the following required fields:\n• Job Number\n• Work Order Number\n• Part Number');
       return;
     }
 
@@ -208,22 +226,115 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
     if (isLeadFree) fullJobNumber += 'L';
     if (isITAR) fullJobNumber += 'M';
 
-    const action = mode === 'create' ? 'Created' : 'Updated';
-    const complianceInfo = [];
-    if (isLeadFree) complianceInfo.push('🟢 Lead Free (RoHS)');
-    if (isITAR) complianceInfo.push('⚠️ ITAR Controlled');
+    // Map traveler type to backend enum
+    const travelerTypeMap: { [key: string]: string } = {
+      'PCB_ASSEMBLY': 'ASSY',
+      'PCB': 'PCB',
+      'CABLE': 'CABLE',
+      'CABLE_ASSEMBLY': 'CABLE',
+      'PCB_CABLE_ASSEMBLY': 'ASSY',
+      'PARTS': 'ASSY',
+      'ASSEMBLY': 'ASSY'
+    };
 
-    alert(`✅ Traveler ${action} Successfully!\n\n` +
-          `Job Number: ${fullJobNumber}\n` +
-          `Part Number: ${formData.partNumber}\n` +
-          `Traveler Type: ${selectedType?.replace('_', ' ')}\n` +
-          (complianceInfo.length > 0 ? `Compliance: ${complianceInfo.join(', ')}\n` : '') +
-          `\nThe traveler has been ${action.toLowerCase()} and is now available in the travelers list.`);
+    // Prepare API payload
+    const travelerData = {
+      job_number: fullJobNumber,
+      work_order_number: formData.workOrderNumber || fullJobNumber,
+      traveler_type: travelerTypeMap[selectedType] || 'ASSY',
+      part_number: formData.partNumber,
+      part_description: formData.partDescription || 'Assembly',
+      revision: formData.revision || 'A',
+      quantity: parseInt(formData.quantity.toString()) || 1,
+      customer_code: formData.customerCode || '',
+      customer_name: formData.customerName || '',
+      priority: formData.priority || 'NORMAL',
+      work_center: formSteps[0]?.workCenter || 'ASSEMBLY',
+      notes: formData.notes || '',
+      specs: formData.specs || '',
+      specs_date: formData.specsDate || '',
+      from_stock: formData.fromStock || '',
+      to_stock: formData.toStock || '',
+      ship_via: formData.shipVia || '',
+      comments: formData.comments || '',
+      due_date: formData.dueDate || '',
+      ship_date: formData.shipDate || formData.dueDate || '',
+      process_steps: formSteps.map(step => ({
+        step_number: step.sequence,
+        operation: step.workCenter,
+        work_center_code: step.workCenter.replace(/\s+/g, '_').toUpperCase(),
+        instructions: step.instruction || '',
+        estimated_time: 30,
+        is_required: true,
+        quantity: step.quantity || null,
+        accepted: step.accepted || null,
+        rejected: step.rejected || null,
+        sign: step.assign || null,
+        completed_date: step.date || null,
+        sub_steps: []
+      })),
+      manual_steps: []
+    };
 
-    // In production, this would save to database and redirect
-    setTimeout(() => {
-      window.location.href = '/travelers';
-    }, 1500);
+    console.log('Submitting traveler data:', JSON.stringify(travelerData, null, 2));
+
+    try {
+      // Call API to create or update traveler
+      const url = mode === 'edit'
+        ? `http://localhost:3002/travelers/${travelerId}`
+        : 'http://localhost:3002/travelers/';
+      const method = mode === 'edit' ? 'PUT' : 'POST';
+
+      console.log(`Making ${method} request to ${url}`);
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+        },
+        body: JSON.stringify(travelerData)
+      });
+
+      console.log('Response status:', response.status);
+      const responseText = await response.text();
+      console.log('Response body:', responseText);
+
+      if (!response.ok) {
+        let errorMessage = `Failed to ${mode === 'edit' ? 'update' : 'create'} traveler`;
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          errorMessage = responseText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = JSON.parse(responseText);
+      console.log('Traveler saved successfully:', result);
+
+      const action = mode === 'create' ? 'Created' : 'Updated';
+      const complianceInfo = [];
+      if (isLeadFree) complianceInfo.push('🟢 Lead Free (RoHS)');
+      if (isITAR) complianceInfo.push('⚠️ ITAR Controlled');
+
+      alert(`✅ Traveler ${action} Successfully!\n\n` +
+            `Job Number: ${fullJobNumber}\n` +
+            `Part Number: ${formData.partNumber}\n` +
+            `Traveler Type: ${selectedType?.replace('_', ' ')}\n` +
+            (complianceInfo.length > 0 ? `Compliance: ${complianceInfo.join(', ')}\n` : '') +
+            `\nThe traveler has been ${action.toLowerCase()} and is now available in the travelers list.`);
+
+      // Redirect to travelers list
+      setTimeout(() => {
+        window.location.href = '/travelers';
+      }, 1500);
+    } catch (error: unknown) {
+      console.error('Error saving traveler:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`❌ Error ${mode === 'edit' ? 'Updating' : 'Creating'} Traveler\n\n${errorMessage}\n\nPlease check the console for more details.`);
+    }
   };
 
   // If type not selected, show type selection
@@ -294,41 +405,62 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
         </div>
 
         {/* Print Header with Barcode - PRINT ONLY */}
-        <div className="hidden print:block border-2 border-black p-1 mb-2">
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <div>
-              <div>Page: {formData.pageNumber}</div>
-              <div>Cust. Code: {formData.customerCode}</div>
-              <div>Cust. Name: {formData.customerName}</div>
-              <div>Work Order: {formData.operation}</div>
-              <div>PO Number: {formData.poNumber}</div>
-              <div>Start Dt: {new Date().toLocaleDateString()}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold">Job No: {formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}</div>
-            </div>
-            <div className="text-right">
-              <div className="border-2 border-black p-2 inline-block mb-1">
-                <svg width="120" height="60">
-                  <rect x="2" y="5" width="2" height="50" fill="black"/>
-                  <rect x="6" y="5" width="1" height="50" fill="black"/>
-                  <rect x="9" y="5" width="3" height="50" fill="black"/>
-                  <rect x="14" y="5" width="1" height="50" fill="black"/>
-                  <rect x="17" y="5" width="2" height="50" fill="black"/>
-                  <rect x="21" y="5" width="1" height="50" fill="black"/>
-                  <rect x="24" y="5" width="3" height="50" fill="black"/>
-                  <rect x="29" y="5" width="2" height="50" fill="black"/>
-                  <rect x="33" y="5" width="1" height="50" fill="black"/>
-                  <rect x="36" y="5" width="2" height="50" fill="black"/>
-                  <rect x="40" y="5" width="3" height="50" fill="black"/>
-                  <text x="60" y="58" fontSize="8" textAnchor="middle">*{formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}*</text>
-                </svg>
+        <div className="hidden print:block bg-gray-100 border-b-2 border-black p-3 mb-0">
+          <div className="grid grid-cols-3 gap-4 text-xs">
+            {/* Left */}
+            <div className="space-y-1">
+              <div className="flex">
+                <span className="font-bold w-24">Cust. Code:</span>
+                <span>{formData.customerCode || '-'}</span>
               </div>
-              <div>Quantity: {formData.quantity}</div>
-              <div>Part No: {formData.partNumber}</div>
-              <div>Desc: {formData.partDescription}</div>
-              <div>Rev: {formData.revision}</div>
-              <div>Due Date: {formData.dueDate}</div>
+              <div className="flex">
+                <span className="font-bold w-24">Cust. Name:</span>
+                <span>{formData.customerName || '-'}</span>
+              </div>
+              <div className="flex">
+                <span className="font-bold w-24">Work Order:</span>
+                <span>{formData.workOrderNumber || '-'}</span>
+              </div>
+            </div>
+
+            {/* Center - Barcode with Details */}
+            <div className="flex items-center justify-center">
+              <div className="text-center">
+                <div className="border-2 border-black p-1 bg-white inline-block mb-1">
+                  <svg width="120" height="60">
+                    <rect x="2" y="5" width="2" height="40" fill="black"/>
+                    <rect x="6" y="5" width="1" height="40" fill="black"/>
+                    <rect x="9" y="5" width="3" height="40" fill="black"/>
+                    <rect x="14" y="5" width="1" height="40" fill="black"/>
+                    <rect x="17" y="5" width="2" height="40" fill="black"/>
+                    <rect x="21" y="5" width="1" height="40" fill="black"/>
+                    <rect x="24" y="5" width="3" height="40" fill="black"/>
+                    <rect x="29" y="5" width="2" height="40" fill="black"/>
+                    <rect x="33" y="5" width="1" height="40" fill="black"/>
+                    <rect x="36" y="5" width="2" height="40" fill="black"/>
+                    <text x="60" y="52" fontSize="7" textAnchor="middle" fontWeight="bold">*{formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}*</text>
+                  </svg>
+                </div>
+                <div className="text-xs font-bold">Job: {formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}</div>
+                <div className="text-xs">Qty: {formData.quantity}</div>
+                <div className="text-xs">Rev: {formData.revision}</div>
+              </div>
+            </div>
+
+            {/* Right */}
+            <div className="space-y-1">
+              <div className="flex">
+                <span className="font-bold w-20">Part No:</span>
+                <span>{formData.partNumber}</span>
+              </div>
+              <div className="flex">
+                <span className="font-bold w-20">Desc:</span>
+                <span>{formData.partDescription}</span>
+              </div>
+              <div className="flex">
+                <span className="font-bold w-20">Due Date:</span>
+                <span>{formData.dueDate || '-'}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -354,7 +486,35 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
                 <input
                   type="text"
                   value={formData.jobNumber}
-                  onChange={(e) => setFormData({...formData, jobNumber: e.target.value})}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    setFormData({...formData, jobNumber: value});
+                    // Auto-populate on blur or after typing
+                    if (value.length >= 3) {
+                      try {
+                        const response = await fetch(`http://localhost:3002/travelers/work-order/${value}`, {
+                          headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+                          }
+                        });
+                        if (response.ok) {
+                          const data = await response.json();
+                          setFormData(prev => ({
+                            ...prev,
+                            workOrderNumber: data.work_order_number || value,
+                            partNumber: data.part_number || prev.partNumber,
+                            partDescription: data.part_description || prev.partDescription,
+                            revision: data.revision || prev.revision,
+                            quantity: data.quantity || prev.quantity,
+                            customerCode: data.customer_code || prev.customerCode,
+                            customerName: data.customer_name || prev.customerName
+                          }));
+                        }
+                      } catch (error) {
+                        console.error('Error fetching work order:', error);
+                      }
+                    }
+                  }}
                   className="flex-1 border-2 border-blue-300 rounded px-2 py-1.5 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                   placeholder="8414"
                 />
@@ -363,10 +523,13 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Work Order *</label>
               <input
-                type="date"
-                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                type="text"
+                value={formData.workOrderNumber}
+                onChange={(e) => setFormData({...formData, workOrderNumber: e.target.value})}
+                className="w-full border-2 border-blue-300 rounded px-2 py-1.5 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                placeholder="WO-123"
               />
             </div>
             <div>
@@ -379,12 +542,12 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Form #</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Ship Date</label>
               <input
-                type="text"
-                value="12148"
-                disabled
-                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm bg-gray-100"
+                type="date"
+                value={formData.shipDate}
+                onChange={(e) => setFormData({...formData, shipDate: e.target.value})}
+                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
             </div>
           </div>
@@ -400,7 +563,7 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
                   value={formData.customerCode}
                   onChange={(e) => setFormData({...formData, customerCode: e.target.value})}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                  placeholder="ACME"
+                  placeholder="750"
                 />
               </div>
               <div>
@@ -430,7 +593,7 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
                   value={formData.poNumber}
                   onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                  placeholder="METMXP-2"
+                  placeholder="PO-12345"
                 />
               </div>
               <div>
@@ -447,6 +610,16 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
 
             {/* Right Column */}
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Part Description *</label>
+                <input
+                  type="text"
+                  value={formData.partDescription}
+                  onChange={(e) => setFormData({...formData, partDescription: e.target.value})}
+                  className="w-full border-2 border-blue-300 rounded-lg px-4 py-3 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  placeholder="METSHIFT Assembly"
+                />
+              </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Quantity *</label>
@@ -468,7 +641,7 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Rev</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Revision</label>
                   <input
                     type="text"
                     value={formData.revision}
@@ -489,13 +662,13 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Dwg #</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Drawing Number</label>
                 <input
                   type="text"
                   value={formData.drawingNumber}
                   onChange={(e) => setFormData({...formData, drawingNumber: e.target.value})}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                  placeholder="88424"
+                  placeholder="DWG-88424"
                 />
               </div>
             </div>
@@ -542,9 +715,20 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
             </div>
           </div>
 
-          {/* Specifications - Prominent Section */}
+          {/* Specifications - Prominent Section with Date */}
           <div className="mb-6 p-6 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl border-3 border-yellow-300 shadow-lg">
-            <label className="block text-lg font-bold text-yellow-900 mb-3 uppercase">Specifications</label>
+            <div className="flex justify-between items-center mb-3">
+              <label className="block text-lg font-bold text-yellow-900 uppercase">Specifications</label>
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-bold text-yellow-900">Date:</label>
+                <input
+                  type="date"
+                  value={formData.specsDate}
+                  onChange={(e) => setFormData({...formData, specsDate: e.target.value})}
+                  className="border-2 border-yellow-400 rounded px-3 py-1.5 text-sm focus:border-yellow-500 focus:ring-1 focus:ring-yellow-200"
+                />
+              </div>
+            </div>
             <textarea
               value={formData.specs}
               onChange={(e) => setFormData({...formData, specs: e.target.value})}
@@ -554,30 +738,39 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
             />
           </div>
 
-          {/* Stock and Shipping Info - To Be Filled After Printing */}
+          {/* Stock and Shipping Info */}
           <div className="mb-6 p-5 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border-2 border-green-300">
-            <h3 className="text-sm font-bold text-green-900 mb-3 uppercase flex items-center">
-              <span className="bg-green-600 text-white px-2 py-1 rounded mr-2 text-xs">Fill After Printing</span>
-              Stock &amp; Shipping Information
-            </h3>
+            <h3 className="text-sm font-bold text-green-900 mb-3 uppercase">Stock &amp; Shipping Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-bold text-green-900 mb-2">From Stock</label>
-                <div className="border-2 border-dashed border-green-400 rounded-lg px-4 py-8 bg-white text-center text-sm text-green-700">
-                  Write here after printing ✍️
-                </div>
+                <input
+                  type="text"
+                  value={formData.fromStock}
+                  onChange={(e) => setFormData({...formData, fromStock: e.target.value})}
+                  className="w-full border-2 border-green-300 rounded-lg px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-200"
+                  placeholder="Location..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-green-900 mb-2">To Stock</label>
-                <div className="border-2 border-dashed border-green-400 rounded-lg px-4 py-8 bg-white text-center text-sm text-green-700">
-                  Write here after printing ✍️
-                </div>
+                <input
+                  type="text"
+                  value={formData.toStock}
+                  onChange={(e) => setFormData({...formData, toStock: e.target.value})}
+                  className="w-full border-2 border-green-300 rounded-lg px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-200"
+                  placeholder="Location..."
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-green-900 mb-2">Ship Via</label>
-                <div className="border-2 border-dashed border-green-400 rounded-lg px-4 py-8 bg-white text-center text-sm text-green-700">
-                  Write here after printing ✍️
-                </div>
+                <input
+                  type="text"
+                  value={formData.shipVia}
+                  onChange={(e) => setFormData({...formData, shipVia: e.target.value})}
+                  className="w-full border-2 border-green-300 rounded-lg px-4 py-3 text-base focus:border-green-500 focus:ring-2 focus:ring-green-200"
+                  placeholder="Shipping method..."
+                />
               </div>
             </div>
           </div>
@@ -623,84 +816,82 @@ export default function TravelerForm({ mode = 'create' }: TravelerFormProps) {
                     </button>
                   </div>
 
-                  {/* Step Fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Work Center */}
-                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Work Center</label>
-                      <select
-                        value={step.workCenter}
-                        onChange={(e) => updateStep(step.id, 'workCenter', e.target.value)}
-                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      >
-                        <option value="">Select Work Center...</option>
-                        {WORK_CENTERS.map(wc => (
-                          <option key={wc} value={wc}>{wc}</option>
-                        ))}
-                      </select>
-                    </div>
+                  {/* Step Fields - ALIGNED COLUMNS */}
+                  <div className="space-y-4">
+                    {/* Row 1: Work Center and Metrics in aligned columns */}
+                    <div className="grid grid-cols-12 gap-3 items-start">
+                      <div className="col-span-3">
+                        <label className="block text-xs font-bold text-gray-700 mb-2">Work Center</label>
+                        <select
+                          value={step.workCenter}
+                          onChange={(e) => updateStep(step.id, 'workCenter', e.target.value)}
+                          className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        >
+                          <option value="">Select Work Center...</option>
+                          {WORK_CENTERS.map(wc => (
+                            <option key={wc} value={wc}>{wc}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                    {/* Quantity, Accepted, Rejected, Sign */}
-                    <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-2">Quantity</label>
+                      {/* Quantity, Rejected, Accepted, Sign - ALIGNED */}
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-gray-700 mb-2 text-center">Quantity</label>
                         <input
                           type="number"
                           value={step.quantity}
                           onChange={(e) => updateStep(step.id, 'quantity', parseInt(e.target.value) || 0)}
-                          className="w-full border-2 border-gray-300 rounded px-2 py-2 text-xs text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                          className="w-full border-2 border-gray-300 rounded px-2 py-2 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-green-700 mb-2">Accepted</label>
-                        <input
-                          type="number"
-                          value={step.accepted}
-                          onChange={(e) => updateStep(step.id, 'accepted', parseInt(e.target.value) || 0)}
-                          className="w-full border-2 border-green-300 rounded px-2 py-2 text-xs text-center focus:border-green-500 focus:ring-1 focus:ring-green-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-red-700 mb-2">Rejected</label>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-red-700 mb-2 text-center">Rejected</label>
                         <input
                           type="number"
                           value={step.rejected}
                           onChange={(e) => updateStep(step.id, 'rejected', parseInt(e.target.value) || 0)}
-                          className="w-full border-2 border-red-300 rounded px-2 py-2 text-xs text-center focus:border-red-500 focus:ring-1 focus:ring-red-200"
+                          className="w-full border-2 border-red-300 rounded px-2 py-2 text-sm text-center focus:border-red-500 focus:ring-1 focus:ring-red-200"
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-bold text-purple-700 mb-2">Sign</label>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-green-700 mb-2 text-center">Accepted</label>
+                        <input
+                          type="number"
+                          value={step.accepted}
+                          onChange={(e) => updateStep(step.id, 'accepted', parseInt(e.target.value) || 0)}
+                          className="w-full border-2 border-green-300 rounded px-2 py-2 text-sm text-center focus:border-green-500 focus:ring-1 focus:ring-green-200"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-purple-700 mb-2 text-center">Sign</label>
                         <input
                           type="text"
                           value={step.assign}
                           onChange={(e) => updateStep(step.id, 'assign', e.target.value)}
-                          className="w-full border-2 border-purple-300 rounded px-2 py-2 text-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-200"
+                          className="w-full border-2 border-purple-300 rounded px-2 py-2 text-sm text-center focus:border-purple-500 focus:ring-1 focus:ring-purple-200"
                           placeholder="Init"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <label className="block text-xs font-bold text-gray-700 mb-2 text-center">Date</label>
+                        <input
+                          type="date"
+                          value={step.date}
+                          onChange={(e) => updateStep(step.id, 'date', e.target.value)}
+                          className="w-full border-2 border-gray-300 rounded px-2 py-2 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                         />
                       </div>
                     </div>
 
-                    {/* Instructions - Full Width */}
-                    <div className="md:col-span-2">
+                    {/* Row 2: Instructions - Full Width */}
+                    <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Instructions</label>
                       <textarea
                         value={step.instruction}
                         onChange={(e) => updateStep(step.id, 'instruction', e.target.value)}
-                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 min-h-[100px] resize-y"
+                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 min-h-[80px] resize-y"
                         placeholder="Enter detailed instructions for this step..."
                         style={{color: '#000000', backgroundColor: '#ffffff'}}
-                      />
-                    </div>
-
-                    {/* Date */}
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Completion Date</label>
-                      <input
-                        type="date"
-                        value={step.date}
-                        onChange={(e) => updateStep(step.id, 'date', e.target.value)}
-                        className="w-full md:w-1/3 border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                       />
                     </div>
                   </div>

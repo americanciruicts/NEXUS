@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import { PlusIcon, EyeIcon, PencilIcon, QrCodeIcon, PrinterIcon } from '@heroicons/react/24/outline';
@@ -9,30 +9,82 @@ export default function TravelersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [customerFilter, setCustomerFilter] = useState('All Customers');
-
-  // Mock data for travelers - ONLY ACME ONE
-  const travelers = [
+  const [travelers, setTravelers] = useState([
     {
       id: '8414L',
       jobNumber: '8414L',
+      workOrder: '23114-3',
       partNumber: 'METSHIFT',
       description: 'METSHIFT Assembly',
       revision: 'V0.2',
       quantity: 250,
       customerCode: 'MEDSHIFT',
-      customerName: 'ACME Corporation',
+      customerName: 'MEDSHIFT',
       status: 'IN_PROGRESS',
       currentStep: 'WAVE SOLDER',
       progress: 75,
-      createdAt: '2024-01-15',
-      dueDate: '2024-01-25',
-      specs: 'Lead-free assembly, RoHS compliant',
+      createdAt: '08/14/24',
+      dueDate: '11/04/24',
+      specs: 'SOME PARTS CUSTOMER SUPPLY',
       fromStock: '',
       toStock: '',
       shipVia: '',
       comments: ''
     }
-  ];
+  ]);
+
+  // Load travelers from API on mount
+  useEffect(() => {
+    const fetchTravelers = async () => {
+      try {
+        const response = await fetch('http://localhost:3002/travelers/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Transform API data to match frontend format
+          const formattedTravelers = data.map((t: Record<string, unknown>) => ({
+            id: String(t.job_number),
+            jobNumber: String(t.job_number),
+            workOrder: String(t.work_order_number || ''),
+            partNumber: String(t.part_number),
+            description: String(t.part_description),
+            revision: String(t.revision),
+            quantity: Number(t.quantity),
+            customerCode: String(t.customer_code || ''),
+            customerName: String(t.customer_name || ''),
+            status: String(t.status),
+            currentStep: t.process_steps && Array.isArray(t.process_steps) && (t.process_steps as Array<{ operation: string; is_completed: boolean }>).length > 0
+              ? (t.process_steps as Array<{ operation: string; is_completed: boolean }>).find(s => !s.is_completed)?.operation || 'COMPLETED'
+              : 'PENDING',
+            progress: t.process_steps && Array.isArray(t.process_steps) && (t.process_steps as Array<{ is_completed: boolean }>).length > 0
+              ? Math.round(((t.process_steps as Array<{ is_completed: boolean }>).filter(s => s.is_completed).length / (t.process_steps as Array<{ is_completed: boolean }>).length) * 100)
+              : 0,
+            createdAt: new Date(t.created_at as string).toLocaleDateString(),
+            dueDate: String(t.due_date || ''),
+            specs: String(t.specs || ''),
+            fromStock: String(t.from_stock || ''),
+            toStock: String(t.to_stock || ''),
+            shipVia: String(t.ship_via || ''),
+            comments: String(t.comments || '')
+          }));
+
+          if (formattedTravelers.length > 0) {
+            setTravelers(formattedTravelers);
+          }
+        } else {
+          console.error('Failed to fetch travelers');
+        }
+      } catch (error) {
+        console.error('Error fetching travelers:', error);
+      }
+    };
+
+    fetchTravelers();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,7 +219,7 @@ export default function TravelersPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Job #
+                    Job # / Work Order
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Part Info
@@ -194,6 +246,7 @@ export default function TravelersPage() {
                   <tr key={traveler.id} className="hover:bg-blue-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{traveler.jobNumber}</div>
+                      <div className="text-sm text-gray-500">WO: {traveler.workOrder}</div>
                       <div className="text-sm text-gray-500">Created: {traveler.createdAt}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

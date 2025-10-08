@@ -4,12 +4,6 @@
 -- Create the database if it doesn't exist
 -- Note: This runs inside the already created 'nexus' database
 
--- Grant permissions to nexus_user
-GRANT ALL PRIVILEGES ON DATABASE nexus TO nexus_user;
-GRANT ALL PRIVILEGES ON SCHEMA public TO nexus_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO nexus_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO nexus_user;
-
 -- Create extensions if needed
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

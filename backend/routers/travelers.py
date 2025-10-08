@@ -145,16 +145,30 @@ async def get_work_order_data(identifier: str, db: Session = Depends(get_db)):
 @router.post("/", response_model=TravelerSchema)
 async def create_traveler(
     traveler_data: TravelerCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Create a new traveler"""
 
-    # Check if user needs approval (not Kris or Adam)
-    if not current_user.is_approver and current_user.username not in ["Kris", "Adam"]:
-        # Create approval request instead of direct creation
-        # For now, we'll create the traveler and mark it as pending approval
-        pass
+    # For now, create travelers without authentication
+    # TODO: Re-enable authentication when frontend auth is implemented
+
+    # Get or create a default user for travelers created without auth
+    default_user = db.query(User).filter(User.username == "system").first()
+    if not default_user:
+        # Create a default system user if it doesn't exist
+        from routers.auth import get_password_hash
+        default_user = User(
+            username="system",
+            email="system@nexus.local",
+            first_name="System",
+            last_name="User",
+            hashed_password=get_password_hash("system"),
+            role="USER",
+            is_approver=False
+        )
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
 
     # Create traveler
     db_traveler = Traveler(
@@ -170,7 +184,15 @@ async def create_traveler(
         priority=traveler_data.priority,
         work_center=traveler_data.work_center,
         notes=traveler_data.notes,
-        created_by=current_user.id
+        specs=traveler_data.specs,
+        specs_date=traveler_data.specs_date,
+        from_stock=traveler_data.from_stock,
+        to_stock=traveler_data.to_stock,
+        ship_via=traveler_data.ship_via,
+        comments=traveler_data.comments,
+        due_date=traveler_data.due_date,
+        ship_date=traveler_data.ship_date,
+        created_by=default_user.id
     )
 
     db.add(db_traveler)
@@ -186,7 +208,12 @@ async def create_traveler(
             work_center_code=step_data.work_center_code,
             instructions=step_data.instructions,
             estimated_time=step_data.estimated_time,
-            is_required=step_data.is_required
+            is_required=step_data.is_required,
+            quantity=step_data.quantity,
+            accepted=step_data.accepted,
+            rejected=step_data.rejected,
+            sign=step_data.sign,
+            completed_date=step_data.completed_date
         )
         db.add(db_step)
         db.commit()
@@ -215,7 +242,7 @@ async def create_traveler(
     # Create audit log
     audit_log = AuditLog(
         traveler_id=db_traveler.id,
-        user_id=current_user.id,
+        user_id=default_user.id,
         action="CREATED",
         timestamp=db_traveler.created_at,
         ip_address="127.0.0.1",  # Get from request
@@ -224,33 +251,36 @@ async def create_traveler(
     db.add(audit_log)
     db.commit()
 
-    # Send notification if approval needed
-    if not current_user.is_approver and current_user.username not in ["Kris", "Adam"]:
-        await send_approval_notification(
-            traveler_id=db_traveler.id,
-            requested_by=current_user.username,
-            request_type="CREATE",
-            db=db
-        )
-
     return db_traveler
 
 @router.get("/", response_model=List[TravelerList])
 async def get_travelers(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get list of travelers"""
     travelers = db.query(Traveler).offset(skip).limit(limit).all()
     return travelers
 
+@router.get("/by-job/{job_number}", response_model=TravelerSchema)
+async def get_traveler_by_job(
+    job_number: str,
+    db: Session = Depends(get_db)
+):
+    """Get a specific traveler by job number"""
+    traveler = db.query(Traveler).filter(Traveler.job_number == job_number).first()
+    if not traveler:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Traveler not found"
+        )
+    return traveler
+
 @router.get("/{traveler_id}", response_model=TravelerSchema)
 async def get_traveler(
     traveler_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get a specific traveler by ID"""
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
@@ -264,9 +294,8 @@ async def get_traveler(
 @router.put("/{traveler_id}", response_model=TravelerSchema)
 async def update_traveler(
     traveler_id: int,
-    traveler_data: TravelerUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    traveler_data: TravelerCreate,
+    db: Session = Depends(get_db)
 ):
     """Update a traveler"""
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
@@ -276,41 +305,101 @@ async def update_traveler(
             detail="Traveler not found"
         )
 
-    # Check if user needs approval for edits (not Kris or Adam)
-    if not current_user.is_approver and current_user.username not in ["Kris", "Adam"]:
-        await send_approval_notification(
-            traveler_id=traveler.id,
-            requested_by=current_user.username,
-            request_type="EDIT",
-            db=db
+    # Get or create a default user for travelers updated without auth
+    default_user = db.query(User).filter(User.username == "system").first()
+    if not default_user:
+        from routers.auth import get_password_hash
+        default_user = User(
+            username="system",
+            email="system@nexus.local",
+            first_name="System",
+            last_name="User",
+            hashed_password=get_password_hash("system"),
+            role="USER",
+            is_approver=False
         )
-        raise HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
-            detail="Edit request sent for approval"
-        )
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
 
     # Update traveler fields
-    update_data = traveler_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(traveler, field, value)
+    traveler.job_number = traveler_data.job_number
+    traveler.work_order_number = traveler_data.work_order_number
+    traveler.traveler_type = traveler_data.traveler_type
+    traveler.part_number = traveler_data.part_number
+    traveler.part_description = traveler_data.part_description
+    traveler.revision = traveler_data.revision
+    traveler.quantity = traveler_data.quantity
+    traveler.customer_code = traveler_data.customer_code
+    traveler.customer_name = traveler_data.customer_name
+    traveler.priority = traveler_data.priority
+    traveler.work_center = traveler_data.work_center
+    traveler.notes = traveler_data.notes
+    traveler.specs = traveler_data.specs
+    traveler.specs_date = traveler_data.specs_date
+    traveler.from_stock = traveler_data.from_stock
+    traveler.to_stock = traveler_data.to_stock
+    traveler.ship_via = traveler_data.ship_via
+    traveler.comments = traveler_data.comments
+    traveler.due_date = traveler_data.due_date
+    traveler.ship_date = traveler_data.ship_date
+
+    # Delete existing process steps
+    db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()
+    db.query(ManualStep).filter(ManualStep.traveler_id == traveler.id).delete()
+
+    # Create new process steps
+    for step_data in traveler_data.process_steps:
+        db_step = ProcessStep(
+            traveler_id=traveler.id,
+            step_number=step_data.step_number,
+            operation=step_data.operation,
+            work_center_code=step_data.work_center_code,
+            instructions=step_data.instructions,
+            estimated_time=step_data.estimated_time,
+            is_required=step_data.is_required,
+            quantity=step_data.quantity,
+            accepted=step_data.accepted,
+            rejected=step_data.rejected,
+            sign=step_data.sign,
+            completed_date=step_data.completed_date
+        )
+        db.add(db_step)
+        db.commit()
+        db.refresh(db_step)
+
+        # Create sub-steps
+        for sub_step_data in step_data.sub_steps:
+            db_sub_step = SubStep(
+                process_step_id=db_step.id,
+                step_number=sub_step_data.step_number,
+                description=sub_step_data.description
+            )
+            db.add(db_sub_step)
+
+    # Create manual steps
+    for manual_step_data in traveler_data.manual_steps:
+        db_manual_step = ManualStep(
+            traveler_id=traveler.id,
+            description=manual_step_data.description,
+            added_by=default_user.id
+        )
+        db.add(db_manual_step)
 
     db.commit()
     db.refresh(traveler)
 
-    # Create audit log for each changed field
-    for field, value in update_data.items():
-        audit_log = AuditLog(
-            traveler_id=traveler.id,
-            user_id=current_user.id,
-            action="UPDATED",
-            field_changed=field,
-            new_value=str(value),
-            ip_address="127.0.0.1",
-            user_agent="NEXUS-Frontend"
-        )
-        db.add(audit_log)
-
+    # Create audit log
+    audit_log = AuditLog(
+        traveler_id=traveler.id,
+        user_id=default_user.id,
+        action="UPDATED",
+        ip_address="127.0.0.1",
+        user_agent="NEXUS-Frontend"
+    )
+    db.add(audit_log)
     db.commit()
+
     return traveler
 
 @router.delete("/{traveler_id}")

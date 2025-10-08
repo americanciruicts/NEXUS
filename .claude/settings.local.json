@@ -12,7 +12,11 @@
       "Bash(timeout:*)",
       "Bash(curl:*)",
       "WebFetch(domain:americancircuits0-my.sharepoint.com)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(alembic revision:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []
