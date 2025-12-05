@@ -2,15 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import json
+from datetime import datetime
 
 from database import get_db
-from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder
+from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType
 from schemas.traveler_schemas import (
     TravelerCreate, Traveler as TravelerSchema, TravelerUpdate,
     TravelerList, ProcessStepCreate, ManualStepCreate
 )
+from schemas.tracking_schemas import TrackingScanRequest, TrackingScanResponse, TrackingLogResponse
 from routers.auth import get_current_user
 from services.email_service import send_approval_notification
+from services.notification_service import create_notification_for_admins
 
 router = APIRouter()
 
@@ -156,24 +159,28 @@ async def create_traveler(
     default_user = db.query(User).filter(User.username == "system").first()
     if not default_user:
         # Create a default system user if it doesn't exist
-        from routers.auth import get_password_hash
         default_user = User(
             username="system",
             email="system@nexus.local",
             first_name="System",
             last_name="User",
-            hashed_password=get_password_hash("system"),
-            role="USER",
+            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
+            role="OPERATOR",
             is_approver=False
         )
         db.add(default_user)
         db.commit()
         db.refresh(default_user)
 
+    # Determine labor hours based on traveler type
+    # PCB parts don't need labor hours, all others do by default
+    include_labor_hours = traveler_data.include_labor_hours if traveler_data.traveler_type != "PCB" else False
+
     # Create traveler
     db_traveler = Traveler(
         job_number=traveler_data.job_number,
         work_order_number=traveler_data.work_order_number,
+        po_number=traveler_data.po_number,
         traveler_type=traveler_data.traveler_type,
         part_number=traveler_data.part_number,
         part_description=traveler_data.part_description,
@@ -192,6 +199,7 @@ async def create_traveler(
         comments=traveler_data.comments,
         due_date=traveler_data.due_date,
         ship_date=traveler_data.ship_date,
+        include_labor_hours=include_labor_hours,
         created_by=default_user.id
     )
 
@@ -201,6 +209,18 @@ async def create_traveler(
 
     # Create process steps
     for step_data in traveler_data.process_steps:
+        # Auto-create work center if it doesn't exist
+        work_center = db.query(WorkCenter).filter(WorkCenter.code == step_data.work_center_code).first()
+        if not work_center:
+            work_center = WorkCenter(
+                code=step_data.work_center_code,
+                name=step_data.operation,
+                description=f"Auto-created from traveler",
+                is_active=True
+            )
+            db.add(work_center)
+            db.commit()
+
         db_step = ProcessStep(
             traveler_id=db_traveler.id,
             step_number=step_data.step_number,
@@ -251,6 +271,17 @@ async def create_traveler(
     db.add(audit_log)
     db.commit()
 
+    # Create notification for all admins
+    create_notification_for_admins(
+        db=db,
+        notification_type=NotificationType.TRAVELER_CREATED,
+        title="New Traveler Created",
+        message=f"{default_user.username} created traveler {db_traveler.job_number} - {db_traveler.part_description}",
+        reference_id=db_traveler.id,
+        reference_type="traveler",
+        created_by_username=default_user.username
+    )
+
     return db_traveler
 
 @router.get("/", response_model=List[TravelerList])
@@ -262,6 +293,84 @@ async def get_travelers(
     """Get list of travelers"""
     travelers = db.query(Traveler).offset(skip).limit(limit).all()
     return travelers
+
+@router.get("/latest-revision")
+async def get_latest_revision_traveler(
+    job_number: str,
+    work_order: str,
+    db: Session = Depends(get_db)
+):
+    """Get the latest revision traveler for a given job number and work order"""
+    from sqlalchemy.orm import joinedload
+
+    travelers = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(
+        Traveler.job_number == job_number,
+        Traveler.work_order_number == work_order
+    ).order_by(Traveler.revision.desc()).all()
+
+    if not travelers:
+        return None
+
+    # Return the traveler with the highest revision
+    traveler = travelers[0]
+
+    # Manually serialize to ensure process_steps are included
+    result = {
+        "id": traveler.id,
+        "job_number": traveler.job_number,
+        "work_order_number": traveler.work_order_number,
+        "po_number": traveler.po_number,
+        "traveler_type": traveler.traveler_type.value if hasattr(traveler.traveler_type, 'value') else str(traveler.traveler_type),
+        "part_number": traveler.part_number,
+        "part_description": traveler.part_description,
+        "revision": traveler.revision,
+        "quantity": traveler.quantity,
+        "customer_code": traveler.customer_code,
+        "customer_name": traveler.customer_name,
+        "priority": traveler.priority.value if hasattr(traveler.priority, 'value') else str(traveler.priority),
+        "work_center": traveler.work_center,
+        "status": traveler.status.value if hasattr(traveler.status, 'value') else str(traveler.status),
+        "is_active": traveler.is_active,
+        "notes": traveler.notes,
+        "specs": traveler.specs,
+        "specs_date": traveler.specs_date,
+        "from_stock": traveler.from_stock,
+        "to_stock": traveler.to_stock,
+        "ship_via": traveler.ship_via,
+        "comments": traveler.comments,
+        "due_date": traveler.due_date,
+        "ship_date": traveler.ship_date,
+        "include_labor_hours": traveler.include_labor_hours,
+        "is_lead_free": getattr(traveler, 'is_lead_free', False),
+        "is_itar": getattr(traveler, 'is_itar', False),
+        "created_by": traveler.created_by,
+        "created_at": traveler.created_at.isoformat() if traveler.created_at else None,
+        "updated_at": traveler.updated_at.isoformat() if traveler.updated_at else None,
+        "completed_at": traveler.completed_at.isoformat() if traveler.completed_at else None,
+        "process_steps": [
+            {
+                "id": step.id,
+                "step_number": step.step_number,
+                "operation": step.operation,
+                "work_center_code": step.work_center_code,
+                "instructions": step.instructions,
+                "quantity": step.quantity,
+                "accepted": step.accepted,
+                "rejected": step.rejected,
+                "sign": step.sign,
+                "completed_date": step.completed_date,
+                "estimated_time": step.estimated_time,
+                "is_required": step.is_required,
+                "is_completed": step.is_completed,
+            }
+            for step in sorted(traveler.process_steps, key=lambda s: s.step_number)
+        ]
+    }
+
+    print(f"Returning traveler with {len(result['process_steps'])} process steps")
+    return result
 
 @router.get("/by-job/{job_number}", response_model=TravelerSchema)
 async def get_traveler_by_job(
@@ -308,23 +417,27 @@ async def update_traveler(
     # Get or create a default user for travelers updated without auth
     default_user = db.query(User).filter(User.username == "system").first()
     if not default_user:
-        from routers.auth import get_password_hash
         default_user = User(
             username="system",
             email="system@nexus.local",
             first_name="System",
             last_name="User",
-            hashed_password=get_password_hash("system"),
-            role="USER",
+            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
+            role="OPERATOR",
             is_approver=False
         )
         db.add(default_user)
         db.commit()
         db.refresh(default_user)
 
+    # Determine labor hours based on traveler type
+    # PCB parts don't need labor hours, all others do by default
+    include_labor_hours = traveler_data.include_labor_hours if traveler_data.traveler_type != "PCB" else False
+
     # Update traveler fields
     traveler.job_number = traveler_data.job_number
     traveler.work_order_number = traveler_data.work_order_number
+    traveler.po_number = traveler_data.po_number
     traveler.traveler_type = traveler_data.traveler_type
     traveler.part_number = traveler_data.part_number
     traveler.part_description = traveler_data.part_description
@@ -343,6 +456,7 @@ async def update_traveler(
     traveler.comments = traveler_data.comments
     traveler.due_date = traveler_data.due_date
     traveler.ship_date = traveler_data.ship_date
+    traveler.include_labor_hours = include_labor_hours
 
     # Delete existing process steps
     db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()
@@ -350,6 +464,18 @@ async def update_traveler(
 
     # Create new process steps
     for step_data in traveler_data.process_steps:
+        # Auto-create work center if it doesn't exist
+        work_center = db.query(WorkCenter).filter(WorkCenter.code == step_data.work_center_code).first()
+        if not work_center:
+            work_center = WorkCenter(
+                code=step_data.work_center_code,
+                name=step_data.operation,
+                description=f"Auto-created from traveler",
+                is_active=True
+            )
+            db.add(work_center)
+            db.commit()
+
         db_step = ProcessStep(
             traveler_id=traveler.id,
             step_number=step_data.step_number,
@@ -400,20 +526,65 @@ async def update_traveler(
     db.add(audit_log)
     db.commit()
 
+    # Create notification for all admins
+    create_notification_for_admins(
+        db=db,
+        notification_type=NotificationType.TRAVELER_UPDATED,
+        title="Traveler Updated",
+        message=f"{default_user.username} updated traveler {traveler.job_number} - {traveler.part_description}",
+        reference_id=traveler.id,
+        reference_type="traveler",
+        created_by_username=default_user.username
+    )
+
     return traveler
+
+@router.patch("/{traveler_id}")
+async def patch_traveler(
+    traveler_id: int,
+    updates: dict,
+    db: Session = Depends(get_db)
+):
+    """Partially update a traveler (e.g., toggle active status)"""
+    traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
+    if not traveler:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Traveler not found"
+        )
+
+    # Log the update for debugging
+    print(f"PATCH traveler {traveler_id}: {updates}")
+
+    # Update only the provided fields
+    for key, value in updates.items():
+        if hasattr(traveler, key):
+            print(f"Setting {key} = {value} (was {getattr(traveler, key)})")
+            setattr(traveler, key, value)
+
+    db.commit()
+    db.refresh(traveler)
+
+    # Verify the update persisted
+    print(f"After commit - is_active: {traveler.is_active}")
+
+    return {
+        "message": "Traveler updated successfully",
+        "traveler": {
+            "id": traveler.id,
+            "job_number": traveler.job_number,
+            "is_active": traveler.is_active
+        }
+    }
 
 @router.delete("/{traveler_id}")
 async def delete_traveler(
     traveler_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
-    """Delete a traveler (admin only)"""
-    if current_user.role != "ADMIN":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can delete travelers"
-        )
+    """Delete a traveler"""
+    # For now, allow deletion without authentication
+    # TODO: Re-enable admin-only restriction when frontend auth is fully implemented
 
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
     if not traveler:
@@ -422,6 +593,156 @@ async def delete_traveler(
             detail="Traveler not found"
         )
 
+    # Store traveler info for notification before deletion
+    job_number = traveler.job_number
+    part_description = traveler.part_description
+
+    # Get user for notification
+    default_user = db.query(User).filter(User.username == "system").first()
+    if not default_user:
+        default_user = User(
+            username="system",
+            email="system@nexus.local",
+            first_name="System",
+            last_name="User",
+            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
+            role="OPERATOR",
+            is_approver=False
+        )
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
+
+    # Delete related records first (cascade delete)
+    db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()
+    db.query(ManualStep).filter(ManualStep.traveler_id == traveler.id).delete()
+    db.query(AuditLog).filter(AuditLog.traveler_id == traveler.id).delete()
+    db.query(TravelerTrackingLog).filter(TravelerTrackingLog.traveler_id == traveler.id).delete()
+
     db.delete(traveler)
     db.commit()
+
+    # Create notification for all admins
+    create_notification_for_admins(
+        db=db,
+        notification_type=NotificationType.TRAVELER_DELETED,
+        title="Traveler Deleted",
+        message=f"{default_user.username} deleted traveler {job_number} - {part_description}",
+        reference_id=traveler_id,
+        reference_type="traveler",
+        created_by_username=default_user.username
+    )
+
     return {"message": "Traveler deleted successfully"}
+
+@router.post("/scan", response_model=TrackingScanResponse)
+async def scan_tracking_code(
+    scan_data: TrackingScanRequest,
+    db: Session = Depends(get_db)
+):
+    """Record a barcode/QR code scan for traveler tracking"""
+
+    # Validate scan type
+    if scan_data.scan_type not in ["HEADER", "WORK_CENTER"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="scan_type must be 'HEADER' or 'WORK_CENTER'"
+        )
+
+    # For WORK_CENTER scans, work_center is required
+    if scan_data.scan_type == "WORK_CENTER" and not scan_data.work_center:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="work_center is required for WORK_CENTER scan type"
+        )
+
+    # Find the traveler by job number
+    traveler = db.query(Traveler).filter(Traveler.job_number == scan_data.job_number).first()
+    if not traveler:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Traveler with job number {scan_data.job_number} not found"
+        )
+
+    # Create tracking log entry
+    tracking_log = TravelerTrackingLog(
+        traveler_id=traveler.id,
+        job_number=scan_data.job_number,
+        work_center=scan_data.work_center,
+        step_sequence=scan_data.step_sequence,
+        scan_type=scan_data.scan_type,
+        scanned_by=scan_data.scanned_by,
+        notes=scan_data.notes
+    )
+
+    db.add(tracking_log)
+    db.commit()
+    db.refresh(tracking_log)
+
+    return TrackingScanResponse(
+        success=True,
+        message=f"Scan recorded successfully for {scan_data.scan_type}",
+        log_id=tracking_log.id,
+        traveler_id=traveler.id
+    )
+
+@router.get("/tracking/logs", response_model=List[TrackingLogResponse])
+async def get_tracking_logs(
+    job_number: str = None,
+    traveler_id: int = None,
+    work_center: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get tracking logs with optional filters"""
+    query = db.query(TravelerTrackingLog)
+
+    if job_number:
+        query = query.filter(TravelerTrackingLog.job_number == job_number)
+    if traveler_id:
+        query = query.filter(TravelerTrackingLog.traveler_id == traveler_id)
+    if work_center:
+        query = query.filter(TravelerTrackingLog.work_center == work_center)
+
+    logs = query.order_by(TravelerTrackingLog.scanned_at.desc()).offset(skip).limit(limit).all()
+    return logs
+
+@router.get("/tracking/current-location/{job_number}")
+async def get_current_location(
+    job_number: str,
+    db: Session = Depends(get_db)
+):
+    """Get the current location (last scanned work center) of a traveler"""
+
+    # Find the traveler
+    traveler = db.query(Traveler).filter(Traveler.job_number == job_number).first()
+    if not traveler:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Traveler with job number {job_number} not found"
+        )
+
+    # Get the most recent WORK_CENTER scan
+    last_scan = db.query(TravelerTrackingLog).filter(
+        TravelerTrackingLog.traveler_id == traveler.id,
+        TravelerTrackingLog.scan_type == "WORK_CENTER"
+    ).order_by(TravelerTrackingLog.scanned_at.desc()).first()
+
+    if not last_scan:
+        return {
+            "job_number": job_number,
+            "traveler_id": traveler.id,
+            "current_location": None,
+            "last_scan_time": None,
+            "message": "No work center scans recorded yet"
+        }
+
+    return {
+        "job_number": job_number,
+        "traveler_id": traveler.id,
+        "current_location": last_scan.work_center,
+        "step_sequence": last_scan.step_sequence,
+        "last_scan_time": last_scan.scanned_at,
+        "scanned_by": last_scan.scanned_by
+    }

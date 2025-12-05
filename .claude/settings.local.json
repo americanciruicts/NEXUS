@@ -16,7 +16,21 @@
       "Bash(alembic revision:*)",
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next lint:*)",
+      "Bash(awk:*)",
+      "Bash(find:*)",
+      "Bash(python3:*)",
+      "Read(//home/tony/**)",
+      "Bash(cat:*)",
+      "Bash(sudo rm:*)",
+      "Bash(ls:*)",
+      "Bash(bash scripts/run_all_checks.sh:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzY0MTk4NjEzfQ.NUz2tcuu-M4MX6VPodIF6YR0PHfBNt3CjXVLRwEbImA\" curl -s -H \"Authorization: Bearer $TOKEN\" http://acidashboard.aci.local:100/api/users/)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2IiwiZXhwIjoxNzY0NzkyNzExfQ.NW7vn1uCq6b13Byvv7-9OV8e3xVE4jnlw9koW0d6Fk0\")",
+      "Bash(netstat:*)",
+      "Bash(ss:*)"
     ],
     "deny": [],
     "ask": []

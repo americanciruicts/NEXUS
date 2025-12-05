@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db
-from models import User
+from models import User, UserRole
 from schemas.user_schemas import User as UserSchema, UserCreate, UserUpdate
 from routers.auth import get_current_user, get_password_hash
 
@@ -16,8 +16,8 @@ async def get_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get list of users (admin/supervisor only)"""
-    if current_user.role not in ["ADMIN", "SUPERVISOR"]:
+    """Get list of users (admin only)"""
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -33,7 +33,7 @@ async def get_user(
     current_user: User = Depends(get_current_user)
 ):
     """Get user by ID"""
-    if current_user.role not in ["ADMIN", "SUPERVISOR"] and current_user.id != user_id:
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -55,7 +55,7 @@ async def create_user(
     current_user: User = Depends(get_current_user)
 ):
     """Create new user (admin only)"""
-    if current_user.role != "ADMIN":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can create users"
@@ -97,7 +97,7 @@ async def update_user(
     current_user: User = Depends(get_current_user)
 ):
     """Update user"""
-    if current_user.role != "ADMIN" and current_user.id != user_id:
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -126,7 +126,7 @@ async def delete_user(
     current_user: User = Depends(get_current_user)
 ):
     """Deactivate user (admin only)"""
-    if current_user.role != "ADMIN":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can delete users"

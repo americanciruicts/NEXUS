@@ -108,13 +108,59 @@ option {
   -webkit-text-fill-color: #000000 !important;
 }
 
-/* Disable dark mode entirely */
+/* Force light color scheme */
 * {
   color-scheme: light !important;
 }
 
 html, body {
   color-scheme: light !important;
+  background-color: #ffffff !important;
+}
+
+/* Force all backgrounds to be light - REMOVED button and div from this rule */
+/* Only apply transparent background to specific layout elements, not all divs */
+body, html, #__next, main {
+  background-color: transparent !important;
+}
+
+/* Ensure no dark backgrounds anywhere */
+.dark, .dark * {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* Force modal backgrounds to be transparent */
+.fixed.inset-0.z-50 {
+  background-color: transparent !important;
+}
+
+.relative.bg-white {
+  background-color: #ffffff !important;
+}
+
+/* Force all page backgrounds to be light - REMOVED to allow login page gradient */
+
+/* Force all containers to have light backgrounds */
+.bg-white {
+  background-color: #ffffff !important;
+}
+
+.bg-gray-50 {
+  background-color: #f9fafb !important;
+}
+
+/* Force all text to be dark */
+.text-gray-900 {
+  color: #111827 !important;
+}
+
+.text-gray-700 {
+  color: #374151 !important;
+}
+
+.text-gray-600 {
+  color: #4b5563 !important;
 }
 
 /* Larger textareas for better data entry */
@@ -133,7 +179,7 @@ input:-webkit-autofill:active {
   color: #000000 !important;
 }
 
-/* Print Styles - SINGLE PAGE ONLY */
+/* Print Styles - LARGE READABLE FONTS */
 @media print {
   /* Hide unnecessary elements when printing */
   .no-print,
@@ -145,9 +191,9 @@ input:-webkit-autofill:active {
     display: none !important;
   }
 
-  /* Reset page margins and sizing - TIGHT MARGINS */
+  /* Reset page margins */
   @page {
-    margin: 0.3cm;
+    margin: 0.1in;
     size: letter portrait;
   }
 
@@ -156,9 +202,10 @@ input:-webkit-autofill:active {
     padding: 0;
     background: white !important;
     color: black !important;
+    font-size: 20px !important;
   }
 
-  /* FORCE SINGLE PAGE - NO PAGE BREAKS */
+  /* Page break control */
   .print-page-break {
     page-break-before: always !important;
     break-before: always !important;
@@ -166,67 +213,77 @@ input:-webkit-autofill:active {
 
   /* Ensure proper backgrounds and colors */
   * {
-    background: white !important;
-    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
     box-shadow: none !important;
     text-shadow: none !important;
   }
 
-  /* NO PAGE BREAKS INSIDE */
-  .space-y-6,
-  .space-y-4,
-  .space-y-3,
-  .space-y-2 {
-    page-break-inside: avoid !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    gap: 2px !important;
+  /* LARGE FONTS FOR READABILITY */
+
+  /* Headers - Customer info section */
+  .print-header,
+  .print-header * {
+    font-size: 30px !important;
+    line-height: 1.4 !important;
   }
 
-  /* Make everything compact */
-  .space-y-6 > * {
-    margin-top: 2px !important;
-    margin-bottom: 2px !important;
+  /* Section titles - SPECIFICATIONS, ROUTING, COMMENTS */
+  .print-section-title {
+    font-size: 52px !important;
+    line-height: 1.2 !important;
+    font-weight: 900 !important;
+    padding: 16px !important;
   }
 
-  /* Traveler specific print styles - SUPER COMPACT */
-  .print-container {
-    width: 100% !important;
-    max-width: none !important;
-    padding: 0.1cm !important;
-    font-size: 7pt !important;
+  /* Content areas */
+  .print-content,
+  .print-content * {
+    font-size: 30px !important;
+    line-height: 1.5 !important;
+    padding: 22px !important;
   }
 
-  /* Compact headers and sections - MINIMAL SPACE */
-  h1, h2, h3 {
-    font-size: 9pt !important;
-    margin: 1px 0 !important;
-    padding: 1px 0 !important;
-    page-break-after: avoid !important;
+  /* Table headers */
+  .print-table-header {
+    font-size: 38px !important;
+    line-height: 1.4 !important;
+    font-weight: 900 !important;
+    padding: 24px 20px !important;
   }
 
-  /* Super compact tables */
+  /* Table cells */
+  .print-table-cell {
+    font-size: 32px !important;
+    line-height: 1.4 !important;
+    padding: 22px 20px !important;
+  }
+
+  /* Override ALL Tailwind text utilities */
+  .text-xs, .text-sm, .text-base, .text-lg, .text-xl, .text-2xl {
+    font-size: inherit !important;
+  }
+
+  [class*="text-"] {
+    font-size: inherit !important;
+  }
+
+  /* Tables */
   table {
     width: 100% !important;
     border-collapse: collapse !important;
-    font-size: 6pt !important;
-    margin: 1px 0 !important;
   }
 
   th, td {
     border: 1px solid #000 !important;
-    padding: 1px 2px !important;
-    font-size: 6pt !important;
-    line-height: 1.1 !important;
   }
 
-  /* Compact divs and sections */
-  div {
-    margin: 0 !important;
-    padding: 2px !important;
+  /* Headers and sections */
+  h1, h2, h3 {
+    page-break-after: avoid !important;
   }
 
-  /* Borders minimal */
+  /* Borders */
   .border-2,
   .border {
     border-width: 1px !important;
@@ -238,76 +295,7 @@ input:-webkit-autofill:active {
     border-radius: 2px !important;
   }
 
-  /* Padding minimal */
-  .p-4,
-  .p-5,
-  .p-6,
-  .px-4,
-  .py-4 {
-    padding: 2px !important;
-  }
-
-  .mb-2,
-  .mb-3,
-  .mb-4,
-  .mt-2,
-  .mt-3,
-  .mt-4,
-  .mt-6 {
-    margin-top: 1px !important;
-    margin-bottom: 1px !important;
-  }
-
-  /* Text sizes minimal */
-  .text-sm,
-  .text-xs,
-  .text-base {
-    font-size: 6pt !important;
-  }
-
-  .text-xl,
-  .text-2xl {
-    font-size: 8pt !important;
-  }
-
-  /* Min heights reduced */
-  .min-h-\[80px\],
-  .min-h-\[40px\],
-  .min-h-\[300px\] {
-    min-height: 20px !important;
-  }
-
-  /* Overview cards should be inline */
-  .print-inline {
-    display: inline-block !important;
-    width: 24% !important;
-    margin: 0 0.5% !important;
-    vertical-align: top !important;
-  }
-
-  /* Compact spacing */
-  .space-y-6 > * + * {
-    margin-top: 0.2cm !important;
-  }
-
-  .p-6, .p-8 {
-    padding: 0.2cm !important;
-  }
-
-  .mb-6, .mb-8 {
-    margin-bottom: 0.2cm !important;
-  }
-
-  /* Border adjustments */
-  .border, .border-2 {
-    border-width: 1px !important;
-  }
-
-  .rounded-xl, .rounded-lg {
-    border-radius: 0 !important;
-  }
-
-  /* Remove shadows and gradients */
+  /* Remove shadows */
   .shadow, .shadow-lg, .shadow-md {
     box-shadow: none !important;
   }
@@ -316,19 +304,6 @@ input:-webkit-autofill:active {
   .bg-gradient-to-br,
   .bg-gradient-to-l {
     background: white !important;
-  }
-
-  /* Ensure visibility of all text */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Force single page */
-  .print-page {
-    page-break-after: avoid !important;
-    page-break-before: avoid !important;
-    page-break-inside: avoid !important;
   }
 }
 
@@ -361,40 +336,36 @@ input:-webkit-autofill:active {
   transform: scaleX(1);
 }
 
-/* Modern Button styles */
+/* Removed dark mode navigation overrides */
+
+/* Simple Button styles */
 .btn-primary {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: #2563eb;
   color: #ffffff;
   border: none;
   font-weight: 600;
-  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
   transition: all 0.2s ease;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4);
-  transform: translateY(-2px);
+  background: #1d4ed8;
 }
 
 .btn-primary:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+  background: #1e40af;
 }
 
 .btn-secondary {
   background-color: #ffffff;
   color: #475569;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #cbd5e1;
   font-weight: 600;
   transition: all 0.2s ease;
 }
 
 .btn-secondary:hover {
   background-color: #f8fafc;
-  border-color: #cbd5e1;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-color: #94a3b8;
 }
 
 /* Card styles */
@@ -417,7 +388,7 @@ table {
 }
 
 thead {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: #f8fafc;
 }
 
 tbody tr {
@@ -426,8 +397,6 @@ tbody tr {
 
 tbody tr:hover {
   background-color: #f8fafc;
-  transform: scale(1.01);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 /* Smooth scrolling */

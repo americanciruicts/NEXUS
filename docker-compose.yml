@@ -1,53 +1,39 @@
- 
-services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: nexus_postgres
-    environment:
-      POSTGRES_DB: nexus
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "3001:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db/init-db:/docker-entrypoint-initdb.d
-    networks:
-      - nexus_network
 
+services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: nexus_backend
+    restart: always
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/nexus
+      DATABASE_URL: postgresql://nexus_user:postgres@aci-database:5432/nexus
       SECRET_KEY: your-secret-key-change-in-production
       SMTP_SERVER: smtp.gmail.com
       SMTP_PORT: 587
       SMTP_USERNAME: your-email@gmail.com
       SMTP_PASSWORD: your-app-password
     ports:
-      - "3002:8000"
-    depends_on:
-      - postgres
+      - "102:8000"
     volumes:
       - ./backend:/app
       - /app/__pycache__
     networks:
       - nexus_network
+      - db-consolidation_aci-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: nexus_frontend
+    restart: always
     ports:
-      - "3003:3000"
+      - "103:3000"
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3002
+      NEXT_PUBLIC_API_URL: http://acidashboard.aci.local:102
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -58,11 +44,11 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nexus_nginx
+    restart: always
     ports:
-      - "3000:80"
+      - "0.0.0.0:100:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - frontend
       - backend
@@ -72,8 +58,5 @@ services:
 networks:
   nexus_network:
     driver: bridge
-
-volumes:
-  postgres_data:
-  
-  
+  db-consolidation_aci-network:
+    external: true

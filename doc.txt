@@ -1,4 +1,122 @@
-https://americancircuits0-my.sharepoint.com/:x:/g/personal/kanav_americancircuits_com/ETN0ma8ITSpHvjVysFusSbIBmGPBIyC8WBkzH7cCZSEjyA?e=Z77hVu
+Create theme context provider for global theme state
 
+Add theme toggle button (bottom right corner with moon/sun icon)
 
-improve the ui/ux of the whole website as well as add some colors in the form, the text files should be bigger so can add more data, worl cenrter files has drop down of all the work center list, first suer select which type of traveler he wants to make, there form should have seuqnce number, workcenter, intricution, quantity, rejectsed, accepted, aidgn, date columne and comment section beloe which thet can print as well as from tock, to stchokc space and ship via space , other details on top of the image i upload is custiomize able and other data auto poluplated, even onnly new tarveler tab is working , no other page are working so create thsose pages as well. as current it should 404 so i want amm it. make the design of whole website mordern, slick, and nice primary colros are whitre ans blue and u can add other colors as well. no tab on navbar working, no other button work, even the text i enter in th form is white coor which is ot even visble to the user properly. 
+Update Layout component to support theme switching
+
+Update all pages to support dark mode colors
+
+Rebuild and test theme switching
+Let me create a theme context provider:
+Write c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\context\ThemeContext.tsx
+⎿
+60 lines
+'use client';
+
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+type Theme = 'light' | 'dark';
+
+interface ThemeContextType {
+  theme: Theme;
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<Theme>('light');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Load theme from localStorage
+    const savedTheme = localStorage.getItem('nexus_theme') as Theme;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+    } else {
+      // Check system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const initialTheme = prefersDark ? 'dark' : 'light';
+      setTheme(initialTheme);
+      document.documentElement.classList.toggle('dark', prefersDark);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('nexus_theme', newTheme);
+    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+  };
+
+  // Prevent flash of unstyled content
+  if (!mounted) {
+    return <>{children}</>;
+  }
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+}
+Now let me create the theme toggle button component:
+Write c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\components\ThemeToggle.tsx
+⎿
+23 lines
+'use client';
+
+import { useTheme } from '@/context/ThemeContext';
+import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
+
+export default function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <button
+      onClick={toggleTheme}
+      className="fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700"
+      aria-label="Toggle theme"
+    >
+      {theme === 'light' ? (
+        <MoonIcon className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+      ) : (
+        <SunIcon className="w-6 h-6 text-yellow-500" />
+      )}
+    </button>
+  );
+}
+Now let me update the root layout to include the ThemeProvider and enable dark mode in Tailwind:
+Read c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\app\layout.tsx
+Edit c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\app\layout.tsx
+⎿
+Added 3 lines
+123456789101112
+12345678910111213
+Now let me update the Layout component to include the ThemeToggle button:
+Read c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\components\layout\Layout.tsx (lines 1-50)
+Edit c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\components\layout\Layout.tsx
+⎿
+Added 2 lines
+123456789101112
+123456789101112
+Now let me update the Header component to support dark mode:
+Read c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\components\layout\Header.tsx (lines 1-100)
+Let me read more to get the complete Header component, then update it for dark mode:
+Bash
+⎿
+Count lines in Header.tsx
+IN
+wc -l "c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\components\layout\Header.tsx"
+OUT
+161 c:\Users\admin\OneDrive - americancircuits.com\Documents\GitHub\Nexus\frontend\src\components\layout\Header.tsx

@@ -4,7 +4,9 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useRouter, usePathname } from 'next/navigation';
 
 interface User {
+  id?: number;
   username: string;
+  email?: string;
   role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER';
   isApprover: boolean;
 }
@@ -44,19 +46,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const authData = localStorage.getItem('nexus_auth');
         if (authData) {
           const parsed = JSON.parse(authData);
-          if (parsed.isAuthenticated) {
-            // Mock user data - in real app this would come from API
-            const isAdmin = parsed.username === 'adam' || parsed.username === 'kris';
+          if (parsed.isAuthenticated && parsed.role) {
             setUser({
               username: parsed.username,
-              role: isAdmin ? 'ADMIN' : 'OPERATOR',
-              isApprover: isAdmin
+              role: parsed.role,
+              isApprover: parsed.isApprover || false
             });
           }
         }
       } catch (error) {
         console.error('Error checking auth:', error);
         localStorage.removeItem('nexus_auth');
+        localStorage.removeItem('nexus_token');
       }
       setIsLoading(false);
     };
@@ -73,32 +74,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      // Mock authentication logic - Adam and Kris are admins
-      const validCredentials = [
-        { username: 'adam', password: 'nexus123', role: 'ADMIN', isApprover: true },
-        { username: 'kris', password: 'nexus123', role: 'ADMIN', isApprover: true },
-        { username: 'praful', password: 'nexus123', role: 'OPERATOR', isApprover: false },
-        { username: 'max', password: 'nexus123', role: 'OPERATOR', isApprover: false },
-        { username: 'preet', password: 'nexus123', role: 'OPERATOR', isApprover: false },
-        { username: 'kanav', password: 'nexus123', role: 'OPERATOR', isApprover: false }
-      ];
+      // Call backend API to authenticate and get JWT token
+      const response = await fetch('http://acidashboard.aci.local:100/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username,
+          password
+        })
+      });
 
-      const validUser = validCredentials.find(
-        cred => cred.username === username && cred.password === password
-      );
+      if (response.ok) {
+        const data = await response.json();
+        const accessToken = data.access_token;
+        const backendUser = data.user;
 
-      if (validUser) {
         const userData: User = {
-          username: validUser.username,
-          role: validUser.role as 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER',
-          isApprover: validUser.isApprover
+          id: backendUser.id,
+          username: backendUser.username,
+          email: backendUser.email,
+          role: backendUser.role,
+          isApprover: backendUser.is_approver
         };
 
         setUser(userData);
 
-        // Store in localStorage
+        // Store token and user info in localStorage
+        localStorage.setItem('nexus_token', accessToken);
         localStorage.setItem('nexus_auth', JSON.stringify({
           username: userData.username,
+          role: userData.role,
+          isApprover: userData.isApprover,
           isAuthenticated: true,
           loginTime: Date.now()
         }));
@@ -116,6 +124,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('nexus_auth');
+    localStorage.removeItem('nexus_token');
     router.push('/auth/login');
   };
 

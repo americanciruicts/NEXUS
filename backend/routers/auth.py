@@ -8,7 +8,7 @@ import os
 
 from database import get_db
 from models import User
-from schemas.user_schemas import UserLogin, Token, UserCreate, User as UserSchema
+from schemas.user_schemas import UserLogin, Token, UserCreate, User as UserSchema, PasswordReset
 
 router = APIRouter()
 
@@ -45,10 +45,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
             raise credentials_exception
-    except JWTError:
+        user_id = int(user_id_str)
+    except (JWTError, ValueError, TypeError):
         raise credentials_exception
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -56,7 +57,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise credentials_exception
     return user
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == user_data.username).first()
     if not user or not verify_password(user_data.password, user.hashed_password):
@@ -78,7 +79,19 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role.value,
+            "is_approver": user.is_approver,
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at
+        }
     }
 
 @router.post("/register", response_model=UserSchema)
@@ -114,3 +127,27 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserSchema)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.post("/reset-password")
+async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)):
+    # Find user by username
+    user = db.query(User).filter(User.username == reset_data.username).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Verify old password
+    if not verify_password(reset_data.old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect current password"
+        )
+
+    # Update password
+    user.hashed_password = get_password_hash(reset_data.new_password)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Password reset successful"}

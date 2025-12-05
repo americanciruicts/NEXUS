@@ -16,7 +16,7 @@ export default function EditTravelerPage() {
   useEffect(() => {
     const fetchTraveler = async () => {
       try {
-        const response = await fetch(`http://localhost:3002/travelers/by-job/${travelerId}`, {
+        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/by-job/${travelerId}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
           }
@@ -42,9 +42,13 @@ export default function EditTravelerPage() {
 
   if (isLoading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-xl text-gray-600">Loading traveler...</div>
+      <Layout fullWidth>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
+          <div className="w-full p-4 lg:p-6">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-xl text-gray-600">Loading traveler...</div>
+            </div>
+          </div>
         </div>
       </Layout>
     );
@@ -52,25 +56,33 @@ export default function EditTravelerPage() {
 
   if (!travelerData) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-xl text-red-600">Traveler not found</div>
+      <Layout fullWidth>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
+          <div className="w-full p-4 lg:p-6">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-xl text-red-600">Traveler not found</div>
+            </div>
+          </div>
         </div>
       </Layout>
     );
   }
 
   return (
-    <Layout>
-      <div className="mb-6">
-        <button
-          onClick={() => router.back()}
-          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold transition-colors"
-        >
-          Back
-        </button>
+    <Layout fullWidth>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
+        <div className="w-full p-4 lg:p-6">
+          <div className="mb-6">
+            <button
+              onClick={() => router.back()}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold transition-colors"
+            >
+              Back
+            </button>
+          </div>
+          <TravelerForm mode="edit" initialData={travelerData} travelerId={travelerId} />
+        </div>
       </div>
-      <TravelerForm mode="edit" initialData={travelerData} travelerId={travelerId} />
     </Layout>
   );
 }

@@ -1,0 +1,89 @@
+<svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="innerGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:0.1" />
+    </linearGradient>
+
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Enhanced hexagon icon -->
+  <g transform="translate(3, 3)">
+    <!-- Outer glow hexagon -->
+    <path d="M 22 3 L 38 12 L 38 30 L 22 39 L 6 30 L 6 12 Z"
+          fill="rgba(37, 99, 235, 0.05)"
+          stroke="url(#accentGrad)"
+          stroke-width="1"
+          opacity="0.4"/>
+
+    <!-- Outer hexagon frame -->
+    <path d="M 22 5 L 36 13 L 36 29 L 22 37 L 8 29 L 8 13 Z"
+          fill="none"
+          stroke="url(#accentGrad)"
+          stroke-width="3"
+          opacity="0.7"
+          filter="url(#shadow)"/>
+
+    <!-- Inner hexagon with gradient -->
+    <path d="M 22 10 L 31 15.5 L 31 26.5 L 22 32 L 13 26.5 L 13 15.5 Z"
+          fill="url(#innerGlow)"
+          stroke="url(#blueGrad)"
+          stroke-width="2"/>
+
+    <!-- Connection nodes at vertices -->
+    <circle cx="22" cy="10" r="2" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="31" cy="15.5" r="2" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="31" cy="26.5" r="2" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="22" cy="32" r="2" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="13" cy="26.5" r="2" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="13" cy="15.5" r="2" fill="url(#blueGrad)" opacity="0.8"/>
+
+    <!-- N letter with modern design -->
+    <g transform="translate(22, 21)">
+      <!-- Left pillar -->
+      <path d="M -6 -9 L -6 9 L -3 9 L -3 -9 Z"
+            fill="url(#blueGrad)"
+            opacity="0.95"/>
+
+      <!-- Diagonal beam -->
+      <path d="M -3 -9 L 6 9 L 3 9 L -6 -9 Z"
+            fill="url(#accentGrad)"/>
+
+      <!-- Right pillar -->
+      <path d="M 3 -9 L 3 9 L 6 9 L 6 -9 Z"
+            fill="url(#blueGrad)"
+            opacity="0.95"/>
+    </g>
+
+    <!-- Enhanced accent lines -->
+    <line x1="22" y1="0" x2="22" y2="5" stroke="url(#blueGrad)" stroke-width="2.5" opacity="0.7"/>
+    <line x1="22" y1="37" x2="22" y2="42" stroke="url(#blueGrad)" stroke-width="2.5" opacity="0.7"/>
+
+    <!-- Corner accent marks -->
+    <line x1="38" y1="12" x2="41" y2="12" stroke="url(#blueGrad)" stroke-width="2" opacity="0.5"/>
+    <line x1="6" y1="30" x2="3" y2="30" stroke="url(#blueGrad)" stroke-width="2" opacity="0.5"/>
+  </g>
+</svg>

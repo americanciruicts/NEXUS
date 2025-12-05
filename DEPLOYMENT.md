@@ -2,11 +2,11 @@
 
 ## NEXUS - American Circuits Traveler Management System
 
-### 📊 Port Configuration (3000 Series)
-- **3000**: Main Application (Nginx)
-- **3001**: PostgreSQL Database
-- **3002**: FastAPI Backend
-- **3003**: Next.js Frontend
+### 📊 Port Configuration (100 Series)
+- **100**: Main Application (Nginx)
+- **101**: PostgreSQL Database
+- **102**: FastAPI Backend
+- **103**: Next.js Frontend
 
 ---
 
@@ -41,9 +41,9 @@
    ```
 
 3. **Access the Application**
-   - **Main Application**: http://localhost:3000
-   - **Backend API**: http://localhost:3002
-   - **Database**: localhost:3001
+   - **Main Application**: http://localhost:100 or http://acidashboard.aci.local:100 or http://192.168.1.95:100
+   - **Backend API**: http://localhost:102
+   - **Database**: localhost:101
 
 ### Option 2: Development Mode
 
@@ -94,7 +94,7 @@ If Docker Desktop is not available, you can run in development mode:
 docker-compose down
 
 # Check what's using the port
-netstat -an | findstr :3000
+netstat -an | grep :100
 ```
 
 ### Database Connection Issues
@@ -139,18 +139,18 @@ docker-compose up --build
 
 ```
 ┌─────────────────────┐
-│   Nginx (3000)      │ ← Main Entry Point
+│   Nginx (100)       │ ← Main Entry Point
 └─────────────────────┘
          │
     ┌─────────────────────────┐
     │                         │
 ┌─────────────────────┐   ┌─────────────────────┐
-│ Frontend (3003)     │   │  Backend (3002)     │
+│ Frontend (103)      │   │  Backend (102)      │
 │ Next.js             │   │  FastAPI            │
 └─────────────────────┘   └─────────────────────┘
                                    │
                           ┌─────────────────────┐
-                          │ PostgreSQL (3001)   │
+                          │ PostgreSQL (101)    │
                           │ Database            │
                           └─────────────────────┘
 ```
@@ -209,7 +209,7 @@ SMTP_PASSWORD=your-app-password
 
 1. **Start Docker Desktop**
 2. **Run**: `docker-compose up --build -d`
-3. **Visit**: http://localhost:3000
+3. **Visit**: http://localhost:100 or http://acidashboard.aci.local:100 or http://192.168.1.95:100
 4. **Login**: admin / nexus123
 5. **Create your first traveler!**
 

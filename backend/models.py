@@ -6,9 +6,7 @@ import enum
 
 class UserRole(enum.Enum):
     ADMIN = "ADMIN"
-    SUPERVISOR = "SUPERVISOR"
     OPERATOR = "OPERATOR"
-    VIEWER = "VIEWER"
 
 class TravelerType(enum.Enum):
     PCB = "PCB"
@@ -91,6 +89,7 @@ class Traveler(Base):
     id = Column(Integer, primary_key=True, index=True)
     job_number = Column(String(50), nullable=False, index=True)
     work_order_number = Column(String(50), index=True)
+    po_number = Column(String(255))
     traveler_type = Column(Enum(TravelerType), nullable=False)
     part_number = Column(String(50), nullable=False)
     part_description = Column(String(200), nullable=False)
@@ -101,6 +100,7 @@ class Traveler(Base):
     priority = Column(Enum(Priority), default=Priority.NORMAL)
     work_center = Column(String(20), nullable=False)
     status = Column(Enum(TravelerStatus), default=TravelerStatus.CREATED)
+    is_active = Column(Boolean, default=True)  # Whether traveler is active in production
     notes = Column(Text)
     specs = Column(Text)  # Specifications
     specs_date = Column(String(20))  # Specifications date
@@ -110,6 +110,7 @@ class Traveler(Base):
     comments = Column(Text)  # Comments section
     due_date = Column(String(20))  # Due date
     ship_date = Column(String(20))  # Ship date
+    include_labor_hours = Column(Boolean, default=False)  # Whether to include labor hours table
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -187,8 +188,11 @@ class LaborEntry(Base):
     id = Column(Integer, primary_key=True, index=True)
     traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
     step_id = Column(Integer, ForeignKey("process_steps.id"))
+    work_center = Column(String(100))  # Work center name
+    sequence_number = Column(Integer)  # Sequence number from process step
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     start_time = Column(DateTime(timezone=True), nullable=False)
+    pause_time = Column(DateTime(timezone=True))  # Time when paused
     end_time = Column(DateTime(timezone=True))
     hours_worked = Column(Float, default=0.0)
     description = Column(Text)
@@ -235,6 +239,90 @@ class AuditLog(Base):
     # Relationships
     traveler = relationship("Traveler", back_populates="audit_logs")
     user = relationship("User", back_populates="audit_logs")
+
+class TravelerTrackingLog(Base):
+    __tablename__ = "traveler_tracking_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
+    job_number = Column(String(50), nullable=False, index=True)
+    work_center = Column(String(100))
+    step_sequence = Column(Integer)
+    scan_type = Column(String(20), nullable=False)  # 'HEADER' or 'WORK_CENTER'
+    scanned_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    scanned_by = Column(String(100))
+    notes = Column(Text)
+
+# Independent Traveler Time Tracking (separate from Labor Entries)
+class TravelerTimeEntry(Base):
+    __tablename__ = "traveler_time_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
+    job_number = Column(String(50), nullable=False, index=True)
+    work_center = Column(String(100), nullable=False)
+    operator_name = Column(String(100), nullable=False)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    pause_time = Column(DateTime(timezone=True))
+    end_time = Column(DateTime(timezone=True))
+    hours_worked = Column(Float, default=0.0)
+    pause_duration = Column(Float, default=0.0)  # in hours
+    is_completed = Column(Boolean, default=False)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    traveler = relationship("Traveler")
+    user = relationship("User")
+
+class NotificationType(enum.Enum):
+    TRAVELER_CREATED = "TRAVELER_CREATED"
+    TRAVELER_UPDATED = "TRAVELER_UPDATED"
+    TRAVELER_DELETED = "TRAVELER_DELETED"
+    LABOR_ENTRY_CREATED = "LABOR_ENTRY_CREATED"
+    LABOR_ENTRY_UPDATED = "LABOR_ENTRY_UPDATED"
+    LABOR_ENTRY_DELETED = "LABOR_ENTRY_DELETED"
+    TRACKING_ENTRY_CREATED = "TRACKING_ENTRY_CREATED"
+    TRACKING_ENTRY_UPDATED = "TRACKING_ENTRY_UPDATED"
+    TRACKING_ENTRY_DELETED = "TRACKING_ENTRY_DELETED"
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Admin receiving notification
+    notification_type = Column(Enum(NotificationType), nullable=False)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    reference_id = Column(Integer)  # ID of the traveler/labor entry/tracking entry
+    reference_type = Column(String(50))  # 'traveler', 'labor_entry', 'tracking_entry'
+    created_by_username = Column(String(100))  # Username of person who triggered the action
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    read_at = Column(DateTime(timezone=True))
+
+    # Relationships
+    user = relationship("User")
+
+class StepScanEvent(Base):
+    __tablename__ = "step_scan_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
+    step_id = Column(Integer, nullable=False)  # ProcessStep or ManualStep ID
+    step_type = Column(String(20), nullable=False)  # 'PROCESS' or 'MANUAL'
+    job_number = Column(String(50), nullable=False, index=True)
+    work_center = Column(String(100), nullable=False)
+    scan_action = Column(String(20), nullable=False)  # 'SCAN_IN' or 'SCAN_OUT'
+    scanned_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    scanned_by = Column(Integer, ForeignKey("users.id"))
+    notes = Column(Text)
+
+    # For calculating time spent
+    duration_minutes = Column(Float)  # Calculated when scan_out happens
+
+    # Relationships
+    user = relationship("User")
 
 class WorkOrder(Base):
     __tablename__ = "work_orders"

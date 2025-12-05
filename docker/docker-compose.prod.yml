@@ -21,7 +21,6 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-      target: production
     container_name: nexus_backend_prod
     environment:
       DATABASE_URL: postgresql://nexus_user:${POSTGRES_PASSWORD:-change_in_production}@postgres:5432/nexus
@@ -47,7 +46,6 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-      target: production
     container_name: nexus_frontend_prod
     ports:
       - "5003:3000"
