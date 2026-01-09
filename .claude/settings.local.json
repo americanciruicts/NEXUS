@@ -30,7 +30,14 @@
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzY0MTk4NjEzfQ.NUz2tcuu-M4MX6VPodIF6YR0PHfBNt3CjXVLRwEbImA\" curl -s -H \"Authorization: Bearer $TOKEN\" http://acidashboard.aci.local:100/api/users/)",
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2IiwiZXhwIjoxNzY0NzkyNzExfQ.NW7vn1uCq6b13Byvv7-9OV8e3xVE4jnlw9koW0d6Fk0\")",
       "Bash(netstat:*)",
-      "Bash(ss:*)"
+      "Bash(ss:*)",
+      "Bash(git clean:*)",
+      "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose down:*)",
+      "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose up:*)",
+      "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose restart:*)",
+      "Bash(grep:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzY0MTk4NjEzfQ.NUz2tcuu-M4MX6VPodIF6YR0PHfBNt3CjXVLRwEbImA\" curl -s -H \"Authorization: Bearer $TOKEN\" http://acidashboard.aci.local:100/api/tracking/)",
+      "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose build:*)"
     ],
     "deny": [],
     "ask": []

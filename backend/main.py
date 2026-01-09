@@ -7,7 +7,7 @@ import uvicorn
 
 from database import engine, get_db
 from models import Base
-from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, traveler_tracking, notifications
+from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, traveler_tracking, notifications, search
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -55,6 +55,7 @@ app.include_router(labor.router, prefix="/labor", tags=["labor"])
 app.include_router(barcodes.router, prefix="/barcodes", tags=["barcodes"])
 app.include_router(traveler_tracking.router, prefix="/tracking", tags=["traveler-tracking"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+app.include_router(search.router, prefix="/search", tags=["search"])
 
 @app.get("/")
 async def root():

@@ -614,10 +614,17 @@ async def delete_traveler(
         db.refresh(default_user)
 
     # Delete related records first (cascade delete)
+    # Import additional models for deletion
+    from models import LaborEntry, TravelerTimeEntry, Approval, StepScanEvent
+
     db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()
     db.query(ManualStep).filter(ManualStep.traveler_id == traveler.id).delete()
     db.query(AuditLog).filter(AuditLog.traveler_id == traveler.id).delete()
     db.query(TravelerTrackingLog).filter(TravelerTrackingLog.traveler_id == traveler.id).delete()
+    db.query(LaborEntry).filter(LaborEntry.traveler_id == traveler.id).delete()
+    db.query(TravelerTimeEntry).filter(TravelerTimeEntry.traveler_id == traveler.id).delete()
+    db.query(Approval).filter(Approval.traveler_id == traveler.id).delete()
+    db.query(StepScanEvent).filter(StepScanEvent.traveler_id == traveler.id).delete()
 
     db.delete(traveler)
     db.commit()

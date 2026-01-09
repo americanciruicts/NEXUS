@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
+import GlobalSearch from '@/components/GlobalSearch';
 
 interface Notification {
   id: number;
@@ -189,6 +190,9 @@ export default function Header() {
 
           {/* User Menu */}
           <div className="flex items-center space-x-4">
+            {/* Global Search */}
+            <GlobalSearch />
+
             {/* Notifications */}
             {user?.role === 'ADMIN' && (
               <div className="relative">
@@ -262,6 +266,18 @@ export default function Header() {
                         ))
                       )}
                     </div>
+
+                    {notifications.length > 0 && (
+                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                        <Link
+                          href="/notifications"
+                          onClick={() => setShowNotifications(false)}
+                          className="block w-full text-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          View All Notifications
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -303,14 +319,24 @@ export default function Header() {
                       Profile
                     </Link>
                     {user?.role === 'ADMIN' && (
-                      <Link
-                        href="/users"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                      >
-                        <UsersIcon className="h-4 w-4 mr-3" />
-                        User Management
-                      </Link>
+                      <>
+                        <Link
+                          href="/notifications"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        >
+                          <BellIcon className="h-4 w-4 mr-3" />
+                          Notifications
+                        </Link>
+                        <Link
+                          href="/users"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        >
+                          <UsersIcon className="h-4 w-4 mr-3" />
+                          User Management
+                        </Link>
+                      </>
                     )}
                     <button
                       onClick={() => {

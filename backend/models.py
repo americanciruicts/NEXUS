@@ -17,11 +17,13 @@ class TravelerType(enum.Enum):
     TEST = "TEST"
 
 class TravelerStatus(enum.Enum):
+    DRAFT = "DRAFT"
     CREATED = "CREATED"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     ON_HOLD = "ON_HOLD"
     CANCELLED = "CANCELLED"
+    ARCHIVED = "ARCHIVED"
 
 class Priority(enum.Enum):
     LOW = "LOW"

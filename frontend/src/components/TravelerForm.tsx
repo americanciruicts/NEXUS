@@ -28,6 +28,44 @@ interface FormStep {
   date: string;
 }
 
+interface TravelerListItem {
+  id: number;
+  job_number: string;
+  work_order_number?: string;
+  part_number: string;
+  part_description: string;
+}
+
+interface ProcessStepData {
+  step_number: number;
+  operation?: string;
+  work_center_code: string;
+  instructions: string;
+  quantity?: number;
+  rejected?: number;
+  accepted?: number;
+  sign?: string;
+  completed_date?: string;
+}
+
+interface FullTravelerData {
+  id: number;
+  job_number: string;
+  work_order_number?: string;
+  part_number: string;
+  part_description: string;
+  revision: string;
+  quantity: number;
+  customer_code?: string;
+  customer_name?: string;
+  specs?: string;
+  from_stock?: string;
+  to_stock?: string;
+  ship_via?: string;
+  comments?: string;
+  process_steps?: ProcessStepData[];
+}
+
 // Helper function to convert any date format to YYYY-MM-DD for date inputs
 const extractDateOnly = (dateStr: unknown): string => {
   if (!dateStr) return '';
@@ -108,9 +146,25 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   const [selectedType, setSelectedType] = useState<TravelerType | ''>(initialData?.traveler_type as TravelerType || '');
   const [showForm, setShowForm] = useState(mode === 'edit' || false);
 
+  // Split work order into prefix (auto-generated) and suffix (user-editable)
+  const splitWorkOrder = (workOrder: string): { prefix: string; suffix: string } => {
+    if (!workOrder) return { prefix: '', suffix: '' };
+    const parts = workOrder.split('-');
+    if (parts.length >= 2) {
+      return { prefix: parts[0], suffix: parts.slice(1).join('-') };
+    }
+    return { prefix: workOrder, suffix: '' };
+  };
+
+  const initialWorkOrder = String(initialData?.work_order_number || '');
+  const { prefix: initialPrefix, suffix: initialSuffix } = splitWorkOrder(initialWorkOrder);
+
+  const [workOrderPrefix, setWorkOrderPrefix] = useState(initialPrefix);
+  const [workOrderSuffix, setWorkOrderSuffix] = useState(initialSuffix);
+
   const [formData, setFormData] = useState({
     jobNumber: String(initialData?.job_number || ''),
-    workOrderNumber: String(initialData?.work_order_number || ''),
+    workOrderNumber: initialWorkOrder,
     partNumber: String(initialData?.part_number || ''),
     partDescription: String(initialData?.part_description || ''),
     revision: String(initialData?.revision || ''),
@@ -154,6 +208,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Sync workOrderNumber when prefix or suffix changes
+  useEffect(() => {
+    const fullWorkOrder = workOrderSuffix ? `${workOrderPrefix}-${workOrderSuffix}` : workOrderPrefix;
+    setFormData(prev => ({ ...prev, workOrderNumber: fullWorkOrder }));
+  }, [workOrderPrefix, workOrderSuffix]);
 
   // Debug: Monitor formSteps changes
   const prevStepsCountRef = useRef(0);
@@ -228,8 +288,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       }
       // Prevent page from scrolling when loading edit data
       setTimeout(() => window.scrollTo(0, 0), 0);
-    } else if (selectedType && mode === 'create') {
-      // In create mode, load default steps ONLY ONCE when type is first selected
+    } else if (selectedType && mode === 'create' && formSteps.length === 0) {
+      // In create mode, load default steps ONLY if formSteps is empty (not already auto-populated)
       console.log('❌ LOADING DEFAULT STEPS for type:', selectedType);
       loadDefaultSteps(selectedType);
       // Set labor hours based on traveler type
@@ -527,6 +587,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     // PCB and PARTS travelers should never have labor hours
     const finalIncludeLaborHours = (selectedType === 'PCB' || selectedType === 'PARTS') ? false : includeLaborHours;
 
+    // Auto-increment revision when editing (if changes were made)
+    const finalRevision = mode === 'edit' && initialData?.revision
+      ? incrementRevision(String(initialData.revision))
+      : formData.revision || 'A';
+
     // Prepare API payload
     const travelerData = {
       job_number: fullJobNumber,
@@ -535,7 +600,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       traveler_type: travelerTypeMap[selectedType] || 'ASSY',
       part_number: formData.partNumber,
       part_description: formData.partDescription || 'Assembly',
-      revision: formData.revision || 'A',
+      revision: finalRevision,
       customer_revision: formData.customerRevision || '',
       part_revision: formData.partRevision || '',
       quantity: parseInt(formData.quantity.toString()) || 1,
@@ -629,6 +694,113 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       console.error('Error saving traveler:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       alert(`❌ Error ${mode === 'edit' ? 'Updating' : 'Creating'} Traveler\n\n${errorMessage}\n\nPlease check the console for more details.`);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!formData.jobNumber) {
+      alert('⚠️ Job Number Required\n\nPlease enter a Job Number to save as draft.');
+      return;
+    }
+
+    // Build full job number with compliance indicators
+    let fullJobNumber = formData.jobNumber;
+    if (isLeadFree) fullJobNumber += 'L';
+    if (isITAR) fullJobNumber += 'M';
+
+    // Map traveler type to backend enum
+    const travelerTypeMap: { [key: string]: string } = {
+      'PCB_ASSEMBLY': 'ASSY',
+      'PCB': 'PCB',
+      'CABLE': 'CABLE',
+      'CABLE_ASSEMBLY': 'CABLE',
+      'PCB_CABLE_ASSEMBLY': 'ASSY',
+      'PARTS': 'ASSY',
+      'ASSEMBLY': 'ASSY'
+    };
+
+    // Prepare API payload with DRAFT status
+    const travelerData = {
+      job_number: fullJobNumber,
+      work_order_number: formData.workOrderNumber || fullJobNumber,
+      po_number: formData.poNumber || '',
+      traveler_type: travelerTypeMap[selectedType] || 'ASSY',
+      part_number: formData.partNumber || '',
+      part_description: formData.partDescription || '',
+      revision: formData.revision || 'A',
+      customer_revision: formData.customerRevision || '',
+      part_revision: formData.partRevision || '',
+      quantity: parseInt(formData.quantity.toString()) || 1,
+      customer_code: formData.customerCode || '',
+      customer_name: formData.customerName || '',
+      priority: formData.priority || 'NORMAL',
+      work_center: formSteps[0]?.workCenter || 'ASSEMBLY',
+      status: 'DRAFT',  // Set status to DRAFT
+      is_active: false,  // Drafts are not active
+      include_labor_hours: false,
+      notes: formData.notes || '',
+      specs: formData.specs || '',
+      specs_date: formData.specsDate || '',
+      from_stock: formData.fromStock || '',
+      to_stock: formData.toStock || '',
+      ship_via: formData.shipVia || '',
+      comments: formData.comments || '',
+      due_date: formData.dueDate || '',
+      ship_date: formData.shipDate || '',
+      process_steps: formSteps.map(step => ({
+        step_number: step.sequence,
+        operation: step.workCenter,
+        work_center_code: step.workCenter.replace(/\s+/g, '_').toUpperCase(),
+        instructions: step.instruction || '',
+        estimated_time: 30,
+        is_required: true,
+        quantity: step.quantity || null,
+        accepted: step.accepted || null,
+        rejected: step.rejected || null,
+        sign: step.assign || '',
+        completed_date: step.date || ''
+      }))
+    };
+
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const url = mode === 'edit'
+        ? `http://acidashboard.aci.local:100/api/travelers/${travelerId}`
+        : 'http://acidashboard.aci.local:100/api/travelers/';
+
+      const method = mode === 'edit' ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(travelerData)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(`Server returned ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Draft saved successfully:', result);
+
+      alert(`✅ Draft Saved Successfully!\n\n` +
+            `Job Number: ${fullJobNumber}\n` +
+            `Status: DRAFT\n\n` +
+            `Your draft has been saved and can be edited later.`);
+
+      // Redirect to travelers list
+      setTimeout(() => {
+        window.location.href = '/travelers';
+      }, 1500);
+    } catch (error: unknown) {
+      console.error('Error saving draft:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`❌ Error Saving Draft\n\n${errorMessage}`);
     }
   };
 
@@ -795,7 +967,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         {/* Main Form - Page 1 */}
         <div className="bg-white shadow-lg rounded-lg border-2 border-indigo-100 p-8 mb-6">
           {/* Top Row - Compact */}
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-6">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Page</label>
               <input
@@ -816,29 +988,80 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   onChange={async (e) => {
                     const value = e.target.value;
                     setFormData({...formData, jobNumber: value});
-                    // Auto-populate on blur or after typing
-                    if (value.length >= 3) {
+                    // Auto-populate from existing traveler with same job number
+                    if (value.length >= 3 && mode === 'create') {
                       try {
-                        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/work-order/${value}`, {
+                        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/`, {
                           headers: {
                             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
                           }
                         });
                         if (response.ok) {
-                          const data = await response.json();
-                          setFormData(prev => ({
-                            ...prev,
-                            workOrderNumber: data.work_order_number || value,
-                            partNumber: data.part_number || prev.partNumber,
-                            partDescription: data.part_description || prev.partDescription,
-                            revision: data.revision || prev.revision,
-                            quantity: data.quantity || prev.quantity,
-                            customerCode: data.customer_code || prev.customerCode,
-                            customerName: data.customer_name || prev.customerName
-                          }));
+                          const travelers: TravelerListItem[] = await response.json();
+                          // Find traveler with matching job number
+                          const matchingTraveler = travelers.find((t: TravelerListItem) =>
+                            t.job_number.toLowerCase() === value.toLowerCase()
+                          );
+
+                          if (matchingTraveler) {
+                            // Fetch full traveler details with steps
+                            const detailResponse = await fetch(`http://acidashboard.aci.local:100/api/travelers/${matchingTraveler.id}`, {
+                              headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+                              }
+                            });
+
+                            if (detailResponse.ok) {
+                              const fullData: FullTravelerData = await detailResponse.json();
+
+                              // Split work order number into prefix and suffix
+                              if (fullData.work_order_number) {
+                                const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
+                                setWorkOrderPrefix(prefix);
+                                setWorkOrderSuffix(suffix);
+                              }
+
+                              // Auto-populate all fields
+                              setFormData(prev => ({
+                                ...prev,
+                                workOrderNumber: fullData.work_order_number || prev.workOrderNumber,
+                                partNumber: fullData.part_number || prev.partNumber,
+                                partDescription: fullData.part_description || prev.partDescription,
+                                revision: fullData.revision || prev.revision,
+                                quantity: fullData.quantity || prev.quantity,
+                                customerCode: fullData.customer_code || prev.customerCode,
+                                customerName: fullData.customer_name || prev.customerName,
+                                specs: fullData.specs || prev.specs,
+                                fromStock: fullData.from_stock || prev.fromStock,
+                                toStock: fullData.to_stock || prev.toStock,
+                                shipVia: fullData.ship_via || prev.shipVia,
+                                comments: fullData.comments || prev.comments
+                              }));
+
+                              // Auto-populate process steps
+                              if (fullData.process_steps && fullData.process_steps.length > 0) {
+                                console.log('📋 Auto-populating steps:', fullData.process_steps.length);
+                                const newSteps = fullData.process_steps.map((step: ProcessStepData, index: number) => ({
+                                  id: `step-${Date.now()}-${index}`,
+                                  sequence: step.step_number,
+                                  workCenter: step.operation || step.work_center_code || '',
+                                  instruction: step.instructions || '',
+                                  quantity: step.quantity || 0,
+                                  rejected: step.rejected || 0,
+                                  accepted: step.accepted || 0,
+                                  assign: step.sign || '',
+                                  date: step.completed_date || ''
+                                }));
+                                console.log('✅ Setting form steps:', newSteps);
+                                setFormSteps(newSteps);
+                              }
+
+                              console.log('✅ Auto-populated data from existing traveler:', matchingTraveler.job_number);
+                            }
+                          }
                         }
                       } catch (error) {
-                        console.error('Error fetching work order:', error);
+                        console.error('Error fetching traveler data:', error);
                       }
                     }
                   }}
@@ -851,13 +1074,25 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Work Order *</label>
-              <input
-                type="text"
-                value={formData.workOrderNumber}
-                onChange={(e) => setFormData({...formData, workOrderNumber: e.target.value})}
-                className="w-full border-2 border-blue-300 rounded px-2 py-1.5 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                placeholder="WO-123"
-              />
+              <div className="flex items-center space-x-1">
+                <input
+                  type="text"
+                  value={workOrderPrefix}
+                  readOnly
+                  className="flex-1 border-2 border-gray-300 bg-gray-100 rounded px-2 py-1.5 text-sm font-bold text-gray-600 cursor-not-allowed"
+                  placeholder="12345"
+                  title="Auto-generated prefix (read-only)"
+                />
+                <span className="text-gray-600 font-bold">-</span>
+                <input
+                  type="text"
+                  value={workOrderSuffix}
+                  onChange={(e) => setWorkOrderSuffix(e.target.value)}
+                  className="flex-1 border-2 border-blue-300 rounded px-2 py-1.5 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                  placeholder="6"
+                  title="Editable suffix"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Start Date</label>
@@ -1315,6 +1550,17 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 </div>
               )}
             </div>
+
+            {/* Add Step Button at Bottom */}
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={addNewStep}
+                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-colors shadow-md"
+              >
+                <PlusIcon className="h-5 w-5" />
+                <span>Add Step</span>
+              </button>
+            </div>
           </div>
 
           {/* Comments Section - Prominent */}
@@ -1331,7 +1577,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-center space-x-4 mb-6">
+        <div className="flex justify-center space-x-4 mb-6 flex-wrap gap-2">
           <button
             onClick={handlePrint}
             className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
@@ -1346,6 +1592,46 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           >
             <QrCodeIcon className="h-5 w-5" />
             <span>Generate Barcode</span>
+          </button>
+
+          <button
+            onClick={handleSaveDraft}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <span>💾 Save as Draft</span>
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+          >
+            <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
+          </button>
+        </div>
+
+        {/* Action Buttons - Bottom (Duplicate) */}
+        <div className="flex justify-center space-x-4 mb-6 mt-8 pt-6 border-t-2 border-gray-200 flex-wrap gap-2">
+          <button
+            onClick={handlePrint}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <PrinterIcon className="h-5 w-5" />
+            <span>Print Traveler</span>
+          </button>
+
+          <button
+            onClick={generateBarcode}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <QrCodeIcon className="h-5 w-5" />
+            <span>Generate Barcode</span>
+          </button>
+
+          <button
+            onClick={handleSaveDraft}
+            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <span>💾 Save as Draft</span>
           </button>
 
           <button

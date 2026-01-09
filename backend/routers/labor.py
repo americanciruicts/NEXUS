@@ -27,8 +27,8 @@ class LaborEntryResponse(BaseModel):
     id: int
     traveler_id: int
     step_id: Optional[int]
-    employee_id: int
-    employee_name: str
+    employee_id: Optional[int] = None
+    employee_name: Optional[str] = None
     job_number: Optional[str] = None
     start_time: datetime
     pause_time: Optional[datetime] = None

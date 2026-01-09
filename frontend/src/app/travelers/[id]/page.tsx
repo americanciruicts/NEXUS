@@ -106,7 +106,7 @@ export default function TravelerDetailPage() {
   useEffect(() => {
     const fetchTraveler = async () => {
       try {
-        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/by-job/${travelerId}`, {
+        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${travelerId}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
           }
@@ -285,7 +285,13 @@ export default function TravelerDetailPage() {
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedTraveler(traveler ? { ...traveler } : null);
+    // Deep copy traveler including all nested arrays
+    setEditedTraveler(traveler ? {
+      ...traveler,
+      steps: traveler.steps.map(step => ({ ...step })),
+      specs: traveler.specs.map(spec => ({ ...spec })),
+      laborEntries: traveler.laborEntries.map(entry => ({ ...entry }))
+    } : null);
     // Prevent page from scrolling when entering edit mode
     window.scrollTo(0, 0);
   };
@@ -520,14 +526,31 @@ export default function TravelerDetailPage() {
         * { font-family: Arial, Helvetica, sans-serif !important; }
 
         @media print {
-          @page { margin: 0.25in; }
+          @page {
+            margin: 0.1in;
+            size: letter;
+          }
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             font-family: Arial, Helvetica, sans-serif !important;
             color: black !important;
+            box-decoration-break: clone !important;
+            -webkit-box-decoration-break: clone !important;
           }
-          body { font-size: 11px !important; margin: 0 !important; padding: 0 !important; }
+          body { font-size: 10px !important; margin: 0 !important; padding: 0 !important; }
+
+          /* Prevent borders from being cut off */
+          table, tr, td, th, div {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* Keep table rows together */
+          tbody tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
           .max-w-7xl { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
           .p-6 { padding: 0 !important; }
 
@@ -540,46 +563,60 @@ export default function TravelerDetailPage() {
             border-color: black !important;
           }
 
-          /* Header section - 11px */
-          .print-header { font-size: 11px !important; padding: 4px !important; }
-          .print-header * { font-size: 11px !important; line-height: 1.2 !important; }
-          .print-header span { font-size: 11px !important; }
-          .print-header div { font-size: 11px !important; }
-          .print-header .font-bold { font-size: 11px !important; font-weight: bold !important; }
+          /* Header section - reduced to match digital */
+          .print-header { font-size: 10px !important; padding: 2px !important; }
+          .print-header * { font-size: 10px !important; line-height: 1.2 !important; }
+          .print-header span { font-size: 10px !important; }
+          .print-header div { font-size: 10px !important; }
+          .print-header .font-bold { font-size: 10px !important; font-weight: bold !important; }
 
-          /* Section titles - 11px and bold */
-          .print-section-title { font-size: 11px !important; line-height: 1.1 !important; font-weight: 900 !important; padding: 3px 6px !important; }
+          /* Section titles - reduced to match digital */
+          .print-section-title { font-size: 10px !important; line-height: 1.1 !important; font-weight: 900 !important; padding: 2px 4px !important; }
 
-          /* Specifications section - REDUCE PADDING */
-          .print-specs-title { font-size: 10px !important; line-height: 1.1 !important; font-weight: 700 !important; padding: 3px 6px !important; }
-          .print-specs-content { font-size: 9px !important; line-height: 1.1 !important; padding: 2px 4px !important; }
-          .print-specs-content * { font-size: 9px !important; line-height: 1.1 !important; }
-          .print-specs-content div { font-size: 9px !important; padding: 0 !important; margin: 0 !important; }
+          /* Specifications section - reduced padding and font */
+          .print-specs-title { font-size: 9px !important; line-height: 1.1 !important; font-weight: 700 !important; padding: 2px 4px !important; }
+          .print-specs-content { font-size: 8px !important; line-height: 1.2 !important; padding: 1px 3px !important; }
+          .print-specs-content * { font-size: 8px !important; line-height: 1.2 !important; }
+          .print-specs-content div { font-size: 8px !important; padding: 0 !important; margin: 0 !important; }
 
-          /* Content areas - 11px */
-          .print-content { font-size: 11px !important; line-height: 1.3 !important; padding: 4px 6px !important; }
-          .print-content * { font-size: 11px !important; line-height: 1.3 !important; }
-          .print-content div { font-size: 11px !important; }
-          .print-content span { font-size: 11px !important; }
-          .print-content p { font-size: 11px !important; margin: 0 !important; }
+          /* Content areas - reduced to match digital */
+          .print-content { font-size: 10px !important; line-height: 1.3 !important; padding: 2px 4px !important; }
+          .print-content * { font-size: 10px !important; line-height: 1.3 !important; }
+          .print-content div { font-size: 10px !important; }
+          .print-content span { font-size: 10px !important; }
+          .print-content p { font-size: 10px !important; margin: 0 !important; }
 
-          /* Job number above barcode - LARGER AND BOLDER */
-          .print-job-number { font-size: 22px !important; font-weight: 900 !important; line-height: 1.2 !important; }
-          .text-xl.font-black { font-size: 22px !important; font-weight: 900 !important; }
-          .text-xl.font-bold { font-size: 22px !important; font-weight: 900 !important; }
+          /* Job number above barcode - reduced to match digital */
+          .print-job-number { font-size: 14px !important; font-weight: 900 !important; line-height: 1.2 !important; }
+          .text-xl.font-black { font-size: 14px !important; font-weight: 900 !important; }
+          .text-xl.font-bold { font-size: 14px !important; font-weight: 900 !important; }
 
           /* Reduce barcode box border and padding for print */
           .border-2.border-black.rounded { border-width: 1px !important; padding: 2px !important; }
 
-          /* Table headers - 11px and bold */
-          .print-table-header { font-size: 11px !important; line-height: 1.2 !important; font-weight: 900 !important; padding: 2px 4px !important; }
+          /* Table headers - reduced to match digital */
+          .print-table-header { font-size: 10px !important; line-height: 1.2 !important; font-weight: 900 !important; padding: 2px 3px !important; }
 
-          /* Table cells - 11px */
-          .print-table-cell { font-size: 11px !important; line-height: 1.2 !important; padding: 2px 4px !important; }
+          /* Table cells - reduced to match digital */
+          .print-table-cell { font-size: 10px !important; line-height: 1.2 !important; padding: 2px 3px !important; }
 
           /* Nuclear option - override ALL Tailwind text utilities */
           [class*="text-xs"], [class*="text-sm"], [class*="text-base"], [class*="text-lg"] { font-size: inherit !important; }
           .text-xs, .text-sm, .text-base, .text-lg, .text-xl, .text-2xl { font-size: inherit !important; }
+
+          /* Reduce table padding for more content on page */
+          table.w-full.border-collapse.text-sm td,
+          table.w-full.border-collapse.text-sm th {
+            padding: 2px 3px !important;
+          }
+
+          /* Reduce section padding */
+          .bg-gray-100.border-b-2.border-black,
+          .bg-yellow-200.border-b.border-black,
+          .bg-blue-200.border-b.border-black,
+          .bg-purple-200 {
+            padding: 2px 4px !important;
+          }
         }
       `}</style>
       <div className={`${isEditing ? 'w-full' : 'max-w-7xl mx-auto'} p-4 lg:p-6 space-y-6`}>
@@ -611,6 +648,33 @@ export default function TravelerDetailPage() {
                       <PencilIcon className="h-5 w-5" />
                       <span>Edit</span>
                     </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Are you sure you want to delete traveler ${displayTraveler.jobNumber}?`)) return;
+                        try {
+                          const token = localStorage.getItem('nexus_token');
+                          const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${displayTraveler.travelerId}`, {
+                            method: 'DELETE',
+                            headers: {
+                              'Authorization': `Bearer ${token}`
+                            }
+                          });
+                          if (response.ok) {
+                            alert(`✅ Traveler ${displayTraveler.jobNumber} deleted!`);
+                            router.push('/travelers');
+                          } else {
+                            alert('❌ Failed to delete traveler');
+                          }
+                        } catch (error) {
+                          console.error('Error:', error);
+                          alert('❌ Failed to delete traveler');
+                        }
+                      }}
+                      className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                      <span>Delete</span>
+                    </button>
                   </>
                 )}
               </>
@@ -638,12 +702,12 @@ export default function TravelerDetailPage() {
         {/* Main Traveler Form */}
         <div className="bg-white shadow-lg border-2 border-black" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
           {/* Header Section */}
-          <div className="bg-gray-100 border-b-2 border-black p-4 print:p-1">
-            <div className="grid grid-cols-3 gap-8 print-header print:gap-2">
+          <div className="bg-gray-100 border-b-2 border-black p-2 print:p-1">
+            <div className="grid grid-cols-3 gap-4 print-header print:gap-1">
               {/* Left */}
-              <div className="space-y-3 print:space-y-0.5">
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '90px'}}>Cust. Code:</span>
+              <div className="space-y-1 print:space-y-0.5">
+                <div className="flex items-baseline gap-2 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '100px'}}>Cust. Code:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -653,11 +717,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span style={{color: 'black'}}>{displayTraveler.customerCode || '-'}</span>
+                    <span className="flex-1" style={{color: 'black'}}>{displayTraveler.customerCode || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '90px'}}>Cust. Name:</span>
+                <div className="flex items-baseline gap-2 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '100px'}}>Cust. Name:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -667,11 +731,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
+                    <span className="flex-1" style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '90px'}}>Work Order:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '90px'}}>Work Order:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -684,8 +748,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{displayTraveler.workOrder || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '90px'}}>PO Number:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '90px'}}>PO Number:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -698,8 +762,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{displayTraveler.poNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '90px'}}>Quantity:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '90px'}}>Quantity:</span>
                   {isEditing ? (
                     <input
                       type="number"
@@ -712,8 +776,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{displayTraveler.quantity}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '90px'}}>Traveler Rev:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '90px'}}>Traveler Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -770,8 +834,8 @@ export default function TravelerDetailPage() {
 
               {/* Right */}
               <div className="space-y-3 print:space-y-0.5">
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '100px'}}>Part No:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '100px'}}>Part No:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -784,8 +848,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '100px'}}>Description:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '100px'}}>Description:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -798,8 +862,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{displayTraveler.description || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '100px'}}>Cust. Revision:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '100px'}}>Cust. Revision:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -815,8 +879,8 @@ export default function TravelerDetailPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-4" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '100px'}}>Start Date:</span>
+                <div className="flex items-baseline gap-4 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '100px'}}>Start Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
@@ -829,8 +893,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-3" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '85px'}}>Due Date:</span>
+                <div className="flex items-baseline gap-3 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '85px'}}>Due Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
@@ -843,8 +907,8 @@ export default function TravelerDetailPage() {
                     <span style={{color: 'black'}}>{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-3" style={{whiteSpace: 'nowrap'}}>
-                  <span className="font-bold inline-block" style={{width: '85px'}}>Ship Date:</span>
+                <div className="flex items-baseline gap-3 print:gap-1" style={{whiteSpace: 'nowrap'}}>
+                  <span className="font-bold inline-block print:w-20" style={{width: '85px'}}>Ship Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
@@ -936,17 +1000,17 @@ export default function TravelerDetailPage() {
             </div>
 
             {/* Table */}
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-sm border-2 border-gray-400">
               <thead>
-                <tr className="bg-gray-200 border-b border-black">
-                  <th className="border-r border-black px-3 py-3 w-20 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">SEQ</th>
-                  <th className="border-r border-black px-3 py-3 w-32 text-left font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">WORK CENTER</th>
-                  <th className="border-r border-black px-3 py-3 text-left font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">INSTRUCTIONS</th>
-                  <th className="border-r border-black px-3 py-3 w-20 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">TIME</th>
-                  <th className="border-r border-black px-3 py-3 w-24 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">QTY</th>
-                  <th className="border-r border-black px-3 py-3 w-24 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">REJ</th>
-                  <th className="border-r border-black px-3 py-3 w-24 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">ACC</th>
-                  <th className="border-r border-black px-3 py-3 w-28 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">SIGN</th>
+                <tr className="bg-gray-200 border-b-2 border-gray-400">
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-20 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">SEQ</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-32 text-left font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">WORK CENTER</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 text-left font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-20 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">TIME</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-24 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">QTY</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-24 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">REJ</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-24 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">ACC</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-28 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs print:border-black">SIGN</th>
                   <th className="px-3 py-3 w-28 text-center font-bold print-table-header print:px-1 print:py-1 text-base print:text-xs">DATE</th>
                 </tr>
               </thead>
@@ -1090,8 +1154,8 @@ export default function TravelerDetailPage() {
                       </>
                     ) : (
                       <>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center font-bold text-lg print:text-xs print-table-cell">{step.seq}</td>
-                        <td className="border-r border-gray-300 px-3 py-3 font-semibold text-base print:text-xs print-table-cell break-words">
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-center font-bold text-lg print:text-xs print-table-cell print:border-black">{step.seq}</td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 font-semibold text-base print:text-xs print-table-cell break-words print:border-black">
                           <div className="flex flex-row items-center justify-between gap-2">
                             <span>{step.workCenter}</span>
                             {step.id && stepQRCodes[step.id] ? (
@@ -1109,13 +1173,27 @@ export default function TravelerDetailPage() {
                             ) : null}
                           </div>
                         </td>
-                        <td className="border-r border-gray-300 px-3 py-3 text-base print:text-xs print-table-cell break-words">{step.instruction || ''}</td>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center text-base print:text-xs print-table-cell">{step.completedTime || ''}</td>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center text-lg font-bold print:text-xs print-table-cell">{step.quantity || ''}</td>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center text-lg font-bold text-red-700 print:text-xs print-table-cell">{step.rejected || ''}</td>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center text-lg font-bold text-green-700 print:text-xs print-table-cell">{step.accepted || ''}</td>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center text-lg font-bold print:text-xs print-table-cell">{step.sign || ''}</td>
-                        <td className="px-3 py-3 text-center text-base print:text-xs print-table-cell">{step.completedDate || ''}</td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-base print:text-xs print-table-cell break-words print:border-black">
+                          {step.instruction ? step.instruction : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-center text-base print:text-xs print-table-cell print:border-black">
+                          {step.completedTime ? step.completedTime : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-center text-lg font-bold print:text-xs print-table-cell print:border-black">
+                          {step.quantity ? step.quantity : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-center text-lg font-bold text-red-700 print:text-xs print-table-cell print:border-black">
+                          {step.rejected ? step.rejected : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-center text-lg font-bold text-green-700 print:text-xs print-table-cell print:border-black">
+                          {step.accepted ? step.accepted : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-3 py-3 text-center text-lg font-bold print:text-xs print-table-cell print:border-black">
+                          {step.sign ? step.sign : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
+                        <td className="border-b-2 border-gray-400 px-3 py-3 text-center text-base print:text-xs print-table-cell print:border-black">
+                          {step.completedDate ? step.completedDate : <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        </td>
                       </>
                     )}
                   </tr>
@@ -1236,13 +1314,13 @@ export default function TravelerDetailPage() {
           </div>
 
           {/* Additional Instructions/Comments Space */}
-          <div className="border-b-2 border-black">
+          <div className="border-b-2 border-black no-print">
             <div className="bg-gray-50 p-3 min-h-[80px] print:min-h-[60px] print:p-2 text-sm">
               <div className="text-gray-400 text-xs print:text-gray-300">Additional Instructions/Comments:</div>
             </div>
           </div>
 
-          {/* Labor Hours Section - Second Page (Page Break Before) - Only show if includeLaborHours is true */}
+          {/* Labor Hours Section - Second Page (Page Break Before) - Show if includeLaborHours is true */}
           {displayTraveler.includeLaborHours && (
             <div className="print:break-before-page">
               <div className="bg-purple-200 border-b-4 border-black px-4 py-4">
@@ -1309,11 +1387,21 @@ export default function TravelerDetailPage() {
                         </>
                       ) : (
                         <>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl">{entry.workCenter}</td>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl">{entry.operatorName}</td>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl text-center">{entry.startTime}</td>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl text-center">{entry.endTime}</td>
-                          <td className="px-6 text-xl print:text-2xl text-center">{entry.totalHours}</td>
+                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl">
+                            {entry.workCenter || <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          </td>
+                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl">
+                            {entry.operatorName || <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          </td>
+                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl text-center">
+                            {entry.startTime || <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          </td>
+                          <td className="border-r-4 border-gray-600 px-6 text-xl print:text-2xl text-center">
+                            {entry.endTime || <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          </td>
+                          <td className="px-6 text-xl print:text-2xl text-center">
+                            {entry.totalHours || <span className="inline-block w-full border-b border-gray-400 print:border-black" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          </td>
                         </>
                       )}
                     </tr>
