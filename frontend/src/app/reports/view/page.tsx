@@ -10,7 +10,8 @@ const REPORT_THEMES = {
   all_travelers: { primary: '#22C55E', secondary: '#DCFCE7', name: 'All Travelers Tracking Report' },
   single_operator: { primary: '#A855F7', secondary: '#F3E8FF', name: 'Single Operator Labor Report' },
   all_operators: { primary: '#F97316', secondary: '#FFEDD5', name: 'All Operators Labor Report' },
-  traveler_labor: { primary: '#EF4444', secondary: '#FEE2E2', name: 'Combined Traveler & Labor Report' }
+  single_work_center: { primary: '#06B6D4', secondary: '#CFFAFE', name: 'Single Work Center Report' },
+  all_work_centers: { primary: '#14B8A6', secondary: '#CCFBF1', name: 'All Work Centers Report' }
 };
 
 function ReportViewContent() {
@@ -19,6 +20,8 @@ function ReportViewContent() {
   const type = searchParams.get('type') as keyof typeof REPORT_THEMES;
   const jobNumber = searchParams.get('jobNumber');
   const operatorName = searchParams.get('operatorName');
+  const workCenter = searchParams.get('workCenter');
+  const workOrder = searchParams.get('workOrder');
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
 
@@ -73,29 +76,43 @@ function ReportViewContent() {
         const total = data.reduce((sum: number, entry: any) => sum + (entry.hours_worked || 0), 0);
         setTotalHours(total);
         setLaborData(data);
-      } else if (type === 'traveler_labor') {
-        const [travelerRes, laborRes] = await Promise.all([
-          fetch('http://acidashboard.aci.local:100/api/tracking/', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch('http://acidashboard.aci.local:100/api/labor/', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-        ]);
-        const travelerDataFetched = await travelerRes.json();
-        const laborDataFetched = await laborRes.json();
-        if (jobNumber) {
-          const filteredTravelerData = travelerDataFetched.filter((entry: any) => entry.job_number === jobNumber);
-          const filteredLaborData = laborDataFetched.filter((entry: any) => entry.job_number === jobNumber);
-          setTravelerData(filteredTravelerData);
-          setLaborData(filteredLaborData);
-        } else {
-          setTravelerData(travelerDataFetched);
-          setLaborData(laborDataFetched);
+      } else if (type === 'single_work_center' || type === 'all_work_centers') {
+        const response = await fetch('http://acidashboard.aci.local:100/api/labor/', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('API error');
+        let data = await response.json();
+
+        // Filter by work center for single_work_center reports
+        if (type === 'single_work_center' && workCenter) {
+          const searchTerm = workCenter.toLowerCase();
+          data = data.filter((entry: any) => {
+            const wc = entry.work_center || '';
+            return wc.toLowerCase().includes(searchTerm);
+          });
         }
-        const travelerTotal = (jobNumber ? travelerDataFetched.filter((e: any) => e.job_number === jobNumber) : travelerDataFetched).reduce((sum: number, entry: any) => sum + (entry.hours_worked || 0), 0);
-        const laborTotal = (jobNumber ? laborDataFetched.filter((e: any) => e.job_number === jobNumber) : laborDataFetched).reduce((sum: number, entry: any) => sum + (entry.hours_worked || 0), 0);
-        setTotalHours(travelerTotal + laborTotal);
+
+        // Filter by job number if provided
+        if (jobNumber && jobNumber.trim()) {
+          const jobSearchTerm = jobNumber.toLowerCase();
+          data = data.filter((entry: any) => {
+            const job = entry.job_number || '';
+            return job.toLowerCase().includes(jobSearchTerm);
+          });
+        }
+
+        // Filter by work order if provided
+        if (workOrder && workOrder.trim()) {
+          const woSearchTerm = workOrder.toLowerCase();
+          data = data.filter((entry: any) => {
+            const wo = entry.work_order || '';
+            return wo.toLowerCase().includes(woSearchTerm);
+          });
+        }
+
+        const total = data.reduce((sum: number, entry: any) => sum + (entry.hours_worked || 0), 0);
+        setTotalHours(total);
+        setLaborData(data);
       }
       setLoading(false);
     } catch (error) {
@@ -113,7 +130,6 @@ function ReportViewContent() {
 
   // Determine which data to display based on report type
   const isLaborReport = type === 'single_operator' || type === 'all_operators';
-  const isCombinedReport = type === 'traveler_labor';
   const displayData = isLaborReport ? laborData : travelerData;
 
   const displayPartNumber = travelerData[0]?.part_number || 'N/A';
@@ -324,10 +340,9 @@ function ReportViewContent() {
           </div>
 
           {/* Traveler Tracking Table - Digital */}
-          {(isCombinedReport || !isLaborReport) && travelerData.length > 0 && (
+          {!isLaborReport && travelerData.length > 0 && (
             <>
-              {isCombinedReport && <h3 style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '20px', marginBottom: '10px', color: theme.primary }}>Traveler Tracking</h3>}
-              <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', marginBottom: isCombinedReport ? '30px' : '0', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', marginBottom: '0', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`, color: 'white' }}>
                     <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>WORK CENTER</th>
@@ -370,26 +385,23 @@ function ReportViewContent() {
                     </tr>
                   ))}
                 </tbody>
-                {!isCombinedReport && (
-                  <tfoot>
-                    <tr style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, #ffffff 100%)` }}>
-                      <td colSpan={4} style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
-                        TOTAL HOURS:
-                      </td>
-                      <td style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
-                        {travelerData.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
+                <tfoot>
+                  <tr style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, #ffffff 100%)` }}>
+                    <td colSpan={4} style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
+                      TOTAL HOURS:
+                    </td>
+                    <td style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
+                      {travelerData.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </>
           )}
 
           {/* Labor Tracking Table - Digital */}
-          {(isCombinedReport || isLaborReport) && laborData.length > 0 && (
+          {isLaborReport && laborData.length > 0 && (
             <>
-              {isCombinedReport && <h3 style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '20px', marginBottom: '10px', color: theme.primary }}>Labor Tracking</h3>}
               <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`, color: 'white' }}>
@@ -433,30 +445,18 @@ function ReportViewContent() {
                     </tr>
                   ))}
                 </tbody>
-                {!isCombinedReport && (
-                  <tfoot>
-                    <tr style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, #ffffff 100%)` }}>
-                      <td colSpan={4} style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
-                        TOTAL HOURS:
-                      </td>
-                      <td style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
-                        {laborData.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
+                <tfoot>
+                  <tr style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, #ffffff 100%)` }}>
+                    <td colSpan={4} style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
+                      TOTAL HOURS:
+                    </td>
+                    <td style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
+                      {laborData.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </>
-          )}
-
-          {/* Combined Total for Combined Report - Digital */}
-          {isCombinedReport && (
-            <div style={{ marginTop: '20px', padding: '15px', background: `linear-gradient(135deg, ${theme.primary}20 0%, ${theme.secondary} 100%)`, borderRadius: '8px', border: `2px solid ${theme.primary}`, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', color: theme.primary }}>TOTAL HOURS (Traveler + Labor):</span>
-                <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#28a745' }}>{totalHours.toFixed(2)}</span>
-              </div>
-            </div>
           )}
 
         </div>

@@ -1,55 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { EyeIcon, EyeSlashIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: ''
-  });
-  const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showResetPassword, setShowResetPassword] = useState(false);
-
-  // Reset password form
-  const [resetData, setResetData] = useState({
-    username: '',
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
-
-  // Password validation state
-  const [passwordValidation, setPasswordValidation] = useState({
-    minLength: false,
-    hasNumber: false,
-    hasSpecialChar: false,
-    passwordsMatch: false
-  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const router = useRouter();
   const { login } = useAuth();
 
-  // Real-time password validation
   useEffect(() => {
-    setPasswordValidation({
-      minLength: resetData.newPassword.length >= 10,
-      hasNumber: /\d/.test(resetData.newPassword),
-      hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(resetData.newPassword),
-      passwordsMatch: resetData.newPassword !== '' && resetData.newPassword === resetData.confirmPassword
-    });
-  }, [resetData.newPassword, resetData.confirmPassword]);
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +27,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const success = await login(formData.username, formData.password);
+      const success = await login(username, password);
 
       if (success) {
         router.push('/dashboard');
@@ -70,469 +40,674 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError('');
-    setResetSuccess(false);
-
-    // Validate passwords match
-    if (resetData.newPassword !== resetData.confirmPassword) {
-      setResetError('New passwords do not match');
-      return;
-    }
-
-    // Validate password strength
-    if (!passwordValidation.minLength || !passwordValidation.hasNumber || !passwordValidation.hasSpecialChar) {
-      setResetError('Password does not meet all requirements');
-      return;
-    }
-
-    setIsResetting(true);
-
-    try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: resetData.username,
-          old_password: resetData.oldPassword,
-          new_password: resetData.newPassword
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to reset password');
-      }
-
-      setResetSuccess(true);
-      setTimeout(() => {
-        setShowResetPassword(false);
-        setResetData({
-          username: '',
-          oldPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        });
-        setResetSuccess(false);
-        setShowOldPassword(false);
-        setShowNewPassword(false);
-        setShowConfirmPassword(false);
-      }, 2000);
-    } catch (err) {
-      const error = err as Error;
-      setResetError(error.message || 'Failed to reset password. Please try again.');
-    } finally {
-      setIsResetting(false);
-    }
-  };
-
-  const handleCancelReset = () => {
-    setShowResetPassword(false);
-    setResetData({
-      username: '',
-      oldPassword: '',
-      newPassword: '',
-      confirmPassword: ''
-    });
-    setResetError('');
-    setResetSuccess(false);
-    setShowOldPassword(false);
-    setShowNewPassword(false);
-    setShowConfirmPassword(false);
-  };
-
-  // Reset Password View
-  if (showResetPassword) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 flex items-center justify-center p-4">
-        <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-12 items-center">
-          {/* Left Side - Branding */}
-          <div className="hidden lg:block">
-            <div className="mb-8">
-              <Image
-                src="/nexus-logo.svg"
-                alt="NEXUS"
-                width={520}
-                height={140}
-                className="mb-6 brightness-0 invert"
-                style={{ filter: 'brightness(0) invert(1)' }}
-              />
-            </div>
-            <h1 className="text-4xl font-bold text-white mb-4">Reset Your Password</h1>
-            <p className="text-xl text-blue-100 mb-8">
-              Create a new secure password to continue accessing your account
-            </p>
-
-            <div className="space-y-4 mt-12">
-              <div className="flex items-center gap-4 text-white">
-                <CheckCircleIcon className="w-8 h-8 flex-shrink-0" />
-                <span className="text-lg">Secure authentication system</span>
-              </div>
-              <div className="flex items-center gap-4 text-white">
-                <CheckCircleIcon className="w-8 h-8 flex-shrink-0" />
-                <span className="text-lg">Password encryption</span>
-              </div>
-              <div className="flex items-center gap-4 text-white">
-                <CheckCircleIcon className="w-8 h-8 flex-shrink-0" />
-                <span className="text-lg">Account protection</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Side - Reset Password Form */}
-          <div>
-            {/* Mobile Logo */}
-            <div className="lg:hidden mb-8 text-center">
-              <Image
-                src="/nexus-logo.svg"
-                alt="NEXUS"
-                width={420}
-                height={115}
-                className="mx-auto mb-4 brightness-0 invert"
-                style={{ filter: 'brightness(0) invert(1)' }}
-              />
-              <h1 className="text-3xl font-bold text-white">Reset Password</h1>
-            </div>
-
-            <div className="bg-white rounded-3xl shadow-2xl p-10">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Reset Password</h2>
-              <p className="text-gray-600 mb-8">Enter your details to reset your password</p>
-
-              <form onSubmit={handleResetPassword} className="space-y-6">
-                {/* Username Field */}
-                <div>
-                  <label className="block text-base font-bold text-gray-800 mb-2">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={resetData.username}
-                    onChange={(e) => setResetData({ ...resetData, username: e.target.value })}
-                    className="w-full px-5 py-4 text-base border-2 border-gray-300 rounded-xl text-gray-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all"
-                    placeholder="Enter your username"
-                  />
-                </div>
-
-                {/* Current Password Field */}
-                <div>
-                  <label className="block text-base font-bold text-gray-800 mb-2">
-                    Current Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showOldPassword ? 'text' : 'password'}
-                      required
-                      value={resetData.oldPassword}
-                      onChange={(e) => setResetData({ ...resetData, oldPassword: e.target.value })}
-                      className="w-full px-5 py-4 pr-14 text-base border-2 border-gray-300 rounded-xl text-gray-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all"
-                      placeholder="Enter current password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowOldPassword(!showOldPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-600 transition-colors"
-                    >
-                      {showOldPassword ? <EyeSlashIcon className="w-6 h-6" /> : <EyeIcon className="w-6 h-6" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* New Password Field */}
-                <div>
-                  <label className="block text-base font-bold text-gray-800 mb-2">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      required
-                      value={resetData.newPassword}
-                      onChange={(e) => setResetData({ ...resetData, newPassword: e.target.value })}
-                      className="w-full px-5 py-4 pr-14 text-base border-2 border-gray-300 rounded-xl text-gray-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all"
-                      placeholder="Enter new password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-600 transition-colors"
-                    >
-                      {showNewPassword ? <EyeSlashIcon className="w-6 h-6" /> : <EyeIcon className="w-6 h-6" />}
-                    </button>
-                  </div>
-
-                  {/* Password Requirements */}
-                  {resetData.newPassword && (
-                    <div className="mt-3 p-4 bg-indigo-50 rounded-xl space-y-2 border border-indigo-200">
-                      <p className="text-xs font-bold text-indigo-900 mb-1">Password Requirements:</p>
-                      <div className="flex items-center gap-2">
-                        {passwordValidation.minLength ? (
-                          <CheckCircleIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        ) : (
-                          <XCircleIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        )}
-                        <span className={`text-sm ${passwordValidation.minLength ? 'text-green-700 font-semibold' : 'text-gray-700'}`}>
-                          At least 10 characters
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {passwordValidation.hasNumber ? (
-                          <CheckCircleIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        ) : (
-                          <XCircleIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        )}
-                        <span className={`text-sm ${passwordValidation.hasNumber ? 'text-green-700 font-semibold' : 'text-gray-700'}`}>
-                          Contains number
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {passwordValidation.hasSpecialChar ? (
-                          <CheckCircleIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        ) : (
-                          <XCircleIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        )}
-                        <span className={`text-sm ${passwordValidation.hasSpecialChar ? 'text-green-700 font-semibold' : 'text-gray-700'}`}>
-                          Contains special character
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Confirm Password Field */}
-                <div>
-                  <label className="block text-base font-bold text-gray-800 mb-2">
-                    Confirm New Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      required
-                      value={resetData.confirmPassword}
-                      onChange={(e) => setResetData({ ...resetData, confirmPassword: e.target.value })}
-                      className="w-full px-5 py-4 pr-14 text-base border-2 border-gray-300 rounded-xl text-gray-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all"
-                      placeholder="Confirm new password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-600 transition-colors"
-                    >
-                      {showConfirmPassword ? <EyeSlashIcon className="w-6 h-6" /> : <EyeIcon className="w-6 h-6" />}
-                    </button>
-                  </div>
-
-                  {/* Password Match Indicator */}
-                  {resetData.confirmPassword && (
-                    <div className="mt-2 flex items-center gap-2">
-                      {passwordValidation.passwordsMatch ? (
-                        <>
-                          <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                          <span className="text-sm font-semibold text-green-700">Passwords match</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircleIcon className="w-5 h-5 text-red-600" />
-                          <span className="text-sm font-semibold text-red-600">Passwords do not match</span>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Error Message */}
-                {resetError && (
-                  <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-xl">
-                    <p className="text-sm text-red-800 font-semibold">{resetError}</p>
-                  </div>
-                )}
-
-                {/* Success Message */}
-                {resetSuccess && (
-                  <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded-xl flex items-center gap-2">
-                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                    <p className="text-sm text-green-800 font-semibold">Password reset successful!</p>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleCancelReset}
-                    className="flex-1 px-6 py-4 text-base bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isResetting || resetSuccess}
-                    className="flex-1 px-6 py-4 text-base bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 hover:from-blue-700 hover:via-indigo-800 hover:to-purple-900 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg"
-                  >
-                    {isResetting ? 'Resetting...' : 'Reset Password'}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <p className="text-center text-white text-sm mt-6 font-medium">
-              © 2025 American Circuits. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
   }
 
-  // Login View
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-12 items-center">
-        {/* Left Side - Branding */}
-        <div className="hidden lg:block">
-          <div className="mb-8">
-            <Image
-              src="/nexus-logo.svg"
-              alt="NEXUS"
-              width={520}
-              height={140}
-              className="mb-6 brightness-0 invert"
-              style={{ filter: 'brightness(0) invert(1)' }}
-            />
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-4">Welcome to NEXUS</h1>
-          <p className="text-xl text-blue-100 mb-8">
-            Advanced Traveler Management System for modern manufacturing operations
-          </p>
+    <div className="login-container">
+      {/* Animated background */}
+      <div className="background-animation">
+        <div className="gradient-orb orb-1"></div>
+        <div className="gradient-orb orb-2"></div>
+        <div className="gradient-orb orb-3"></div>
+        <div className="gradient-orb orb-4"></div>
+      </div>
 
-          <div className="space-y-4 mt-12">
-            <div className="flex items-center gap-4 text-white">
-              <CheckCircleIcon className="w-8 h-8 flex-shrink-0" />
-              <span className="text-lg">Real-time operation tracking</span>
-            </div>
-            <div className="flex items-center gap-4 text-white">
-              <CheckCircleIcon className="w-8 h-8 flex-shrink-0" />
-              <span className="text-lg">Labor management & analytics</span>
-            </div>
-            <div className="flex items-center gap-4 text-white">
-              <CheckCircleIcon className="w-8 h-8 flex-shrink-0" />
-              <span className="text-lg">Comprehensive reporting</span>
-            </div>
-          </div>
+      {/* Circuit pattern overlay */}
+      <div className="circuit-pattern"></div>
+
+      {/* Grid overlay for depth */}
+      <div className="grid-overlay"></div>
+
+      {/* Floating particles */}
+      <div className="particles">
+        {[...Array(20)].map((_, i) => (
+          <div key={i} className={`particle particle-${i + 1}`}></div>
+        ))}
+      </div>
+
+      {/* Login card */}
+      <div className={`login-card ${mounted ? 'visible' : ''}`}>
+        {/* Logo section - using SVG logo */}
+        <div className="logo-section">
+          <Image
+            src="/nexus-logo.svg"
+            alt="NEXUS - American Circuits Traveler Management"
+            width={280}
+            height={80}
+            className="main-logo"
+            priority
+          />
         </div>
 
-        {/* Right Side - Login Form */}
-        <div>
-          {/* Mobile Logo */}
-          <div className="lg:hidden mb-8 text-center">
-            <Image
-              src="/nexus-logo.svg"
-              alt="NEXUS"
-              width={420}
-              height={115}
-              className="mx-auto mb-4 brightness-0 invert"
-              style={{ filter: 'brightness(0) invert(1)' }}
-            />
-            <h1 className="text-3xl font-bold text-white">NEXUS</h1>
+        {/* Error message */}
+        {error && (
+          <div className="error-message">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="2"/>
+              <path d="M10 6v5M10 13.5v.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            {error}
+          </div>
+        )}
+
+        {/* Login form */}
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="input-group">
+            <label htmlFor="username">Username</label>
+            <div className="input-wrapper">
+              <svg className="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="6" r="4" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M2 18c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder="Enter your username"
+                autoComplete="username"
+              />
+            </div>
           </div>
 
-          <div className="bg-white rounded-3xl shadow-2xl p-10">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Sign In</h2>
-            <p className="text-gray-600 mb-8">Access your dashboard</p>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Username Field */}
-              <div>
-                <label htmlFor="username" className="block text-base font-bold text-gray-800 mb-2">
-                  Username
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  required
-                  autoComplete="username"
-                  value={formData.username}
-                  onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                  className="w-full px-5 py-4 text-base border-2 border-gray-300 rounded-xl text-gray-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all"
-                  placeholder="Enter your username"
-                />
-              </div>
-
-              {/* Password Field */}
-              <div>
-                <label htmlFor="password" className="block text-base font-bold text-gray-800 mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    autoComplete="current-password"
-                    value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full px-5 py-4 pr-14 text-base border-2 border-gray-300 rounded-xl text-gray-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-200 transition-all"
-                    placeholder="Enter your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-indigo-600 transition-colors"
-                  >
-                    {showPassword ? <EyeSlashIcon className="w-6 h-6" /> : <EyeIcon className="w-6 h-6" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-xl">
-                  <p className="text-sm text-red-800 font-semibold">{error}</p>
-                </div>
-              )}
-
-              {/* Reset Password Link */}
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowResetPassword(true)}
-                  className="text-indigo-600 hover:text-indigo-800 font-bold text-base transition-colors underline"
-                >
-                  Reset Password
-                </button>
-              </div>
-
-              {/* Submit Button */}
+          <div className="input-group">
+            <label htmlFor="password">Password</label>
+            <div className="input-wrapper">
+              <svg className="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <rect x="3" y="8" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M6 8V6a4 4 0 118 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="10" cy="13" r="1.5" fill="currentColor"/>
+              </svg>
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="Enter your password"
+                autoComplete="current-password"
+              />
               <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-4 text-lg bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 hover:from-blue-700 hover:via-indigo-800 hover:to-purple-900 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-xl hover:shadow-2xl"
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="password-toggle"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {isLoading ? (
-                  <span className="flex items-center justify-center gap-3">
-                    <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Signing in...
-                  </span>
-                ) : (
-                  'Sign In'
-                )}
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
-            </form>
+            </div>
           </div>
 
-          <p className="text-center text-white text-sm mt-6 font-medium">
-            © 2025 American Circuits. All rights reserved.
-          </p>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className={`submit-button ${isLoading ? 'loading' : ''}`}
+          >
+            {isLoading ? (
+              <>
+                <svg className="spinner" width="20" height="20" viewBox="0 0 20 20">
+                  <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="50" strokeLinecap="round"/>
+                </svg>
+                Signing In...
+              </>
+            ) : (
+              <>
+                Sign In
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 10h12M12 6l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Footer */}
+        <div className="card-footer">
+          <button type="button" className="forgot-password">
+            Forgot Password?
+          </button>
         </div>
       </div>
+
+      <style jsx>{`
+        .login-container {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(135deg, #0a0f1c 0%, #101828 50%, #0d1220 100%);
+        }
+
+        /* Animated gradient orbs */
+        .background-animation {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          z-index: 0;
+        }
+
+        .gradient-orb {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(100px);
+          opacity: 0.5;
+          animation: float 25s ease-in-out infinite;
+        }
+
+        .orb-1 {
+          width: 700px;
+          height: 700px;
+          background: radial-gradient(circle, rgba(0, 102, 179, 0.35) 0%, transparent 70%);
+          top: -25%;
+          left: -15%;
+          animation-delay: 0s;
+        }
+
+        .orb-2 {
+          width: 600px;
+          height: 600px;
+          background: radial-gradient(circle, rgba(230, 81, 0, 0.25) 0%, transparent 70%);
+          bottom: -20%;
+          right: -15%;
+          animation-delay: -6s;
+        }
+
+        .orb-3 {
+          width: 500px;
+          height: 500px;
+          background: radial-gradient(circle, rgba(0, 136, 204, 0.25) 0%, transparent 70%);
+          top: 50%;
+          right: 10%;
+          animation-delay: -12s;
+        }
+
+        .orb-4 {
+          width: 450px;
+          height: 450px;
+          background: radial-gradient(circle, rgba(255, 109, 0, 0.2) 0%, transparent 70%);
+          bottom: 40%;
+          left: 5%;
+          animation-delay: -18s;
+        }
+
+        @keyframes float {
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          25% {
+            transform: translate(40px, -40px) scale(1.05);
+          }
+          50% {
+            transform: translate(-30px, 30px) scale(0.95);
+          }
+          75% {
+            transform: translate(-40px, -30px) scale(1.02);
+          }
+        }
+
+        /* Circuit pattern */
+        .circuit-pattern {
+          position: absolute;
+          inset: 0;
+          background-image:
+            radial-gradient(circle at 20% 30%, rgba(0, 102, 179, 0.12) 2px, transparent 2px),
+            radial-gradient(circle at 80% 70%, rgba(230, 81, 0, 0.08) 2px, transparent 2px),
+            radial-gradient(circle at 50% 50%, rgba(0, 136, 204, 0.06) 1.5px, transparent 1.5px);
+          background-size: 80px 80px, 100px 100px, 50px 50px;
+          animation: circuitMove 40s linear infinite;
+          z-index: 1;
+        }
+
+        @keyframes circuitMove {
+          0% {
+            background-position: 0 0, 50px 50px, 25px 25px;
+          }
+          100% {
+            background-position: 80px 80px, 150px 150px, 75px 75px;
+          }
+        }
+
+        /* Grid overlay */
+        .grid-overlay {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(0, 102, 179, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 102, 179, 0.04) 1px, transparent 1px);
+          background-size: 60px 60px;
+          z-index: 1;
+        }
+
+        /* Floating particles */
+        .particles {
+          position: absolute;
+          inset: 0;
+          z-index: 2;
+          pointer-events: none;
+        }
+
+        .particle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: rgba(0, 136, 204, 0.6);
+          border-radius: 50%;
+          animation: particleFloat 15s ease-in-out infinite;
+        }
+
+        .particle:nth-child(odd) {
+          background: rgba(255, 109, 0, 0.5);
+        }
+
+        .particle-1 { left: 10%; top: 20%; animation-delay: 0s; }
+        .particle-2 { left: 20%; top: 80%; animation-delay: -2s; }
+        .particle-3 { left: 30%; top: 40%; animation-delay: -4s; }
+        .particle-4 { left: 40%; top: 60%; animation-delay: -6s; }
+        .particle-5 { left: 50%; top: 30%; animation-delay: -8s; }
+        .particle-6 { left: 60%; top: 70%; animation-delay: -10s; }
+        .particle-7 { left: 70%; top: 50%; animation-delay: -12s; }
+        .particle-8 { left: 80%; top: 25%; animation-delay: -1s; }
+        .particle-9 { left: 90%; top: 85%; animation-delay: -3s; }
+        .particle-10 { left: 15%; top: 55%; animation-delay: -5s; }
+        .particle-11 { left: 25%; top: 15%; animation-delay: -7s; }
+        .particle-12 { left: 35%; top: 75%; animation-delay: -9s; }
+        .particle-13 { left: 45%; top: 45%; animation-delay: -11s; }
+        .particle-14 { left: 55%; top: 90%; animation-delay: -13s; }
+        .particle-15 { left: 65%; top: 35%; animation-delay: -2.5s; }
+        .particle-16 { left: 75%; top: 65%; animation-delay: -4.5s; }
+        .particle-17 { left: 85%; top: 10%; animation-delay: -6.5s; }
+        .particle-18 { left: 95%; top: 55%; animation-delay: -8.5s; }
+        .particle-19 { left: 5%; top: 70%; animation-delay: -10.5s; }
+        .particle-20 { left: 50%; top: 5%; animation-delay: -12.5s; }
+
+        @keyframes particleFloat {
+          0%, 100% {
+            transform: translateY(0) translateX(0);
+            opacity: 0.6;
+          }
+          25% {
+            transform: translateY(-20px) translateX(10px);
+            opacity: 0.8;
+          }
+          50% {
+            transform: translateY(-10px) translateX(-15px);
+            opacity: 0.4;
+          }
+          75% {
+            transform: translateY(-30px) translateX(5px);
+            opacity: 0.7;
+          }
+        }
+
+        /* Login card */
+        .login-card {
+          width: 100%;
+          max-width: 480px;
+          padding: 48px 44px;
+          background: rgba(255, 255, 255, 0.98);
+          border-radius: 28px;
+          box-shadow:
+            0 30px 60px -12px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(255, 255, 255, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(20px);
+          position: relative;
+          z-index: 10;
+          opacity: 0;
+          transform: translateY(30px);
+          transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+
+        .login-card.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        /* Logo section */
+        .logo-section {
+          text-align: center;
+          margin-bottom: 36px;
+          display: flex;
+          justify-content: center;
+        }
+
+        .logo-section :global(.main-logo) {
+          max-width: 100%;
+          height: auto;
+        }
+
+        /* Error message */
+        .error-message {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 14px 16px;
+          background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+          color: #dc2626;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 500;
+          margin-bottom: 24px;
+          border: 1px solid rgba(220, 38, 38, 0.2);
+        }
+
+        /* Form styles */
+        .login-form {
+          display: flex;
+          flex-direction: column;
+          gap: 22px;
+        }
+
+        .input-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .input-group label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .input-icon {
+          position: absolute;
+          left: 16px;
+          color: #9ca3af;
+          pointer-events: none;
+          transition: color 0.2s;
+        }
+
+        .input-wrapper input {
+          width: 100%;
+          padding: 16px 50px 16px 48px;
+          background: #f8fafc;
+          border: 2px solid #e2e8f0;
+          border-radius: 14px;
+          font-size: 15px;
+          color: #1a202c;
+          outline: none;
+          transition: all 0.25s;
+        }
+
+        .input-wrapper input:focus {
+          background: #ffffff;
+          border-color: #0066B3;
+          box-shadow: 0 0 0 4px rgba(0, 102, 179, 0.12);
+        }
+
+        .input-wrapper input:focus + .input-icon,
+        .input-wrapper:focus-within .input-icon {
+          color: #0066B3;
+        }
+
+        .input-wrapper input::placeholder {
+          color: #94a3b8;
+        }
+
+        .password-toggle {
+          position: absolute;
+          right: 16px;
+          background: none;
+          border: none;
+          color: #9ca3af;
+          cursor: pointer;
+          padding: 4px;
+          display: flex;
+          align-items: center;
+          transition: color 0.2s;
+        }
+
+        .password-toggle:hover {
+          color: #0066B3;
+        }
+
+        /* Submit button */
+        .submit-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+          padding: 18px 24px;
+          background: linear-gradient(135deg, #0077CC 0%, #004A82 100%);
+          color: white;
+          border: none;
+          border-radius: 14px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 4px 16px rgba(0, 102, 179, 0.4);
+          margin-top: 8px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .submit-button::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+          transition: left 0.5s;
+        }
+
+        .submit-button:hover:not(:disabled)::before {
+          left: 100%;
+        }
+
+        .submit-button:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(0, 102, 179, 0.5);
+          background: linear-gradient(135deg, #0088DD 0%, #005599 100%);
+        }
+
+        .submit-button:active:not(:disabled) {
+          transform: translateY(0);
+        }
+
+        .submit-button:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+
+        .submit-button.loading {
+          background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+        }
+
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        /* Footer */
+        .card-footer {
+          text-align: center;
+          margin-top: 28px;
+          padding-top: 24px;
+          border-top: 1px solid #e2e8f0;
+        }
+
+        .forgot-password {
+          background: none;
+          border: none;
+          color: #0066B3;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          padding: 8px 16px;
+          border-radius: 8px;
+        }
+
+        .forgot-password:hover {
+          color: #004A82;
+          background: rgba(0, 102, 179, 0.08);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+          .content-wrapper {
+            max-width: 500px;
+            padding: 20px;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .page-container {
+            padding: 16px;
+          }
+
+          .content-wrapper {
+            max-width: 100%;
+            padding: 16px;
+          }
+
+          .login-card {
+            padding: 40px 32px;
+            border-radius: 28px;
+          }
+
+          .logo-section :global(.main-logo) {
+            width: 240px;
+          }
+
+          .form-title {
+            font-size: 24px;
+          }
+
+          .form-subtitle {
+            font-size: 13px;
+          }
+
+          .form-input {
+            padding: 12px 14px;
+            font-size: 14px;
+          }
+
+          .submit-button {
+            padding: 13px 20px;
+            font-size: 15px;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .login-card {
+            padding: 32px 24px;
+            margin: 0;
+            border-radius: 24px;
+          }
+
+          .logo-section :global(.main-logo) {
+            width: 200px;
+          }
+
+          .form-title {
+            font-size: 22px;
+          }
+
+          .form-subtitle {
+            font-size: 12px;
+            margin-bottom: 24px;
+          }
+
+          .form-group {
+            gap: 6px;
+          }
+
+          .form-label {
+            font-size: 13px;
+          }
+
+          .form-input {
+            padding: 11px 12px;
+            font-size: 14px;
+          }
+
+          .password-input {
+            padding-right: 44px;
+          }
+
+          .password-toggle {
+            right: 10px;
+          }
+
+          .icon {
+            width: 18px;
+            height: 18px;
+          }
+
+          .submit-button {
+            padding: 12px 18px;
+            font-size: 14px;
+          }
+
+          .forgot-password {
+            font-size: 13px;
+          }
+
+          .error-message {
+            padding: 12px 14px;
+            font-size: 13px;
+          }
+
+          .copyright {
+            font-size: 11px;
+            margin-top: 20px;
+          }
+
+          .background-orb {
+            filter: blur(80px);
+          }
+
+          .orb-1 {
+            width: 400px;
+            height: 400px;
+          }
+
+          .orb-2 {
+            width: 350px;
+            height: 350px;
+          }
+
+          .orb-3 {
+            width: 300px;
+            height: 300px;
+          }
+        }
+
+        @media (max-width: 375px) {
+          .login-card {
+            padding: 28px 20px;
+          }
+
+          .logo-section :global(.main-logo) {
+            width: 180px;
+          }
+
+          .form-title {
+            font-size: 20px;
+          }
+        }
+      `}</style>
     </div>
-  );
+  )
 }
