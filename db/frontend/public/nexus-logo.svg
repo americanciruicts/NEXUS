@@ -1,0 +1,114 @@
+<svg width="260" height="60" viewBox="0 0 260 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="innerGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:0.1" />
+    </linearGradient>
+
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Enhanced hexagon icon -->
+  <g transform="translate(5, 5)">
+    <!-- Outer glow hexagon -->
+    <path d="M 25 3 L 43 13.5 L 43 34.5 L 25 45 L 7 34.5 L 7 13.5 Z"
+          fill="rgba(37, 99, 235, 0.05)"
+          stroke="url(#accentGrad)"
+          stroke-width="1"
+          opacity="0.4"/>
+
+    <!-- Outer hexagon frame with enhanced styling -->
+    <path d="M 25 5 L 41 14.5 L 41 33.5 L 25 43 L 9 33.5 L 9 14.5 Z"
+          fill="none"
+          stroke="url(#accentGrad)"
+          stroke-width="3"
+          opacity="0.7"
+          filter="url(#shadow)"/>
+
+    <!-- Inner hexagon with gradient fill -->
+    <path d="M 25 11 L 36 17.5 L 36 30.5 L 25 37 L 14 30.5 L 14 17.5 Z"
+          fill="url(#innerGlow)"
+          stroke="url(#blueGrad)"
+          stroke-width="2"/>
+
+    <!-- Connection nodes at vertices -->
+    <circle cx="25" cy="11" r="2.5" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="36" cy="17.5" r="2.5" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="36" cy="30.5" r="2.5" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="25" cy="37" r="2.5" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="14" cy="30.5" r="2.5" fill="url(#blueGrad)" opacity="0.8"/>
+    <circle cx="14" cy="17.5" r="2.5" fill="url(#blueGrad)" opacity="0.8"/>
+
+    <!-- Central N letter with modern design -->
+    <g transform="translate(25, 24)">
+      <!-- Left pillar with gradient -->
+      <path d="M -7 -11 L -7 11 L -3.5 11 L -3.5 -11 Z"
+            fill="url(#blueGrad)"
+            opacity="0.95"/>
+
+      <!-- Diagonal beam with accent gradient -->
+      <path d="M -3.5 -11 L 7 11 L 3.5 11 L -7 -11 Z"
+            fill="url(#accentGrad)"/>
+
+      <!-- Right pillar -->
+      <path d="M 3.5 -11 L 3.5 11 L 7 11 L 7 -11 Z"
+            fill="url(#blueGrad)"
+            opacity="0.95"/>
+    </g>
+
+    <!-- Enhanced accent lines -->
+    <line x1="25" y1="0" x2="25" y2="5" stroke="url(#blueGrad)" stroke-width="2.5" opacity="0.7"/>
+    <line x1="25" y1="43" x2="25" y2="48" stroke="url(#blueGrad)" stroke-width="2.5" opacity="0.7"/>
+
+    <!-- Corner accent marks -->
+    <line x1="43" y1="13.5" x2="46" y2="13.5" stroke="url(#blueGrad)" stroke-width="2" opacity="0.5"/>
+    <line x1="7" y1="34.5" x2="4" y2="34.5" stroke="url(#blueGrad)" stroke-width="2" opacity="0.5"/>
+  </g>
+
+  <!-- Text -->
+  <text x="63" y="32"
+        font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+        font-size="28"
+        font-weight="900"
+        fill="url(#textGrad)"
+        letter-spacing="4">
+    NEXUS
+  </text>
+
+  <text x="64" y="47"
+        font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+        font-size="9"
+        fill="#64748b"
+        letter-spacing="1.8"
+        font-weight="600">
+    TRAVELER MANAGEMENT SYSTEM
+  </text>
+</svg>

@@ -1,0 +1,62 @@
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexus_backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://nexus_user:nexus_password@aci-database:5432/nexus
+      SECRET_KEY: your-secret-key-change-in-production
+      SMTP_SERVER: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USERNAME: your-email@gmail.com
+      SMTP_PASSWORD: your-app-password
+    ports:
+      - "102:8000"
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    networks:
+      - nexus_network
+      - db-consolidation_aci-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexus_frontend
+    restart: always
+    ports:
+      - "103:3000"
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://acidashboard.aci.local:102
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - nexus_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: nexus_nginx
+    restart: always
+    ports:
+      - "0.0.0.0:100:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - nexus_network
+
+networks:
+  nexus_network:
+    driver: bridge
+  db-consolidation_aci-network:
+    external: true

@@ -1,0 +1,97 @@
+<svg width="260" height="60" viewBox="0 0 260 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="whiteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0f2fe;stop-opacity:0.95" />
+    </linearGradient>
+
+    <linearGradient id="whiteGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#a5f3fc;stop-opacity:0.1" />
+    </linearGradient>
+
+    <!-- Glow filter for enhanced depth -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Enhanced hexagon icon -->
+  <g transform="translate(5, 5)">
+    <!-- Outer glow hexagon -->
+    <path d="M 25 3 L 43 13.5 L 43 34.5 L 25 45 L 7 34.5 L 7 13.5 Z"
+          fill="rgba(255, 255, 255, 0.05)"
+          stroke="rgba(255, 255, 255, 0.3)"
+          stroke-width="1"
+          filter="url(#glow)"/>
+
+    <!-- Outer hexagon frame with enhanced thickness -->
+    <path d="M 25 5 L 41 14.5 L 41 33.5 L 25 43 L 9 33.5 L 9 14.5 Z"
+          fill="none"
+          stroke="white"
+          stroke-width="3"
+          opacity="0.9"/>
+
+    <!-- Inner hexagon with gradient -->
+    <path d="M 25 11 L 36 17.5 L 36 30.5 L 25 37 L 14 30.5 L 14 17.5 Z"
+          fill="url(#whiteGlow)"
+          stroke="white"
+          stroke-width="2"/>
+
+    <!-- Connection nodes at vertices -->
+    <circle cx="25" cy="11" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="36" cy="17.5" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="36" cy="30.5" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="25" cy="37" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="14" cy="30.5" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="14" cy="17.5" r="2.5" fill="white" opacity="0.9"/>
+
+    <!-- Central N letter with modern design -->
+    <g transform="translate(25, 24)">
+      <!-- Left pillar with gradient -->
+      <path d="M -7 -11 L -7 11 L -3.5 11 L -3.5 -11 Z"
+            fill="white"
+            opacity="0.95"/>
+
+      <!-- Diagonal beam with gradient -->
+      <path d="M -3.5 -11 L 7 11 L 3.5 11 L -7 -11 Z"
+            fill="url(#whiteGrad)"/>
+
+      <!-- Right pillar -->
+      <path d="M 3.5 -11 L 3.5 11 L 7 11 L 7 -11 Z"
+            fill="white"
+            opacity="0.95"/>
+    </g>
+
+    <!-- Enhanced accent lines -->
+    <line x1="25" y1="0" x2="25" y2="5" stroke="white" stroke-width="2.5" opacity="0.7"/>
+    <line x1="25" y1="43" x2="25" y2="48" stroke="white" stroke-width="2.5" opacity="0.7"/>
+
+    <!-- Corner accent marks -->
+    <line x1="43" y1="13.5" x2="46" y2="13.5" stroke="white" stroke-width="2" opacity="0.5"/>
+    <line x1="7" y1="34.5" x2="4" y2="34.5" stroke="white" stroke-width="2" opacity="0.5"/>
+  </g>
+
+  <!-- Text -->
+  <text x="63" y="32"
+        font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+        font-size="28"
+        font-weight="900"
+        fill="white"
+        letter-spacing="4">
+    NEXUS
+  </text>
+
+  <text x="64" y="47"
+        font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+        font-size="9"
+        fill="rgba(255, 255, 255, 0.90)"
+        letter-spacing="1.8"
+        font-weight="600">
+    TRAVELER MANAGEMENT SYSTEM
+  </text>
+</svg>
