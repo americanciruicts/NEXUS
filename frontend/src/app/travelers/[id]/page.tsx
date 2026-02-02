@@ -815,31 +815,31 @@ export default function TravelerDetailPage() {
       `}</style>
       <div className={`${isEditing ? 'w-full' : 'max-w-7xl mx-auto'} p-4 lg:p-6 space-y-6`}>
         {/* Action Bar - Screen Only */}
-        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 no-print bg-white shadow rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 no-print bg-white shadow rounded-lg p-3 sm:p-4">
           <button
             onClick={() => router.back()}
-            className="flex items-center justify-center space-x-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="flex items-center justify-center space-x-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
           >
-            <ArrowLeftIcon className="h-5 w-5" />
+            <ArrowLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
             <span>Back</span>
           </button>
-          <div className="flex flex-wrap items-center gap-2 sm:space-x-3">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
             {!isEditing ? (
               <>
                 {user?.role !== 'OPERATOR' && (
                   <>
                     <button
                       onClick={handlePrint}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                      className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
                     >
-                      <PrinterIcon className="h-5 w-5" />
+                      <PrinterIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                       <span>Print</span>
                     </button>
                     <button
                       onClick={handleEdit}
-                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                      className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
                     >
-                      <PencilIcon className="h-5 w-5" />
+                      <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                       <span>Edit</span>
                     </button>
                     <button
@@ -864,9 +864,9 @@ export default function TravelerDetailPage() {
                           alert('❌ Failed to delete traveler');
                         }
                       }}
-                      className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                      className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
                     >
-                      <TrashIcon className="h-5 w-5" />
+                      <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                       <span>Delete</span>
                     </button>
                   </>
@@ -876,16 +876,16 @@ export default function TravelerDetailPage() {
               <>
                 <button
                   onClick={handleCancel}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
                 >
-                  <XMarkIcon className="h-5 w-5" />
+                  <XMarkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span>Cancel</span>
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                  className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
                 >
-                  <CheckIcon className="h-5 w-5" />
+                  <CheckIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span>Save</span>
                 </button>
               </>
@@ -897,12 +897,12 @@ export default function TravelerDetailPage() {
         <div className="bg-white shadow-lg border-2 border-black overflow-x-auto" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
           <div className="min-w-0 lg:min-w-[800px]">
           {/* Header Section */}
-          <div className="bg-gray-100 border-b-2 border-black p-1 print:p-0.5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 print:gap-1">
+          <div className="bg-gray-100 border-b-2 border-black p-2 sm:p-3 md:p-4 print:p-0.5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-2 print:gap-1">
               {/* Left */}
-              <div className="space-y-0.5 print:space-y-0">
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Code:</span>
+              <div className="space-y-1 sm:space-y-0.5 print:space-y-0">
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Code:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -915,8 +915,8 @@ export default function TravelerDetailPage() {
                     <span className="flex-1 text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.customerCode || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Name:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Name:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -926,11 +926,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="flex-1 text-[10px] truncate" style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
+                    <span className="flex-1 text-[10px] sm:text-xs truncate" style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Work Order:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Work Order:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -940,11 +940,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.workOrder || '-'}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.workOrder || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">PO Number:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">PO Number:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -954,11 +954,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.poNumber || '-'}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.poNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Quantity:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Quantity:</span>
                   {isEditing ? (
                     <input
                       type="number"
@@ -968,11 +968,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.quantity}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.quantity}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Traveler Rev:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Traveler Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -982,7 +982,7 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>
                       {displayTraveler.revision ? displayTraveler.revision : '- -'}
                     </span>
                   )}
@@ -990,22 +990,22 @@ export default function TravelerDetailPage() {
               </div>
 
               {/* Center - Barcode with Details */}
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center my-4 md:my-0">
                 <div className="text-center">
-                  <div className="text-lg font-black mb-1 print:mb-0 print:text-[10px] print:leading-tight" style={{color: 'black', fontSize: '18px', fontWeight: '900'}}>
+                  <div className="text-base sm:text-lg md:text-xl font-black mb-2 print:mb-0 print:text-[10px] print:leading-tight" style={{color: 'black', fontWeight: '900'}}>
                     {isEditing ? (
-                      <div className="flex items-center gap-1 justify-center">
-                        <span>Job:</span>
+                      <div className="flex items-center gap-1 justify-center flex-wrap">
+                        <span className="text-sm sm:text-base md:text-lg">Job:</span>
                         <input
                           type="text"
                           value={editedTraveler.jobNumber}
                           onChange={(e) => updateField('jobNumber', e.target.value)}
-                          className="w-24 border border-gray-300 rounded px-1 py-0.5 text-lg font-black"
+                          className="w-20 sm:w-24 md:w-32 border border-gray-300 rounded px-1 py-0.5 text-sm sm:text-base md:text-lg font-black"
                           style={{color: 'black'}}
                         />
                       </div>
                     ) : (
-                      <span className="text-xl font-bold print:text-[10px]">Job: {displayTraveler.jobNumber}</span>
+                      <span className="text-base sm:text-lg md:text-xl font-bold print:text-[10px]">Job: {displayTraveler.jobNumber}</span>
                     )}
                   </div>
                   <div className="border-2 border-black p-2 bg-white inline-block rounded print:p-0.5 print:border">
@@ -1013,14 +1013,14 @@ export default function TravelerDetailPage() {
                       <img
                         src={`data:image/png;base64,${headerBarcode}`}
                         alt={`Barcode for ${displayTraveler.jobNumber}`}
-                        className="mx-auto print:w-[100px] print:h-[30px]"
-                        style={{ height: '60px', width: '180px', objectFit: 'contain' }}
+                        className="mx-auto w-32 h-10 sm:w-40 sm:h-12 md:w-44 md:h-14 print:w-[100px] print:h-[30px]"
+                        style={{ objectFit: 'contain' }}
                         onError={(e) => {
                           console.error('Failed to load header barcode');
                         }}
                       />
                     ) : (
-                      <div className="flex items-center justify-center" style={{ height: '60px', width: '180px' }}>
+                      <div className="flex items-center justify-center w-32 h-10 sm:w-40 sm:h-12 md:w-44 md:h-14">
                         <span className="text-xs text-gray-400">Loading barcode...</span>
                       </div>
                     )}
@@ -1029,9 +1029,9 @@ export default function TravelerDetailPage() {
               </div>
 
               {/* Right */}
-              <div className="space-y-0.5 print:space-y-0">
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Part No:</span>
+              <div className="space-y-1 sm:space-y-0.5 print:space-y-0">
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Part No:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -1041,11 +1041,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.partNumber || '-'}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Description:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Description:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -1058,8 +1058,8 @@ export default function TravelerDetailPage() {
                     <span className="text-xs break-words" style={{color: 'black'}}>{displayTraveler.description || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Revision:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Revision:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -1070,13 +1070,13 @@ export default function TravelerDetailPage() {
                       placeholder="Cust. Revision"
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>
                       {displayTraveler.customerRevision ? displayTraveler.customerRevision : '- -'}
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Start Date:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Start Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
@@ -1086,11 +1086,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Due Date:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Due Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
@@ -1100,11 +1100,11 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5">
-                  <span className="font-bold text-xs min-w-[90px] print:text-[8px] print:min-w-[60px] print:leading-tight">Ship Date:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Ship Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
@@ -1114,7 +1114,7 @@ export default function TravelerDetailPage() {
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
+                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
                   )}
                 </div>
               </div>
