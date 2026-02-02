@@ -36,6 +36,7 @@ type TravelerItem = {
   dbId: number;
   jobNumber: string;
   workOrder: string;
+  poNumber: string;
   partNumber: string;
   description: string;
   revision: string;
@@ -47,6 +48,7 @@ type TravelerItem = {
   progress: number;
   createdAt: string;
   dueDate: string;
+  shipDate: string;
   specs: string;
   fromStock: string;
   toStock: string;
@@ -86,6 +88,7 @@ export default function TravelersPage() {
           dbId: Number(t.id),
           jobNumber: String(t.job_number),
           workOrder: String(t.work_order_number || ''),
+          poNumber: String(t.po_number || ''),
           partNumber: String(t.part_number),
           description: String(t.part_description),
           revision: String(t.revision),
@@ -97,6 +100,7 @@ export default function TravelersPage() {
           progress: 0,
           createdAt: String(t.created_at || ''),
           dueDate: String(t.due_date || ''),
+          shipDate: String(t.ship_date || ''),
           specs: String(t.specs || ''),
           fromStock: String(t.from_stock || ''),
           toStock: String(t.to_stock || ''),
@@ -488,7 +492,7 @@ export default function TravelersPage() {
                       />
                     </th>
                     <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
-                      Job & Work Order
+                      Job, WO & PO
                     </th>
                     <th className="hidden sm:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Part Details
@@ -497,7 +501,7 @@ export default function TravelersPage() {
                       Customer Info
                     </th>
                     <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
-                      Due Date
+                      Dates
                     </th>
                     <th className="hidden lg:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Shipping
@@ -529,6 +533,7 @@ export default function TravelersPage() {
                         <div className="space-y-1">
                           <div className="text-base font-bold text-gray-900">Job# <span className="underline">{traveler.jobNumber}</span></div>
                           <div className="text-base font-extrabold text-indigo-700">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
+                          <div className="text-base font-semibold text-purple-700">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
                         </div>
                       </td>
                       <td className="hidden sm:table-cell px-4 py-4">
@@ -548,8 +553,12 @@ export default function TravelersPage() {
                           <div className="text-base text-gray-600">Cust. Rev: <span className="font-semibold text-gray-900">N/A</span></div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="text-base font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span>
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          <div className="text-sm text-gray-600">Created: <span className="font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
+                          <div className="text-sm text-gray-600">Due: <span className="font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
+                          <div className="text-sm text-gray-600">Ship: <span className="font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
+                        </div>
                       </td>
                       <td className="hidden lg:table-cell px-4 py-4">
                         <div className="space-y-1">
@@ -714,6 +723,7 @@ export default function TravelersPage() {
                         <div>
                           <div className="text-sm font-bold">Job# {traveler.jobNumber}</div>
                           <div className="text-xs text-blue-100">WO# {traveler.workOrder || 'N/A'}</div>
+                          <div className="text-xs text-blue-100">PO# {traveler.poNumber || 'N/A'}</div>
                         </div>
                       </div>
                     </div>
@@ -737,8 +747,16 @@ export default function TravelersPage() {
                           <div className="text-sm font-semibold text-gray-900">{traveler.customerCode || 'N/A'}</div>
                         </div>
                         <div>
+                          <div className="text-xs text-gray-500 font-semibold">Created</div>
+                          <div className="text-sm font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</div>
+                        </div>
+                        <div>
                           <div className="text-xs text-gray-500 font-semibold">Due Date</div>
                           <div className="text-sm font-semibold text-gray-900">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Ship Date</div>
+                          <div className="text-sm font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</div>
                         </div>
                       </div>
 
