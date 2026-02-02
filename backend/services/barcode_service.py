@@ -18,11 +18,11 @@ class BarcodeService:
         try:
             # Generate Code128 barcode with options for better rectangle shape
             writer_options = {
-                'module_height': 10,      # Height of barcode bars (smaller)
-                'module_width': 0.3,      # Width of individual bars
-                'font_size': 10,          # Font size for text
-                'text_distance': 5,       # Distance between barcode and text (more space)
-                'quiet_zone': 4,          # Margin around barcode
+                'module_height': 12,      # Height of barcode bars (taller for print)
+                'module_width': 0.2,      # Width of individual bars (tighter spacing)
+                'font_size': 11,          # Font size for text
+                'text_distance': 4,       # Distance between barcode and text
+                'quiet_zone': 3,          # Margin around barcode (reduced for bigger barcode)
             }
 
             code128 = Code128(barcode_data, writer=ImageWriter())

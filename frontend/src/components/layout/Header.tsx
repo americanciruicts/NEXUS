@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon, Bars3Icon, XMarkIcon, HomeIcon, ClipboardDocumentListIcon, ClockIcon, ChartBarSquareIcon, QueueListIcon, PlusCircleIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import GlobalSearch from '@/components/GlobalSearch';
 
@@ -24,6 +24,7 @@ export default function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showTravelerMenu, setShowTravelerMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -134,8 +135,9 @@ export default function Header() {
 
           {/* Navigation Links */}
           <nav className="hidden md:flex space-x-2 items-center">
-            <Link href="/dashboard" className={getLinkClasses('/dashboard')}>
-              Dashboard
+            <Link href="/dashboard" className={`${getLinkClasses('/dashboard')} flex items-center space-x-2`}>
+              <HomeIcon className="h-4 w-4 text-yellow-300" />
+              <span>Dashboard</span>
             </Link>
 
             {/* Travelers Dropdown */}
@@ -144,54 +146,77 @@ export default function Header() {
                 onClick={() => setShowTravelerMenu(!showTravelerMenu)}
                 className={`${getLinkClasses('/travelers')} flex items-center space-x-1`}
               >
+                <ClipboardDocumentListIcon className="h-4 w-4 text-blue-300" />
                 <span>Travelers</span>
-                <ChevronDownIcon className="h-4 w-4" />
+                <ChevronDownIcon className="h-4 w-4 text-blue-300" />
               </button>
 
               {showTravelerMenu && (
-                <div className="absolute left-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 border border-gray-200">
+                <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 border border-gray-200">
                   <div className="py-1">
                     <Link
                       href="/travelers"
                       onClick={() => setShowTravelerMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
-                      All Travelers
+                      <QueueListIcon className="h-4 w-4 text-blue-600" />
+                      <span>All Travelers</span>
                     </Link>
                     {user?.role !== 'OPERATOR' && (
                       <Link
                         href="/travelers/new"
                         onClick={() => setShowTravelerMenu(false)}
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                       >
-                        New Traveler
+                        <PlusCircleIcon className="h-4 w-4 text-green-600" />
+                        <span>New Traveler</span>
                       </Link>
                     )}
                     <Link
                       href="/travelers/tracking"
                       onClick={() => setShowTravelerMenu(false)}
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
-                      Traveler Tracking
+                      <MapPinIcon className="h-4 w-4 text-purple-600" />
+                      <span>Traveler Tracking</span>
                     </Link>
                   </div>
                 </div>
               )}
             </div>
-            <Link href="/labor-tracking" className={getLinkClasses('/labor-tracking')}>
-              Labor Tracking
+            <Link href="/labor-tracking" className={`${getLinkClasses('/labor-tracking')} flex items-center space-x-2`}>
+              <ClockIcon className="h-4 w-4 text-green-300" />
+              <span>Labor Tracking</span>
             </Link>
             {user?.role !== 'OPERATOR' && (
-              <Link href="/reports" className={getLinkClasses('/reports')}>
-                Reports
+              <Link href="/reports" className={`${getLinkClasses('/reports')} flex items-center space-x-2`}>
+                <ChartBarSquareIcon className="h-4 w-4 text-purple-300" />
+                <span>Reports</span>
               </Link>
             )}
           </nav>
 
-          {/* User Menu */}
-          <div className="flex items-center space-x-4">
-            {/* Global Search */}
-            <GlobalSearch />
+          {/* Mobile menu button */}
+          <div className="flex items-center space-x-2">
+            <div className="md:hidden flex items-center space-x-2">
+              <GlobalSearch />
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-2 rounded-md text-white hover:bg-white/10 transition-colors"
+                aria-label="Toggle mobile menu"
+              >
+                {showMobileMenu ? (
+                  <XMarkIcon className="h-6 w-6" />
+                ) : (
+                  <Bars3Icon className="h-6 w-6" />
+                )}
+              </button>
+            </div>
+
+            {/* Desktop User Menu */}
+            <div className="hidden md:flex items-center space-x-4">
+              {/* Global Search */}
+              <GlobalSearch />
 
             {/* Notifications */}
             {user?.role === 'ADMIN' && (
@@ -201,7 +226,7 @@ export default function Header() {
                   className="relative p-2 text-white/80 hover:text-white transition-colors"
                   title="Notifications"
                 >
-                  <BellIcon className="h-6 w-6" />
+                  <BellIcon className="h-6 w-6 text-yellow-300" />
                   {unreadCount > 0 && (
                     <span className="absolute top-0 right-0 flex items-center justify-center h-5 w-5 text-xs font-bold text-white bg-red-500 rounded-full ring-2 ring-blue-600">
                       {unreadCount > 9 ? '9+' : unreadCount}
@@ -294,7 +319,7 @@ export default function Header() {
                   <p className="text-sm font-medium text-white">{user?.username || 'Guest'}</p>
                   <p className="text-xs text-blue-200">{user?.role || 'No Role'}</p>
                 </div>
-                <UserCircleIcon className="h-9 w-9 text-white flex-shrink-0" />
+                <UserCircleIcon className="h-9 w-9 text-pink-300 flex-shrink-0" />
               </button>
 
               {/* User Dropdown Menu */}
@@ -315,7 +340,7 @@ export default function Header() {
                       onClick={() => setShowUserMenu(false)}
                       className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                     >
-                      <UserIcon className="h-4 w-4 mr-3" />
+                      <UserIcon className="h-4 w-4 mr-3 text-blue-600" />
                       Profile
                     </Link>
                     {user?.role === 'ADMIN' && (
@@ -325,7 +350,7 @@ export default function Header() {
                           onClick={() => setShowUserMenu(false)}
                           className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                         >
-                          <BellIcon className="h-4 w-4 mr-3" />
+                          <BellIcon className="h-4 w-4 mr-3 text-yellow-600" />
                           Notifications
                         </Link>
                         <Link
@@ -333,7 +358,7 @@ export default function Header() {
                           onClick={() => setShowUserMenu(false)}
                           className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                         >
-                          <UsersIcon className="h-4 w-4 mr-3" />
+                          <UsersIcon className="h-4 w-4 mr-3 text-purple-600" />
                           User Management
                         </Link>
                       </>
@@ -345,7 +370,7 @@ export default function Header() {
                       }}
                       className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors border-t border-gray-100"
                     >
-                      <ArrowRightOnRectangleIcon className="h-4 w-4 mr-3" />
+                      <ArrowRightOnRectangleIcon className="h-4 w-4 mr-3 text-red-600" />
                       Sign Out
                     </button>
                   </div>
@@ -353,8 +378,128 @@ export default function Header() {
               )}
             </div>
           </div>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      {showMobileMenu && (
+        <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
+          <div className="px-4 pt-2 pb-4 space-y-1">
+            <Link
+              href="/dashboard"
+              onClick={() => setShowMobileMenu(false)}
+              className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              <HomeIcon className="h-5 w-5 mr-3 text-yellow-600" />
+              <span>Dashboard</span>
+            </Link>
+
+            <div>
+              <button
+                onClick={() => setShowTravelerMenu(!showTravelerMenu)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <div className="flex items-center">
+                  <ClipboardDocumentListIcon className="h-5 w-5 mr-3 text-blue-600" />
+                  <span>Travelers</span>
+                </div>
+                <ChevronDownIcon className={`h-5 w-5 transition-transform text-blue-600 ${showTravelerMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showTravelerMenu && (
+                <div className="pl-4 mt-1 space-y-1">
+                  <Link
+                    href="/travelers"
+                    onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    <QueueListIcon className="h-4 w-4 text-blue-600" />
+                    <span>All Travelers</span>
+                  </Link>
+                  {user?.role !== 'OPERATOR' && (
+                    <Link
+                      href="/travelers/new"
+                      onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
+                      className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      <PlusCircleIcon className="h-4 w-4 text-green-600" />
+                      <span>New Traveler</span>
+                    </Link>
+                  )}
+                  <Link
+                    href="/travelers/tracking"
+                    onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
+                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    <MapPinIcon className="h-4 w-4 text-purple-600" />
+                    <span>Traveler Tracking</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            <Link
+              href="/labor-tracking"
+              onClick={() => setShowMobileMenu(false)}
+              className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/labor-tracking') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              <ClockIcon className="h-5 w-5 mr-3 text-green-600" />
+              <span>Labor Tracking</span>
+            </Link>
+
+            {user?.role !== 'OPERATOR' && (
+              <Link
+                href="/reports"
+                onClick={() => setShowMobileMenu(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/reports') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+              >
+                <ChartBarSquareIcon className="h-5 w-5 mr-3 text-purple-600" />
+                <span>Reports</span>
+              </Link>
+            )}
+
+            <div className="border-t border-gray-200 mt-4 pt-4">
+              <Link
+                href="/profile"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <UserIcon className="h-5 w-5 mr-3 text-blue-600" />
+                Profile
+              </Link>
+
+              {user?.role === 'ADMIN' && (
+                <>
+                  <Link
+                    href="/notifications"
+                    onClick={() => setShowMobileMenu(false)}
+                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <BellIcon className="h-5 w-5 mr-3 text-yellow-600" />
+                    Notifications
+                  </Link>
+                  <Link
+                    href="/users"
+                    onClick={() => setShowMobileMenu(false)}
+                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <UsersIcon className="h-5 w-5 mr-3 text-purple-600" />
+                    User Management
+                  </Link>
+                </>
+              )}
+
+              <button
+                onClick={() => { setShowMobileMenu(false); logout(); }}
+                className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50 mt-2"
+              >
+                <ArrowRightOnRectangleIcon className="h-5 w-5 mr-3 text-red-600" />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Barcode Scanner Modal */}
     </header>

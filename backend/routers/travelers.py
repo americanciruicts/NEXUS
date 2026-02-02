@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import json
 from datetime import datetime
 
@@ -16,6 +17,41 @@ from services.email_service import send_approval_notification
 from services.notification_service import create_notification_for_admins
 
 router = APIRouter()
+security = HTTPBearer(auto_error=False)  # Don't auto-error on missing auth
+
+async def get_user_or_system(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Get current authenticated user if auth token provided, otherwise return system user.
+    This maintains backward compatibility while supporting authentication.
+    """
+    # Try to get authenticated user if credentials provided
+    if credentials:
+        try:
+            return await get_current_user(credentials, db)
+        except HTTPException:
+            pass  # Fall through to system user
+
+    # Fall back to system user for backward compatibility
+    system_user = db.query(User).filter(User.username == "system").first()
+    if not system_user:
+        # Create system user if doesn't exist
+        system_user = User(
+            username="system",
+            email="system@nexus.local",
+            first_name="System",
+            last_name="User",
+            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
+            role="OPERATOR",
+            is_approver=False
+        )
+        db.add(system_user)
+        db.commit()
+        db.refresh(system_user)
+
+    return system_user
 
 # Memory store for manufacturing process steps
 MANUFACTURING_STEPS = {
@@ -148,141 +184,136 @@ async def get_work_order_data(identifier: str, db: Session = Depends(get_db)):
 @router.post("/", response_model=TravelerSchema)
 async def create_traveler(
     traveler_data: TravelerCreate,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
-    """Create a new traveler"""
+    """
+    Create a new traveler.
+    Supports optional authentication - uses authenticated user if token provided,
+    otherwise falls back to system user for backward compatibility.
+    """
+    try:
+        # Determine labor hours based on traveler type
+        # PCB parts don't need labor hours, all others do by default
+        include_labor_hours = traveler_data.include_labor_hours if traveler_data.traveler_type != "PCB" else False
 
-    # For now, create travelers without authentication
-    # TODO: Re-enable authentication when frontend auth is implemented
-
-    # Get or create a default user for travelers created without auth
-    default_user = db.query(User).filter(User.username == "system").first()
-    if not default_user:
-        # Create a default system user if it doesn't exist
-        default_user = User(
-            username="system",
-            email="system@nexus.local",
-            first_name="System",
-            last_name="User",
-            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
-            role="OPERATOR",
-            is_approver=False
+        # Create traveler
+        db_traveler = Traveler(
+            job_number=traveler_data.job_number,
+            work_order_number=traveler_data.work_order_number,
+            po_number=traveler_data.po_number,
+            traveler_type=traveler_data.traveler_type,
+            part_number=traveler_data.part_number,
+            part_description=traveler_data.part_description,
+            revision=traveler_data.revision,
+            quantity=traveler_data.quantity,
+            customer_code=traveler_data.customer_code,
+            customer_name=traveler_data.customer_name,
+            priority=traveler_data.priority,
+            work_center=traveler_data.work_center,
+            notes=traveler_data.notes,
+            specs=traveler_data.specs,
+            specs_date=traveler_data.specs_date,
+            from_stock=traveler_data.from_stock,
+            to_stock=traveler_data.to_stock,
+            ship_via=traveler_data.ship_via,
+            comments=traveler_data.comments,
+            due_date=traveler_data.due_date,
+            ship_date=traveler_data.ship_date,
+            include_labor_hours=include_labor_hours,
+            created_by=current_user.id  # Use authenticated or system user
         )
-        db.add(default_user)
+
+        db.add(db_traveler)
         db.commit()
-        db.refresh(default_user)
+        db.refresh(db_traveler)
 
-    # Determine labor hours based on traveler type
-    # PCB parts don't need labor hours, all others do by default
-    include_labor_hours = traveler_data.include_labor_hours if traveler_data.traveler_type != "PCB" else False
+        # Create process steps
+        for step_data in traveler_data.process_steps:
+            # Auto-create work center if it doesn't exist
+            work_center = db.query(WorkCenter).filter(WorkCenter.code == step_data.work_center_code).first()
+            if not work_center:
+                work_center = WorkCenter(
+                    code=step_data.work_center_code,
+                    name=step_data.operation,
+                    description=f"Auto-created from traveler",
+                    is_active=True
+                )
+                db.add(work_center)
+                db.commit()
 
-    # Create traveler
-    db_traveler = Traveler(
-        job_number=traveler_data.job_number,
-        work_order_number=traveler_data.work_order_number,
-        po_number=traveler_data.po_number,
-        traveler_type=traveler_data.traveler_type,
-        part_number=traveler_data.part_number,
-        part_description=traveler_data.part_description,
-        revision=traveler_data.revision,
-        quantity=traveler_data.quantity,
-        customer_code=traveler_data.customer_code,
-        customer_name=traveler_data.customer_name,
-        priority=traveler_data.priority,
-        work_center=traveler_data.work_center,
-        notes=traveler_data.notes,
-        specs=traveler_data.specs,
-        specs_date=traveler_data.specs_date,
-        from_stock=traveler_data.from_stock,
-        to_stock=traveler_data.to_stock,
-        ship_via=traveler_data.ship_via,
-        comments=traveler_data.comments,
-        due_date=traveler_data.due_date,
-        ship_date=traveler_data.ship_date,
-        include_labor_hours=include_labor_hours,
-        created_by=default_user.id
-    )
-
-    db.add(db_traveler)
-    db.commit()
-    db.refresh(db_traveler)
-
-    # Create process steps
-    for step_data in traveler_data.process_steps:
-        # Auto-create work center if it doesn't exist
-        work_center = db.query(WorkCenter).filter(WorkCenter.code == step_data.work_center_code).first()
-        if not work_center:
-            work_center = WorkCenter(
-                code=step_data.work_center_code,
-                name=step_data.operation,
-                description=f"Auto-created from traveler",
-                is_active=True
+            db_step = ProcessStep(
+                traveler_id=db_traveler.id,
+                step_number=step_data.step_number,
+                operation=step_data.operation,
+                work_center_code=step_data.work_center_code,
+                instructions=step_data.instructions,
+                estimated_time=step_data.estimated_time,
+                is_required=step_data.is_required,
+                quantity=step_data.quantity,
+                accepted=step_data.accepted,
+                rejected=step_data.rejected,
+                sign=step_data.sign,
+                completed_date=step_data.completed_date
             )
-            db.add(work_center)
+            db.add(db_step)
             db.commit()
+            db.refresh(db_step)
 
-        db_step = ProcessStep(
-            traveler_id=db_traveler.id,
-            step_number=step_data.step_number,
-            operation=step_data.operation,
-            work_center_code=step_data.work_center_code,
-            instructions=step_data.instructions,
-            estimated_time=step_data.estimated_time,
-            is_required=step_data.is_required,
-            quantity=step_data.quantity,
-            accepted=step_data.accepted,
-            rejected=step_data.rejected,
-            sign=step_data.sign,
-            completed_date=step_data.completed_date
-        )
-        db.add(db_step)
-        db.commit()
-        db.refresh(db_step)
+            # Create sub-steps
+            for sub_step_data in step_data.sub_steps:
+                db_sub_step = SubStep(
+                    process_step_id=db_step.id,
+                    step_number=sub_step_data.step_number,
+                    description=sub_step_data.description
+                )
+                db.add(db_sub_step)
 
-        # Create sub-steps
-        for sub_step_data in step_data.sub_steps:
-            db_sub_step = SubStep(
-                process_step_id=db_step.id,
-                step_number=sub_step_data.step_number,
-                description=sub_step_data.description
+        # Create manual steps
+        for manual_step_data in traveler_data.manual_steps:
+            db_manual_step = ManualStep(
+                traveler_id=db_traveler.id,
+                description=manual_step_data.description,
+                added_by=current_user.id
             )
-            db.add(db_sub_step)
+            db.add(db_manual_step)
 
-    # Create manual steps
-    for manual_step_data in traveler_data.manual_steps:
-        db_manual_step = ManualStep(
+        db.commit()
+
+        # Create audit log
+        audit_log = AuditLog(
             traveler_id=db_traveler.id,
-            description=manual_step_data.description,
-            added_by=current_user.id
+            user_id=current_user.id,  # Fixed: use current_user
+            action="CREATED",
+            timestamp=db_traveler.created_at,
+            ip_address="127.0.0.1",
+            user_agent="NEXUS-Frontend"
         )
-        db.add(db_manual_step)
+        db.add(audit_log)
+        db.commit()
 
-    db.commit()
+        # Create notification for all admins
+        create_notification_for_admins(
+            db=db,
+            notification_type=NotificationType.TRAVELER_CREATED,
+            title="New Traveler Created",
+            message=f"{current_user.username} created traveler {db_traveler.job_number} - {db_traveler.part_description}",  # Fixed: use current_user
+            reference_id=db_traveler.id,
+            reference_type="traveler",
+            created_by_username=current_user.username  # Fixed: use current_user
+        )
 
-    # Create audit log
-    audit_log = AuditLog(
-        traveler_id=db_traveler.id,
-        user_id=default_user.id,
-        action="CREATED",
-        timestamp=db_traveler.created_at,
-        ip_address="127.0.0.1",  # Get from request
-        user_agent="NEXUS-Frontend"  # Get from request
-    )
-    db.add(audit_log)
-    db.commit()
+        return db_traveler
 
-    # Create notification for all admins
-    create_notification_for_admins(
-        db=db,
-        notification_type=NotificationType.TRAVELER_CREATED,
-        title="New Traveler Created",
-        message=f"{default_user.username} created traveler {db_traveler.job_number} - {db_traveler.part_description}",
-        reference_id=db_traveler.id,
-        reference_type="traveler",
-        created_by_username=default_user.username
-    )
-
-    return db_traveler
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating traveler: {str(e)}"
+        )
 
 @router.get("/", response_model=List[TravelerList])
 async def get_travelers(

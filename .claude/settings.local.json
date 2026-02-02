@@ -37,7 +37,17 @@
       "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose restart:*)",
       "Bash(grep:*)",
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzY0MTk4NjEzfQ.NUz2tcuu-M4MX6VPodIF6YR0PHfBNt3CjXVLRwEbImA\" curl -s -H \"Authorization: Bearer $TOKEN\" http://acidashboard.aci.local:100/api/tracking/)",
-      "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose build:*)"
+      "Bash(COMPOSE_HTTP_TIMEOUT=300 docker-compose build:*)",
+      "Bash(file /home/tony/NEXUS/frontend/public/nexus-logo*.svg)",
+      "WebFetch(domain:acidashboard.aci.local)",
+      "Bash(pgrep:*)",
+      "Bash(pwdx:*)",
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4IiwiZXhwIjoxNzcwMDg0MDM0fQ.1onGkarYAoN8ZnBTjdUEa6ZyP8dmly-pDpmsKiMdXFk\")",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4IiwiZXhwIjoxNzcwMDg0MDkyfQ.qEcQDm0PvlpMHjTwVbVvo_LNXjtA4jhy9QZEpNeiLP0\")",
+      "Bash(git -C /home/tony/NEXUS diff --stat)",
+      "Bash(git -C /home/tony/NEXUS status)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []

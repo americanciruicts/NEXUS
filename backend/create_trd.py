@@ -247,7 +247,7 @@ def create_trd():
     doc.add_paragraph('• Job Number (unique identifier)', style='List Bullet')
     doc.add_paragraph('• Work Order Number', style='List Bullet')
     doc.add_paragraph('• PO Number (optional)', style='List Bullet')
-    doc.add_paragraph('• Traveler Type (PCB, ASSY, CABLE, CABLE_ASSY, MECHANICAL, TEST)', style='List Bullet')
+    doc.add_paragraph('• Traveler Type (PCB, ASSY, CABLE, PURCHASING)', style='List Bullet')
     doc.add_paragraph('• Part Number and Description', style='List Bullet')
     doc.add_paragraph('• Revision (Part, Customer)', style='List Bullet')
     doc.add_paragraph('• Quantity', style='List Bullet')

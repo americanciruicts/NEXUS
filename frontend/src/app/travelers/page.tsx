@@ -64,6 +64,8 @@ export default function TravelersPage() {
   const [travelers, setTravelers] = useState<TravelerItem[]>([]);
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
     fetchTravelers();
@@ -146,6 +148,58 @@ export default function TravelersPage() {
     return matchesSearch && matchesStatus && matchesView;
   });
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, viewFilter]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredTravelers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTravelers = filteredTravelers.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxPagesToShow = 5;
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
   const toggleSelectTraveler = (dbId: number) => {
     if (selectedTravelers.includes(dbId)) {
       setSelectedTravelers(selectedTravelers.filter(id => id !== dbId));
@@ -155,10 +209,21 @@ export default function TravelersPage() {
   };
 
   const selectAll = () => {
-    if (selectedTravelers.length === filteredTravelers.length) {
-      setSelectedTravelers([]);
+    const currentPageIds = paginatedTravelers.map(t => t.dbId);
+    const allCurrentPageSelected = currentPageIds.every(id => selectedTravelers.includes(id));
+
+    if (allCurrentPageSelected) {
+      // Deselect all on current page
+      setSelectedTravelers(selectedTravelers.filter(id => !currentPageIds.includes(id)));
     } else {
-      setSelectedTravelers(filteredTravelers.map(t => t.dbId));
+      // Select all on current page
+      const newSelected = [...selectedTravelers];
+      currentPageIds.forEach(id => {
+        if (!newSelected.includes(id)) {
+          newSelected.push(id);
+        }
+      });
+      setSelectedTravelers(newSelected);
     }
   };
 
@@ -283,23 +348,23 @@ export default function TravelersPage() {
     <Layout fullWidth>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
         {/* Header with Stats */}
-        <div className="mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-lg p-6 shadow-lg">
-          <div className="flex items-center justify-between">
+        <div className="mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-lg p-4 md:p-6 shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold mb-1">📋 Travelers Management</h1>
-              <p className="text-blue-100">Manage production travelers and track progress</p>
+              <h1 className="text-xl md:text-2xl font-bold mb-1">📋 Travelers Management</h1>
+              <p className="text-sm md:text-base text-blue-100">Manage production travelers and track progress</p>
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/30">
-                <div className="text-2xl font-bold">{stats.active}</div>
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 md:px-4 py-2 md:py-3 border border-white/30 flex-1 md:flex-initial">
+                <div className="text-xl md:text-2xl font-bold">{stats.active}</div>
                 <div className="text-xs text-blue-100">Active</div>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/30">
-                <div className="text-2xl font-bold">{stats.drafts}</div>
+              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 md:px-4 py-2 md:py-3 border border-white/30 flex-1 md:flex-initial">
+                <div className="text-xl md:text-2xl font-bold">{stats.drafts}</div>
                 <div className="text-xs text-blue-100">Drafts</div>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/30">
-                <div className="text-2xl font-bold">{stats.archived}</div>
+              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 md:px-4 py-2 md:py-3 border border-white/30 flex-1 md:flex-initial">
+                <div className="text-xl md:text-2xl font-bold">{stats.archived}</div>
                 <div className="text-xs text-blue-100">Archived</div>
               </div>
             </div>
@@ -308,25 +373,25 @@ export default function TravelersPage() {
 
         {/* Filters and Actions */}
         <div className="mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col gap-4">
             {/* Search */}
-            <div className="flex-1 min-w-[300px]">
+            <div className="w-full">
               <input
                 type="text"
                 placeholder="Search by job number, part number, description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm md:text-base"
               />
             </div>
 
             {/* View Filter Tabs */}
-            <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+            <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg p-1 overflow-x-auto">
               {(['active', 'drafts', 'archived', 'all'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setViewFilter(view)}
-                  className={`px-4 py-2 rounded-md font-semibold transition-all ${
+                  className={`px-3 md:px-4 py-2 rounded-md font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
                     viewFilter === view
                       ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
                       : 'text-gray-700 hover:bg-gray-200'
@@ -340,7 +405,7 @@ export default function TravelersPage() {
             {/* Create Button */}
             <Link
               href="/travelers/new"
-              className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold shadow-md transition-all"
+              className="flex items-center justify-center space-x-2 px-4 md:px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold shadow-md transition-all text-sm md:text-base"
             >
               <PlusIcon className="h-5 w-5" />
               <span>New Traveler</span>
@@ -348,31 +413,31 @@ export default function TravelersPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="mt-4 pt-4 border-t-2 border-gray-200 flex flex-wrap items-center gap-3">
+          <div className="mt-4 pt-4 border-t-2 border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 md:gap-3">
             <button
               onClick={selectAll}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md"
+              className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md text-sm md:text-base"
             >
-              <CheckIcon className="h-5 w-5" />
+              <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
               <span>{selectedTravelers.length === filteredTravelers.length ? 'Deselect All' : 'Select All'}</span>
             </button>
 
             <button
               onClick={exportSelectedPDFs}
               disabled={selectedTravelers.length === 0}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed"
+              className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
             >
-              <DocumentArrowDownIcon className="h-5 w-5" />
-              <span>Export PDFs ({selectedTravelers.length})</span>
+              <DocumentArrowDownIcon className="h-4 md:h-5 w-4 md:w-5" />
+              <span className="whitespace-nowrap">Export PDFs ({selectedTravelers.length})</span>
             </button>
 
             {viewFilter !== 'archived' && (
               <button
                 onClick={archiveSelected}
                 disabled={selectedTravelers.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed"
+                className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
               >
-                <ArchiveBoxIcon className="h-5 w-5" />
+                <ArchiveBoxIcon className="h-4 md:h-5 w-4 md:w-5" />
                 <span>Archive ({selectedTravelers.length})</span>
               </button>
             )}
@@ -381,9 +446,9 @@ export default function TravelersPage() {
               <button
                 onClick={restoreSelected}
                 disabled={selectedTravelers.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed"
+                className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
               >
-                <ArchiveBoxXMarkIcon className="h-5 w-5" />
+                <ArchiveBoxXMarkIcon className="h-4 md:h-5 w-4 md:w-5" />
                 <span>Restore ({selectedTravelers.length})</span>
               </button>
             )}
@@ -391,135 +456,136 @@ export default function TravelersPage() {
             <button
               onClick={deleteSelected}
               disabled={selectedTravelers.length === 0}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed"
+              className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
             >
-              <TrashIcon className="h-5 w-5" />
+              <TrashIcon className="h-4 md:h-5 w-4 md:w-5" />
               <span>Delete ({selectedTravelers.length})</span>
             </button>
           </div>
         </div>
 
-        {/* Travelers Grid */}
-        <div className="grid grid-cols-1 gap-4">
+        {/* Travelers Table */}
+        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
           {filteredTravelers.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-gray-200">
+            <div className="p-12 text-center">
               <div className="text-6xl mb-4">📋</div>
               <h3 className="text-2xl font-bold text-gray-800 mb-2">No Travelers Found</h3>
               <p className="text-gray-600">Try adjusting your search or filters</p>
             </div>
           ) : (
-            filteredTravelers.map((traveler) => (
-              <div
-                key={traveler.dbId}
-                className={`bg-white rounded-xl shadow-lg border-2 ${
-                  selectedTravelers.includes(traveler.dbId)
-                    ? 'border-blue-500 ring-4 ring-blue-200'
-                    : 'border-gray-200'
-                } p-6 transition-all hover:shadow-xl`}
-              >
-                <div className="flex items-start space-x-4">
-                  {/* Checkbox */}
-                  <input
-                    type="checkbox"
-                    checked={selectedTravelers.includes(traveler.dbId)}
-                    onChange={() => toggleSelectTraveler(traveler.dbId)}
-                    className="mt-2 h-6 w-6 text-blue-600 rounded-lg cursor-pointer"
-                  />
-
-                  {/* Content */}
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-2xl font-bold text-gray-900">{traveler.jobNumber}</h3>
-                          {getStatusBadge(traveler.status)}
+            <>
+            {/* Desktop Table View */}
+            <div className="hidden lg:block w-full overflow-x-auto">
+              <table className="w-full divide-y divide-gray-200">
+                <thead className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 sticky top-0 z-10" style={{ backgroundColor: '#4f46e5' }}>
+                  <tr>
+                    <th className="px-3 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      <input
+                        type="checkbox"
+                        checked={paginatedTravelers.length > 0 && paginatedTravelers.every(t => selectedTravelers.includes(t.dbId))}
+                        onChange={selectAll}
+                        className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                      />
+                    </th>
+                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      Job & Work Order
+                    </th>
+                    <th className="hidden sm:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      Part Details
+                    </th>
+                    <th className="hidden md:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      Customer Info
+                    </th>
+                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      Due Date
+                    </th>
+                    <th className="hidden lg:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      Shipping
+                    </th>
+                    <th className="px-4 py-4 text-center text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedTravelers.map((traveler) => (
+                    <tr
+                      key={traveler.dbId}
+                      className={`transition-colors ${
+                        selectedTravelers.includes(traveler.dbId)
+                          ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedTravelers.includes(traveler.dbId)}
+                          onChange={() => toggleSelectTraveler(traveler.dbId)}
+                          className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          <div className="text-base font-bold text-gray-900">Job# <span className="underline">{traveler.jobNumber}</span></div>
+                          <div className="text-base font-extrabold text-indigo-700">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-500 font-semibold">Part Number</p>
-                            <p className="text-gray-900 font-bold">{traveler.partNumber}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 font-semibold">Description</p>
-                            <p className="text-gray-900">{traveler.description}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 font-semibold">Quantity</p>
-                            <p className="text-gray-900 font-bold">{traveler.quantity}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 font-semibold">Revision</p>
-                            <p className="text-gray-900 font-bold">{traveler.revision}</p>
+                      </td>
+                      <td className="hidden sm:table-cell px-4 py-4">
+                        <div className="space-y-1">
+                          <div className="text-base font-semibold text-gray-900">Part# <span className="underline">{traveler.partNumber}</span></div>
+                          <div className="text-base text-gray-600 max-w-xs truncate" title={traveler.description}>{traveler.description || 'N/A'}</div>
+                          <div className="flex gap-3 text-base">
+                            <span className="text-gray-500">Traveler Rev: <span className="font-semibold text-gray-900 underline">{traveler.revision || 'N/A'}</span></span>
+                            <span className="text-gray-500">Qty: <span className="font-bold text-gray-900 underline">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></span>
                           </div>
                         </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center space-x-2">
-                        <Link
-                          href={`/travelers/${traveler.dbId}`}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="View"
-                        >
-                          <EyeIcon className="h-5 w-5" />
-                        </Link>
-                        <Link
-                          href={`/travelers/${traveler.dbId}`}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <PencilIcon className="h-5 w-5" />
-                        </Link>
-                        <Link
-                          href={`/travelers/clone/${traveler.dbId}`}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Clone"
-                        >
-                          <DocumentDuplicateIcon className="h-5 w-5" />
-                        </Link>
-                        <button
-                          onClick={async () => {
-                            const newActiveStatus = !traveler.isActive;
-                            const action = newActiveStatus ? 'activate' : 'deactivate';
-                            if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`)) return;
-                            try {
-                              const token = localStorage.getItem('nexus_token');
-                              const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                method: 'PATCH',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`,
-                                  'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ is_active: newActiveStatus })
-                              });
-                              if (response.ok) {
-                                alert(`✅ Traveler ${traveler.jobNumber} ${action}d!`);
-                                fetchTravelers();
-                              } else {
-                                alert(`❌ Failed to ${action} traveler`);
-                              }
-                            } catch (error) {
-                              console.error('Error:', error);
-                              alert(`❌ Failed to ${action} traveler`);
-                            }
-                          }}
-                          className={`p-2 rounded-lg transition-colors ${
-                            traveler.isActive
-                              ? 'text-green-600 hover:bg-green-50'
-                              : 'text-red-600 hover:bg-red-50'
-                          }`}
-                          title={traveler.isActive ? 'Mark as Inactive' : 'Mark as Active'}
-                        >
-                          {traveler.isActive ? (
-                            <CheckCircleIcon className="h-5 w-5" />
-                          ) : (
-                            <XCircleIcon className="h-5 w-5" />
-                          )}
-                        </button>
-                        {traveler.status !== 'ARCHIVED' && (
+                      </td>
+                      <td className="hidden md:table-cell px-4 py-4">
+                        <div className="space-y-1">
+                          <div className="text-base text-gray-600">Cust. Code: <span className="font-semibold text-gray-900 underline">{traveler.customerCode || 'N/A'}</span></div>
+                          <div className="text-base text-gray-600 max-w-xs truncate" title={traveler.customerName}>Cust. Name: <span className="font-semibold text-gray-900">{traveler.customerName || 'N/A'}</span></div>
+                          <div className="text-base text-gray-600">Cust. Rev: <span className="font-semibold text-gray-900">N/A</span></div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className="text-base font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span>
+                      </td>
+                      <td className="hidden lg:table-cell px-4 py-4">
+                        <div className="space-y-1">
+                          <div className="text-base text-gray-600">Ship Via: <span className="font-semibold text-gray-900">{traveler.shipVia || 'N/A'}</span></div>
+                          <div className="text-base text-gray-600">From Stock: <span className="font-semibold text-gray-900">{traveler.fromStock || 'N/A'}</span></div>
+                          <div className="text-base text-gray-600">To Stock: <span className="font-semibold text-gray-900">{traveler.toStock || 'N/A'}</span></div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          <Link
+                            href={`/travelers/${traveler.dbId}`}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                            title="View"
+                          >
+                            <EyeIcon className="h-5 w-5" />
+                          </Link>
+                          <Link
+                            href={`/travelers/${traveler.dbId}`}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
+                            title="Edit"
+                          >
+                            <PencilIcon className="h-5 w-5" />
+                          </Link>
+                          <Link
+                            href={`/travelers/clone/${traveler.dbId}`}
+                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex items-center justify-center"
+                            title="Clone"
+                          >
+                            <DocumentDuplicateIcon className="h-5 w-5" />
+                          </Link>
                           <button
                             onClick={async () => {
-                              if (!confirm(`Archive traveler ${traveler.jobNumber}?`)) return;
+                              const newActiveStatus = !traveler.isActive;
+                              const action = newActiveStatus ? 'activate' : 'deactivate';
+                              if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`)) return;
                               try {
                                 const token = localStorage.getItem('nexus_token');
                                 const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
@@ -528,65 +594,265 @@ export default function TravelersPage() {
                                     'Authorization': `Bearer ${token}`,
                                     'Content-Type': 'application/json'
                                   },
-                                  body: JSON.stringify({ status: 'ARCHIVED' })
+                                  body: JSON.stringify({ is_active: newActiveStatus })
                                 });
                                 if (response.ok) {
-                                  alert(`✅ Traveler ${traveler.jobNumber} archived!`);
+                                  alert(`✅ Traveler ${traveler.jobNumber} ${action}d!`);
                                   fetchTravelers();
                                 } else {
-                                  alert('❌ Failed to archive traveler');
+                                  alert(`❌ Failed to ${action} traveler`);
                                 }
                               } catch (error) {
                                 console.error('Error:', error);
-                                alert('❌ Failed to archive traveler');
+                                alert(`❌ Failed to ${action} traveler`);
                               }
                             }}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                            title="Archive"
+                            className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                              traveler.isActive
+                                ? 'text-green-600 hover:bg-green-50'
+                                : 'text-red-600 hover:bg-red-50'
+                            }`}
+                            title={traveler.isActive ? 'Mark as Inactive' : 'Mark as Active'}
                           >
-                            <ArchiveBoxIcon className="h-5 w-5" />
+                            {traveler.isActive ? (
+                              <CheckCircleIcon className="h-5 w-5" />
+                            ) : (
+                              <XCircleIcon className="h-5 w-5" />
+                            )}
                           </button>
-                        )}
-                        <button
-                          onClick={async () => {
-                            if (!confirm(`Are you sure you want to DELETE traveler ${traveler.jobNumber}? This cannot be undone!`)) return;
-                            try {
-                              const token = localStorage.getItem('nexus_token');
-                              const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                method: 'DELETE',
-                                headers: {
-                                  'Authorization': `Bearer ${token}`
+                          {traveler.status !== 'ARCHIVED' && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Archive traveler ${traveler.jobNumber}?`)) return;
+                                try {
+                                  const token = localStorage.getItem('nexus_token');
+                                  const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                      'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({ status: 'ARCHIVED' })
+                                  });
+                                  if (response.ok) {
+                                    alert(`✅ Traveler ${traveler.jobNumber} archived!`);
+                                    fetchTravelers();
+                                  } else {
+                                    alert('❌ Failed to archive traveler');
+                                  }
+                                } catch (error) {
+                                  console.error('Error:', error);
+                                  alert('❌ Failed to archive traveler');
                                 }
-                              });
-                              if (response.ok) {
-                                alert(`✅ Traveler ${traveler.jobNumber} deleted!`);
-                                fetchTravelers();
-                              } else {
+                              }}
+                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex items-center justify-center"
+                              title="Archive"
+                            >
+                              <ArchiveBoxIcon className="h-5 w-5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Are you sure you want to DELETE traveler ${traveler.jobNumber}? This cannot be undone!`)) return;
+                              try {
+                                const token = localStorage.getItem('nexus_token');
+                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`
+                                  }
+                                });
+                                if (response.ok) {
+                                  alert(`✅ Traveler ${traveler.jobNumber} deleted!`);
+                                  fetchTravelers();
+                                } else {
+                                  alert('❌ Failed to delete traveler');
+                                }
+                              } catch (error) {
+                                console.error('Error:', error);
                                 alert('❌ Failed to delete traveler');
                               }
-                            } catch (error) {
-                              console.error('Error:', error);
-                              alert('❌ Failed to delete traveler');
-                            }
-                          }}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <TrashIcon className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
-                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                          title="Print"
-                        >
-                          <PrinterIcon className="h-5 w-5" />
-                        </button>
+                            }}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                            title="Delete"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
+                            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center"
+                            title="Print"
+                          >
+                            <PrinterIcon className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="block lg:hidden">
+              <div className="p-3 space-y-3">
+                {paginatedTravelers.map((traveler) => (
+                  <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
+                    selectedTravelers.includes(traveler.dbId)
+                      ? 'bg-blue-50 border-blue-500'
+                      : 'bg-white border-gray-200'
+                  }`}>
+                    {/* Card Header */}
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-2 rounded-t-lg flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedTravelers.includes(traveler.dbId)}
+                          onChange={() => toggleSelectTraveler(traveler.dbId)}
+                          className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                        />
+                        <div>
+                          <div className="text-sm font-bold">Job# {traveler.jobNumber}</div>
+                          <div className="text-xs text-blue-100">WO# {traveler.workOrder || 'N/A'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Content */}
+                    <div className="p-3 space-y-2">
+                      {/* Part Details */}
+                      <div>
+                        <div className="text-xs text-gray-500 font-semibold">Part Number</div>
+                        <div className="text-sm font-bold text-gray-900">{traveler.partNumber}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 font-semibold">Description</div>
+                        <div className="text-sm text-gray-700">{traveler.description || 'N/A'}</div>
+                      </div>
+
+                      {/* Metrics Grid */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Customer Code</div>
+                          <div className="text-sm font-semibold text-gray-900">{traveler.customerCode || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Due Date</div>
+                          <div className="text-sm font-semibold text-gray-900">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="pt-2 border-t border-gray-200">
+                        <div className="grid grid-cols-3 gap-2">
+                          <Link
+                            href={`/travelers/${traveler.dbId}`}
+                            className="flex items-center justify-center space-x-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm font-semibold border border-blue-200"
+                          >
+                            <EyeIcon className="h-4 w-4" />
+                            <span>View</span>
+                          </Link>
+                          <Link
+                            href={`/travelers/${traveler.dbId}`}
+                            className="flex items-center justify-center space-x-1 px-3 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors text-sm font-semibold border border-green-200"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                            <span>Edit</span>
+                          </Link>
+                          <button
+                            onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
+                            className="flex items-center justify-center space-x-1 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-sm font-semibold border border-gray-200"
+                          >
+                            <PrinterIcon className="h-4 w-4" />
+                            <span>Print</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                ))}
               </div>
-            ))
+            </div>
+
+              {/* Pagination Controls */}
+              {filteredTravelers.length > 0 && (
+                <div className="px-4 py-4 border-t-2 border-gray-200 bg-gray-50">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    {/* Items per page selector */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 font-medium">Show:</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                          setItemsPerPage(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="px-3 py-1 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm font-semibold"
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                      <span className="text-sm text-gray-700">
+                        Showing {startIndex + 1}-{Math.min(endIndex, filteredTravelers.length)} of {filteredTravelers.length} travelers
+                      </span>
+                    </div>
+
+                    {/* Page navigation */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        First
+                      </button>
+                      <button
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Prev
+                      </button>
+
+                      {getPageNumbers().map((page, index) => (
+                        page === '...' ? (
+                          <span key={`ellipsis-${index}`} className="px-3 py-1 text-gray-500">...</span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => goToPage(Number(page))}
+                            className={`px-3 py-1 rounded-lg font-semibold text-sm transition-colors ${
+                              currentPage === page
+                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                                : 'bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      ))}
+
+                      <button
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                      <button
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Last
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

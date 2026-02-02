@@ -204,6 +204,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
+  // Ref for abort controller to prevent race conditions in auto-populate
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Keep page at top when component mounts
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -312,12 +315,23 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     if (mode === 'create' && formData.jobNumber.trim().length >= 3 && formData.workOrderNumber.trim().length >= 3) {
       console.log('✅ Auto-populate triggered! Waiting 300ms then fetching...');
 
+      // Cancel any previous request to prevent race conditions
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+      const currentController = abortControllerRef.current;
+
       const fetchLatestRevision = async () => {
         try {
           const url = `http://acidashboard.aci.local:100/api/travelers/latest-revision?job_number=${encodeURIComponent(formData.jobNumber)}&work_order=${encodeURIComponent(formData.workOrderNumber)}`;
           console.log('🌐 Fetching:', url);
 
-          const response = await fetch(url);
+          const response = await fetch(url, {
+            signal: currentController.signal
+          });
           console.log('📡 Response status:', response.status);
 
           if (response.ok) {
@@ -422,6 +436,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             console.warn('⚠️ API returned error status:', response.status);
           }
         } catch (error) {
+          // Ignore abort errors (they're expected when a new request cancels the old one)
+          if (error instanceof Error && error.name === 'AbortError') {
+            console.log('🔄 Previous request cancelled');
+            return;
+          }
           console.error('❌ Error fetching latest revision:', error);
         }
       };
@@ -431,6 +450,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       return () => {
         console.log('🔄 Cleaning up auto-populate timeout');
         clearTimeout(timeoutId);
+        // Cancel ongoing request on cleanup
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
       };
     }
   }, [formData.jobNumber, formData.workOrderNumber, mode]);
@@ -573,15 +596,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     if (isLeadFree) fullJobNumber += 'L';
     if (isITAR) fullJobNumber += 'M';
 
-    // Map traveler type to backend enum
+    // Map traveler type to backend enum - ONLY 4 types
     const travelerTypeMap: { [key: string]: string } = {
       'PCB_ASSEMBLY': 'ASSY',
       'PCB': 'PCB',
-      'CABLE': 'CABLE',
-      'CABLE_ASSEMBLY': 'CABLE',
-      'PCB_CABLE_ASSEMBLY': 'ASSY',
-      'PARTS': 'ASSY',
-      'ASSEMBLY': 'ASSY'
+      'CABLES': 'CABLE',
+      'PURCHASING': 'PURCHASING'
     };
 
     // PCB and PARTS travelers should never have labor hours
@@ -708,15 +728,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     if (isLeadFree) fullJobNumber += 'L';
     if (isITAR) fullJobNumber += 'M';
 
-    // Map traveler type to backend enum
+    // Map traveler type to backend enum - ONLY 4 types
     const travelerTypeMap: { [key: string]: string } = {
       'PCB_ASSEMBLY': 'ASSY',
       'PCB': 'PCB',
-      'CABLE': 'CABLE',
-      'CABLE_ASSEMBLY': 'CABLE',
-      'PCB_CABLE_ASSEMBLY': 'ASSY',
-      'PARTS': 'ASSY',
-      'ASSEMBLY': 'ASSY'
+      'CABLES': 'CABLE',
+      'PURCHASING': 'PURCHASING'
     };
 
     // Prepare API payload with DRAFT status
@@ -879,23 +896,23 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
   // Main form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-4 lg:p-6">
-      <div className="w-full">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-2 sm:p-4 lg:p-6">
+      <div className="w-full max-w-7xl mx-auto">
         {/* Header with Type Badge - NO PRINT */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg rounded-lg p-6 mb-6 border-2 border-indigo-300 no-print">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <span className="px-4 py-2 bg-white text-indigo-700 rounded-lg font-bold shadow-md">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg rounded-lg p-3 sm:p-4 md:p-6 mb-3 sm:mb-4 md:mb-6 border-2 border-indigo-300 no-print">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:space-x-4">
+              <span className="px-3 py-2 bg-white text-indigo-700 rounded-lg font-bold shadow-md text-sm md:text-base">
                 {travelerTypes.find(t => t.value === selectedType)?.label}
               </span>
               <div>
-                <h2 className="text-xl font-bold text-white">Traveler Form</h2>
-                <p className="text-sm text-indigo-100">Fill in all required fields</p>
+                <h2 className="text-lg md:text-xl font-bold text-white">Traveler Form</h2>
+                <p className="text-xs md:text-sm text-indigo-100">Fill in all required fields</p>
               </div>
             </div>
             <button
               onClick={() => setShowForm(false)}
-              className="px-5 py-2 bg-white text-indigo-700 rounded-lg font-semibold hover:bg-indigo-50 transition-colors shadow-md"
+              className="w-full sm:w-auto px-4 py-2 bg-white text-indigo-700 rounded-lg font-semibold hover:bg-indigo-50 transition-colors shadow-md text-sm md:text-base"
             >
               Change Type
             </button>
@@ -965,23 +982,23 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         </div>
 
         {/* Main Form - Page 1 */}
-        <div className="bg-white shadow-lg rounded-lg border-2 border-indigo-100 p-8 mb-6">
-          {/* Top Row - Compact */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-6">
+        <div className="bg-white shadow-lg rounded-lg border-2 border-indigo-100 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6 overflow-hidden">
+          {/* Top Row - Responsive */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Page</label>
               <input
                 type="text"
                 value={formData.pageNumber}
                 onChange={(e) => setFormData({...formData, pageNumber: e.target.value})}
-                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-gray-700 mb-1">
                 Job No * {isLeadFree && <span className="text-green-600">(L)</span>}{isITAR && <span className="text-red-600">(M)</span>}
               </label>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center gap-1 min-w-0">
                 <input
                   type="text"
                   value={formData.jobNumber}
@@ -1065,30 +1082,30 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                       }
                     }
                   }}
-                  className="flex-1 border-2 border-blue-300 rounded px-2 py-1.5 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                  className="flex-1 min-w-0 border-2 border-blue-300 rounded px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                   placeholder="8414"
                 />
-                {isLeadFree && <span className="px-2 py-1.5 bg-green-100 text-green-800 font-bold rounded text-xs border border-green-300">L</span>}
-                {isITAR && <span className="px-2 py-1.5 bg-purple-100 text-purple-800 font-bold rounded text-xs border border-purple-300">M</span>}
+                {isLeadFree && <span className="flex-shrink-0 px-2 py-1.5 bg-green-100 text-green-800 font-bold rounded text-xs border border-green-300">L</span>}
+                {isITAR && <span className="flex-shrink-0 px-2 py-1.5 bg-purple-100 text-purple-800 font-bold rounded text-xs border border-purple-300">M</span>}
               </div>
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-gray-700 mb-1">Work Order *</label>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center gap-1 min-w-0">
                 <input
                   type="text"
                   value={workOrderPrefix}
                   readOnly
-                  className="flex-1 border-2 border-gray-300 bg-gray-100 rounded px-2 py-1.5 text-sm font-bold text-gray-600 cursor-not-allowed"
+                  className="flex-1 min-w-0 border-2 border-gray-300 bg-gray-100 rounded px-2 py-1.5 text-xs sm:text-sm font-bold text-gray-600 cursor-not-allowed"
                   placeholder="12345"
                   title="Auto-generated prefix (read-only)"
                 />
-                <span className="text-gray-600 font-bold">-</span>
+                <span className="text-gray-600 font-bold flex-shrink-0 text-xs sm:text-sm">-</span>
                 <input
                   type="text"
                   value={workOrderSuffix}
                   onChange={(e) => setWorkOrderSuffix(e.target.value)}
-                  className="flex-1 border-2 border-blue-300 rounded px-2 py-1.5 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                  className="w-14 sm:w-16 md:w-20 flex-shrink-0 border-2 border-blue-300 rounded px-1 sm:px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                   placeholder="6"
                   title="Editable suffix"
                 />
@@ -1100,7 +1117,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
             </div>
             <div>
@@ -1109,7 +1126,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 type="date"
                 value={formData.dueDate}
                 onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
-                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
             </div>
             <div>
@@ -1118,22 +1135,22 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 type="date"
                 value={formData.shipDate}
                 onChange={(e) => setFormData({...formData, shipDate: e.target.value})}
-                className="w-full border-2 border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
             </div>
           </div>
 
           {/* Customer and Part Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6 lg:gap-8 mb-3 sm:mb-4 md:mb-6">
             {/* Left Column */}
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Customer Code</label>
                 <input
                   type="text"
                   value={formData.customerCode}
                   onChange={(e) => setFormData({...formData, customerCode: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="750"
                 />
               </div>
@@ -1143,7 +1160,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.customerName}
                   onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="ACME Corporation"
                 />
               </div>
@@ -1153,7 +1170,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.partNumber}
                   onChange={(e) => setFormData({...formData, partNumber: e.target.value})}
-                  className="w-full border-2 border-blue-300 rounded-lg px-4 py-3 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="METSHIFT"
                 />
               </div>
@@ -1163,7 +1180,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.poNumber}
                   onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="PO-12345"
                 />
               </div>
@@ -1173,25 +1190,25 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.operation}
                   onChange={(e) => setFormData({...formData, operation: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="84"
                 />
               </div>
             </div>
 
             {/* Right Column */}
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Part Description *</label>
                 <input
                   type="text"
                   value={formData.partDescription}
                   onChange={(e) => setFormData({...formData, partDescription: e.target.value})}
-                  className="w-full border-2 border-blue-300 rounded-lg px-4 py-3 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="METSHIFT Assembly"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Quantity *</label>
                   <input
@@ -1234,7 +1251,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.customerRevision}
                   onChange={(e) => setFormData({...formData, customerRevision: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="REV A"
                 />
               </div>
@@ -1244,7 +1261,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.drawingNumber}
                   onChange={(e) => setFormData({...formData, drawingNumber: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="DWG-88424"
                 />
               </div>
@@ -1252,7 +1269,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Compliance and Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border-2 border-indigo-200 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border-2 border-indigo-200 shadow-sm">
             <div className="flex items-center space-x-4 p-3 bg-white rounded border border-gray-200">
               <input
                 type="checkbox"
@@ -1263,9 +1280,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               />
               <label htmlFor="leadFree" className="flex-1 cursor-pointer">
                 <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-green-100 text-green-800 font-bold rounded text-sm">L</span>
+                  <span className="px-2 py-1 bg-green-100 text-green-800 font-bold rounded text-xs md:text-sm">L</span>
                   <div>
-                    <p className="font-semibold text-gray-900">Lead Free (RoHS)</p>
+                    <p className="font-semibold text-gray-900 text-sm md:text-base">Lead Free (RoHS)</p>
                   </div>
                 </div>
               </label>
@@ -1281,9 +1298,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               />
               <label htmlFor="itar" className="flex-1 cursor-pointer">
                 <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-purple-100 text-purple-800 font-bold rounded text-sm">M</span>
+                  <span className="px-2 py-1 bg-purple-100 text-purple-800 font-bold rounded text-xs md:text-sm">M</span>
                   <div>
-                    <p className="font-semibold text-gray-900">ITAR Controlled</p>
+                    <p className="font-semibold text-gray-900 text-sm md:text-base">ITAR Controlled</p>
                   </div>
                 </div>
               </label>
@@ -1307,7 +1324,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 />
                 <label htmlFor="includeLaborHours" className="flex-1 cursor-pointer">
                   <div>
-                    <p className="font-semibold text-gray-900">Include Labor Hours Table</p>
+                    <p className="font-semibold text-gray-900 text-sm md:text-base">Include Labor Hours Table</p>
                     <p className="text-xs text-gray-500">
                       {includeLaborHours ? '✓ Labor tracking enabled' : 'Add labor tracking section'}
                     </p>
@@ -1334,7 +1351,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               />
               <label htmlFor="isActive" className="flex-1 cursor-pointer">
                 <div>
-                  <p className="font-semibold text-gray-900">Active Traveler</p>
+                  <p className="font-semibold text-gray-900 text-sm md:text-base">Active Traveler</p>
                   <p className="text-xs text-gray-500">Mark as active in production</p>
                 </div>
               </label>
@@ -1342,39 +1359,39 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Specifications - Prominent Section with Date */}
-          <div className="mb-6 p-5 bg-yellow-50 rounded-lg border-2 border-yellow-200 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-              <label className="block text-base font-bold text-gray-900">Specifications</label>
-              <div className="flex items-center space-x-2">
-                <label className="text-sm font-semibold text-gray-700">Date:</label>
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-yellow-50 rounded-lg border-2 border-yellow-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-3">
+              <label className="block text-sm md:text-base font-bold text-gray-900">Specifications</label>
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <label className="text-xs md:text-sm font-semibold text-gray-700">Date:</label>
                 <input
                   type="date"
                   value={formData.specsDate}
                   onChange={(e) => setFormData({...formData, specsDate: e.target.value})}
-                  className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:border-blue-500"
+                  className="flex-1 sm:flex-none border border-gray-300 rounded px-2 md:px-3 py-1.5 text-sm focus:border-blue-500"
                 />
               </div>
             </div>
             <textarea
               value={formData.specs}
               onChange={(e) => setFormData({...formData, specs: e.target.value})}
-              className="w-full border border-gray-300 rounded px-4 py-3 text-base text-gray-900 focus:border-blue-500 min-h-[120px] resize-y"
+              className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-gray-900 focus:border-blue-500 min-h-[100px] md:min-h-[120px] resize-y"
               placeholder="Enter specifications, notes, and special requirements..."
               style={{color: '#000000', backgroundColor: '#ffffff'}}
             />
           </div>
 
           {/* Stock and Shipping Info */}
-          <div className="mb-6 p-5 bg-blue-50 rounded-lg border-2 border-blue-200 shadow-sm">
-            <h3 className="text-base font-bold text-gray-900 mb-3">Stock &amp; Shipping Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-blue-50 rounded-lg border-2 border-blue-200 shadow-sm">
+            <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3">Stock &amp; Shipping Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">From Stock</label>
                 <input
                   type="text"
                   value={formData.fromStock}
                   onChange={(e) => setFormData({...formData, fromStock: e.target.value})}
-                  className="w-full border border-gray-300 rounded px-4 py-2 text-base focus:border-blue-500"
+                  className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500"
                   placeholder="Location..."
                 />
               </div>
@@ -1384,7 +1401,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.toStock}
                   onChange={(e) => setFormData({...formData, toStock: e.target.value})}
-                  className="w-full border border-gray-300 rounded px-4 py-2 text-base focus:border-blue-500"
+                  className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500"
                   placeholder="Location..."
                 />
               </div>
@@ -1394,7 +1411,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   type="text"
                   value={formData.shipVia}
                   onChange={(e) => setFormData({...formData, shipVia: e.target.value})}
-                  className="w-full border border-gray-300 rounded px-4 py-2 text-base focus:border-blue-500"
+                  className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500"
                   placeholder="Shipping method..."
                 />
               </div>
@@ -1402,35 +1419,37 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Process Steps - Card-Based Layout */}
-          <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Process Steps (Routing)</h3>
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+              <h3 className="text-lg md:text-xl font-bold text-gray-900">Process Steps (Routing)</h3>
               <button
                 onClick={addNewStep}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-colors shadow-md"
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-colors shadow-md"
               >
                 <PlusIcon className="h-5 w-5" />
                 <span>Add Step</span>
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {formSteps.map((step, index) => (
                 <div
                   key={step.id}
                   ref={(el) => {
                     stepRowRefs.current[step.id] = el;
                   }}
-                  className="bg-white border-2 border-indigo-200 rounded-lg p-4 shadow-sm transition-colors duration-300"
+                  className="bg-white border-2 border-indigo-200 rounded-lg p-3 md:p-4 shadow-sm transition-colors duration-300"
                 >
                   {/* Step Header */}
-                  <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-200">
-                    <div className="flex items-center space-x-4">
-                      <span className="bg-blue-600 text-white font-bold px-3 py-1 rounded">
+                  <div className="mb-4 pb-3 border-b border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="bg-blue-600 text-white font-bold px-3 py-1.5 rounded text-sm">
                         Step {index + 1}
                       </span>
-                      <div className="flex items-center space-x-2 bg-yellow-100 border-2 border-yellow-400 rounded-lg px-3 py-1">
-                        <label className="text-sm font-bold text-yellow-800">SEQ #</label>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2 bg-yellow-100 border-2 border-yellow-400 rounded-lg px-3 py-1.5">
+                        <label className="text-xs md:text-sm font-bold text-yellow-800">SEQ #</label>
                         <input
                           type="number"
                           min="1"
@@ -1441,29 +1460,31 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                               updateStep(step.id, 'sequence', newSeq);
                             }
                           }}
-                          className="w-20 border-2 border-yellow-500 rounded px-3 py-1 text-lg font-bold text-center bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="w-16 md:w-20 border-2 border-yellow-500 rounded px-2 md:px-3 py-1 text-base md:text-lg font-bold text-center bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         />
                       </div>
+                      <button
+                        onClick={() => removeStep(step.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm font-semibold"
+                        title="Remove step"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        <span>Remove Step</span>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeStep(step.id)}
-                      className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-100 rounded-lg transition-colors"
-                      title="Remove step"
-                    >
-                      <TrashIcon className="h-5 w-5" />
-                    </button>
                   </div>
 
-                  {/* Step Fields - ALIGNED COLUMNS */}
+                  {/* Step Fields - RESPONSIVE COLUMNS */}
                   <div className="space-y-4">
-                    {/* Row 1: Work Center and Metrics in aligned columns */}
-                    <div className="grid grid-cols-12 gap-3 items-start">
-                      <div className="col-span-3 relative group">
-                        <label className="block text-xs font-bold text-gray-700 mb-2">Work Center</label>
+                    {/* Row 1: Work Center - Full Width on Mobile */}
+                    <div className="w-full">
+                      <div className="relative group">
+                        <label className="block text-xs md:text-sm font-bold text-gray-700 mb-2">Work Center</label>
                         <select
                           value={step.workCenter}
                           onChange={(e) => updateStep(step.id, 'workCenter', e.target.value)}
-                          className="w-full border-2 border-blue-500 rounded-lg px-3 py-2 text-sm font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                          className="w-full border-2 border-blue-500 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer appearance-none"
+                          style={{ minHeight: '42px' }}
                         >
                           <option value="">-- Select Work Center --</option>
                           {getWorkCentersByType(selectedType).map(wc => (
@@ -1473,15 +1494,17 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           ))}
                         </select>
                         {step.workCenter && (
-                          <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-xl max-w-xs">
+                          <div className="hidden md:group-hover:block absolute left-0 top-full mt-1 z-50 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-xl max-w-xs">
                             <div className="font-bold text-yellow-300 mb-1">{step.workCenter}</div>
                             <div>{getWorkCentersByType(selectedType).find(wc => wc.name === step.workCenter)?.description || ''}</div>
                           </div>
                         )}
                       </div>
+                    </div>
 
-                      {/* Quantity, Rejected, Accepted, Sign - ALIGNED */}
-                      <div className="col-span-2">
+                    {/* Row 2: Quantity, Rejected, Accepted, Sign, Date - RESPONSIVE */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 md:gap-3">
+                      <div className="col-span-1">
                         <label className="block text-xs font-bold text-gray-700 mb-2 text-center">Quantity</label>
                         <input
                           type="number"
@@ -1490,7 +1513,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           className="w-full border-2 border-gray-300 rounded px-2 py-2 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         <label className="block text-xs font-bold text-red-700 mb-2 text-center">Rejected</label>
                         <input
                           type="number"
@@ -1499,7 +1522,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           className="w-full border-2 border-red-300 rounded px-2 py-2 text-sm text-center focus:border-red-500 focus:ring-1 focus:ring-red-200"
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         <label className="block text-xs font-bold text-green-700 mb-2 text-center">Accepted</label>
                         <input
                           type="number"
@@ -1508,7 +1531,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           className="w-full border-2 border-green-300 rounded px-2 py-2 text-sm text-center focus:border-green-500 focus:ring-1 focus:ring-green-200"
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1">
                         <label className="block text-xs font-bold text-purple-700 mb-2 text-center">Sign</label>
                         <input
                           type="text"
@@ -1518,7 +1541,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           placeholder="Init"
                         />
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-2 sm:col-span-1">
                         <label className="block text-xs font-bold text-gray-700 mb-2 text-center">Date</label>
                         <input
                           type="date"
@@ -1531,11 +1554,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
                     {/* Row 2: Instructions - Full Width */}
                     <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Instructions</label>
+                      <label className="block text-xs md:text-sm font-bold text-gray-700 mb-2">Instructions</label>
                       <textarea
                         value={step.instruction}
                         onChange={(e) => updateStep(step.id, 'instruction', e.target.value)}
-                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 min-h-[80px] resize-y"
+                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 min-h-[60px] md:min-h-[80px] resize-y"
                         placeholder="Enter detailed instructions for this step..."
                         style={{color: '#000000', backgroundColor: '#ffffff'}}
                       />
@@ -1545,8 +1568,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               ))}
 
               {formSteps.length === 0 && (
-                <div className="text-center py-8 bg-gray-50 rounded border border-dashed border-gray-300">
-                  <p className="text-gray-600">No process steps yet. Click &quot;Add Step&quot; to create one.</p>
+                <div className="text-center py-6 md:py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <p className="text-sm md:text-base text-gray-600">No process steps yet. Click &quot;Add Step&quot; to create one.</p>
                 </div>
               )}
             </div>
@@ -1555,7 +1578,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             <div className="flex justify-center mt-4">
               <button
                 onClick={addNewStep}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-colors shadow-md"
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-colors shadow-md"
               >
                 <PlusIcon className="h-5 w-5" />
                 <span>Add Step</span>
@@ -1564,23 +1587,23 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Comments Section - Prominent */}
-          <div className="mb-6 p-5 bg-green-50 rounded-lg border-2 border-green-200 shadow-sm">
-            <label className="block text-base font-bold text-gray-900 mb-3">Comments &amp; Notes</label>
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-green-50 rounded-lg border-2 border-green-200 shadow-sm">
+            <label className="block text-sm md:text-base font-bold text-gray-900 mb-3">Comments &amp; Notes</label>
             <textarea
               value={formData.comments}
               onChange={(e) => setFormData({...formData, comments: e.target.value})}
-              className="w-full border border-gray-300 rounded px-4 py-3 text-base text-gray-900 focus:border-blue-500 min-h-[150px] resize-y"
+              className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-gray-900 focus:border-blue-500 min-h-[120px] md:min-h-[150px] resize-y"
               placeholder="Enter any additional comments, notes, quality issues, or special instructions..."
-              style={{color: '#000000', backgroundColor: '#ffffff', fontSize: '1rem', lineHeight: '1.6'}}
+              style={{color: '#000000', backgroundColor: '#ffffff'}}
             />
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-center space-x-4 mb-6 flex-wrap gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
           <button
             onClick={handlePrint}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <PrinterIcon className="h-5 w-5" />
             <span>Print Traveler</span>
@@ -1588,7 +1611,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
           <button
             onClick={generateBarcode}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <QrCodeIcon className="h-5 w-5" />
             <span>Generate Barcode</span>
@@ -1596,24 +1619,24 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
           <button
             onClick={handleSaveDraft}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <span>💾 Save as Draft</span>
           </button>
 
           <button
             onClick={handleSubmit}
-            className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
           >
             <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
           </button>
         </div>
 
         {/* Action Buttons - Bottom (Duplicate) */}
-        <div className="flex justify-center space-x-4 mb-6 mt-8 pt-6 border-t-2 border-gray-200 flex-wrap gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200">
           <button
             onClick={handlePrint}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <PrinterIcon className="h-5 w-5" />
             <span>Print Traveler</span>
@@ -1621,7 +1644,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
           <button
             onClick={generateBarcode}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <QrCodeIcon className="h-5 w-5" />
             <span>Generate Barcode</span>
@@ -1629,14 +1652,14 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
           <button
             onClick={handleSaveDraft}
-            className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <span>💾 Save as Draft</span>
           </button>
 
           <button
             onClick={handleSubmit}
-            className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
           >
             <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
           </button>

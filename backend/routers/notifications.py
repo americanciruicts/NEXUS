@@ -108,3 +108,18 @@ def delete_notification(
     db.delete(notification)
     db.commit()
     return {"message": "Notification deleted"}
+
+@router.delete("/admin/delete-all")
+def delete_all_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete all notifications for all users (admin only)"""
+    # Only admins can delete all notifications
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can delete all notifications")
+
+    count = db.query(Notification).count()
+    db.query(Notification).delete()
+    db.commit()
+    return {"message": f"Deleted {count} notifications for all users"}

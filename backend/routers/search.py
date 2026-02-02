@@ -5,10 +5,10 @@ Provides search functionality across travelers, users, work orders, and labor en
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func
+from sqlalchemy import or_, and_, func, distinct
 from typing import List, Optional
 from database import get_db
-from models import Traveler, User, WorkOrder, LaborEntry, ProcessStep
+from models import Traveler, User, WorkOrder, LaborEntry, ProcessStep, WorkCenter, UserRole
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/search", tags=["Search"])
@@ -196,4 +196,176 @@ async def search_travelers(
             "revision": t.revision
         }
         for t in travelers
+    ]
+
+
+@router.get("/autocomplete/job-numbers")
+async def autocomplete_job_numbers(
+    q: str = Query("", description="Search query - leave empty for all active jobs"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    status: Optional[str] = Query(None, description="Filter by status (e.g., 'IN_PROGRESS', 'COMPLETED')"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Autocomplete endpoint for job numbers
+    Returns matching job numbers with part description and customer name for context
+    """
+
+    query = db.query(Traveler).filter(Traveler.is_active == True)
+
+    if q:
+        search_term = f"%{q}%"
+        query = query.filter(
+            or_(
+                Traveler.job_number.ilike(search_term),
+                Traveler.part_description.ilike(search_term),
+                Traveler.customer_name.ilike(search_term)
+            )
+        )
+
+    if status:
+        query = query.filter(Traveler.status == status)
+
+    # Order by most recently created first, then by job number
+    travelers = query.order_by(Traveler.created_at.desc()).limit(limit).all()
+
+    return [
+        {
+            "id": t.id,
+            "job_number": t.job_number,
+            "part_description": t.part_description,
+            "customer_name": t.customer_name,
+            "status": t.status,
+            "label": f"{t.job_number} - {t.part_description[:50]}{'...' if len(t.part_description) > 50 else ''}",
+            "value": t.job_number
+        }
+        for t in travelers
+    ]
+
+
+@router.get("/autocomplete/work-centers")
+async def autocomplete_work_centers(
+    q: str = Query("", description="Search query - leave empty for all"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    include_inactive: bool = Query(False, description="Include inactive work centers"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Autocomplete endpoint for work centers
+    Combines data from WorkCenter table and distinct values from labor/process entries
+    """
+
+    results = []
+
+    # Get from WorkCenter table
+    wc_query = db.query(WorkCenter)
+
+    if not include_inactive:
+        wc_query = wc_query.filter(WorkCenter.is_active == True)
+
+    if q:
+        search_term = f"%{q}%"
+        wc_query = wc_query.filter(
+            or_(
+                WorkCenter.code.ilike(search_term),
+                WorkCenter.name.ilike(search_term),
+                WorkCenter.description.ilike(search_term)
+            )
+        )
+
+    work_centers = wc_query.order_by(WorkCenter.code).limit(limit).all()
+
+    for wc in work_centers:
+        results.append({
+            "code": wc.code,
+            "name": wc.name,
+            "description": wc.description,
+            "is_active": wc.is_active,
+            "label": f"{wc.code} - {wc.name}",
+            "value": wc.code
+        })
+
+    # If we haven't reached the limit, also get distinct work centers from labor entries
+    if len(results) < limit:
+        remaining = limit - len(results)
+        existing_codes = {r["code"] for r in results}
+
+        # Get distinct work centers from LaborEntry
+        labor_wc_query = db.query(distinct(LaborEntry.work_center)).filter(
+            LaborEntry.work_center.isnot(None),
+            LaborEntry.work_center != ""
+        )
+
+        if q:
+            search_term = f"%{q}%"
+            labor_wc_query = labor_wc_query.filter(LaborEntry.work_center.ilike(search_term))
+
+        labor_wcs = labor_wc_query.limit(remaining * 2).all()  # Get extra in case of duplicates
+
+        for (wc,) in labor_wcs:
+            if wc not in existing_codes and len(results) < limit:
+                results.append({
+                    "code": wc,
+                    "name": wc,
+                    "description": "From labor entries",
+                    "is_active": True,
+                    "label": wc,
+                    "value": wc
+                })
+                existing_codes.add(wc)
+
+    return results[:limit]
+
+
+@router.get("/autocomplete/operators")
+async def autocomplete_operators(
+    q: str = Query("", description="Search query - leave empty for all"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    active_only: bool = Query(True, description="Only return active users"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Autocomplete endpoint for operator names
+    Returns users with OPERATOR or ADMIN role
+    """
+
+    query = db.query(User).filter(
+        or_(
+            User.role == UserRole.OPERATOR,
+            User.role == UserRole.ADMIN
+        )
+    )
+
+    if active_only:
+        query = query.filter(User.is_active == True)
+
+    if q:
+        search_term = f"%{q}%"
+        query = query.filter(
+            or_(
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term),
+                User.username.ilike(search_term),
+                func.concat(User.first_name, ' ', User.last_name).ilike(search_term)
+            )
+        )
+
+    users = query.order_by(User.first_name, User.last_name).limit(limit).all()
+
+    return [
+        {
+            "id": u.id,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+            "username": u.username,
+            "full_name": f"{u.first_name} {u.last_name}",
+            "is_active": u.is_active,
+            "role": u.role.value,
+            "label": f"{u.first_name} {u.last_name} ({u.username})",
+            "value": f"{u.first_name} {u.last_name}"
+        }
+        for u in users
     ]

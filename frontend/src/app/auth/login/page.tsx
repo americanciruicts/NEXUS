@@ -13,6 +13,11 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showResetForm, setShowResetForm] = useState(false);
+  const [resetUsername, setResetUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
 
   const router = useRouter();
   const { login } = useAuth();
@@ -37,6 +42,56 @@ export default function LoginPage() {
     } catch (err) {
       console.error('Login error:', err);
       setError('Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetMessage('');
+    setError('');
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://acidashboard.aci.local:100/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: resetUsername,
+          new_password: newPassword
+        })
+      });
+
+      if (response.ok) {
+        setResetMessage('Password reset successfully! You can now login with your new password.');
+        setTimeout(() => {
+          setShowResetForm(false);
+          setResetUsername('');
+          setNewPassword('');
+          setConfirmPassword('');
+          setResetMessage('');
+        }, 2000);
+      } else {
+        const data = await response.json();
+        setError(data.detail || 'Failed to reset password');
+      }
+    } catch (err) {
+      console.error('Reset password error:', err);
+      setError('Failed to reset password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -67,16 +122,18 @@ export default function LoginPage() {
 
       {/* Login card */}
       <div className={`login-card ${mounted ? 'visible' : ''}`}>
-        {/* Logo section - using SVG logo */}
+        {/* Logo section */}
         <div className="logo-section">
           <Image
-            src="/nexus-logo.svg"
-            alt="NEXUS - American Circuits Traveler Management"
-            width={280}
+            src="/nexus-icon-only.svg"
+            alt="NEXUS Icon"
+            width={80}
             height={80}
-            className="main-logo"
+            className="logo-icon"
             priority
           />
+          <h1 className="logo-text">NEXUS</h1>
+          <p className="logo-tagline">American Circuits Traveler Management</p>
         </div>
 
         {/* Error message */}
@@ -90,35 +147,37 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Login form */}
-        <form onSubmit={handleSubmit} className="login-form">
+        {/* Success message for reset */}
+        {resetMessage && (
+          <div className="success-message">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="2"/>
+              <path d="M6 10l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {resetMessage}
+          </div>
+        )}
+
+        {/* Login or Reset Password form */}
+        {!showResetForm ? (
+          <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
             <label htmlFor="username">Username</label>
-            <div className="input-wrapper">
-              <svg className="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="6" r="4" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M2 18c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                placeholder="Enter your username"
-                autoComplete="username"
-              />
-            </div>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              placeholder="Enter your username"
+              autoComplete="username"
+              className="simple-input"
+            />
           </div>
 
           <div className="input-group">
             <label htmlFor="password">Password</label>
-            <div className="input-wrapper">
-              <svg className="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <rect x="3" y="8" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M6 8V6a4 4 0 118 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                <circle cx="10" cy="13" r="1.5" fill="currentColor"/>
-              </svg>
+            <div className="password-field">
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -127,6 +186,7 @@ export default function LoginPage() {
                 required
                 placeholder="Enter your password"
                 autoComplete="current-password"
+                className="simple-input"
               />
               <button
                 type="button"
@@ -161,13 +221,90 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+        ) : (
+          <form onSubmit={handleResetPassword} className="login-form">
+            <div className="input-group">
+              <label htmlFor="reset-username">Username</label>
+              <input
+                id="reset-username"
+                type="text"
+                value={resetUsername}
+                onChange={(e) => setResetUsername(e.target.value)}
+                required
+                placeholder="Enter your username"
+                className="simple-input"
+              />
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="new-password">New Password</label>
+              <input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="Enter new password"
+                className="simple-input"
+              />
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="confirm-password">Confirm Password</label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Confirm new password"
+                className="simple-input"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`submit-button ${isLoading ? 'loading' : ''}`}
+            >
+              {isLoading ? (
+                <>
+                  <svg className="spinner" width="20" height="20" viewBox="0 0 20 20">
+                    <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="50" strokeLinecap="round"/>
+                  </svg>
+                  Resetting...
+                </>
+              ) : (
+                'Reset Password'
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowResetForm(false);
+                setError('');
+                setResetMessage('');
+              }}
+              className="back-to-login"
+            >
+              Back to Login
+            </button>
+          </form>
+        )}
 
         {/* Footer */}
-        <div className="card-footer">
-          <button type="button" className="forgot-password">
-            Forgot Password?
-          </button>
-        </div>
+        {!showResetForm && (
+          <div className="card-footer">
+            <button
+              type="button"
+              className="forgot-password"
+              onClick={() => setShowResetForm(true)}
+            >
+              Reset Password
+            </button>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
@@ -179,7 +316,7 @@ export default function LoginPage() {
           padding: 20px;
           position: relative;
           overflow: hidden;
-          background: linear-gradient(135deg, #0a0f1c 0%, #101828 50%, #0d1220 100%);
+          background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #6366f1 60%, #7c3aed 100%);
         }
 
         /* Animated gradient orbs */
@@ -201,7 +338,7 @@ export default function LoginPage() {
         .orb-1 {
           width: 700px;
           height: 700px;
-          background: radial-gradient(circle, rgba(0, 102, 179, 0.35) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
           top: -25%;
           left: -15%;
           animation-delay: 0s;
@@ -210,7 +347,7 @@ export default function LoginPage() {
         .orb-2 {
           width: 600px;
           height: 600px;
-          background: radial-gradient(circle, rgba(230, 81, 0, 0.25) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(124, 58, 237, 0.35) 0%, transparent 70%);
           bottom: -20%;
           right: -15%;
           animation-delay: -6s;
@@ -219,7 +356,7 @@ export default function LoginPage() {
         .orb-3 {
           width: 500px;
           height: 500px;
-          background: radial-gradient(circle, rgba(0, 136, 204, 0.25) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(79, 70, 229, 0.3) 0%, transparent 70%);
           top: 50%;
           right: 10%;
           animation-delay: -12s;
@@ -228,7 +365,7 @@ export default function LoginPage() {
         .orb-4 {
           width: 450px;
           height: 450px;
-          background: radial-gradient(circle, rgba(255, 109, 0, 0.2) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(147, 51, 234, 0.25) 0%, transparent 70%);
           bottom: 40%;
           left: 5%;
           animation-delay: -18s;
@@ -254,9 +391,9 @@ export default function LoginPage() {
           position: absolute;
           inset: 0;
           background-image:
-            radial-gradient(circle at 20% 30%, rgba(0, 102, 179, 0.12) 2px, transparent 2px),
-            radial-gradient(circle at 80% 70%, rgba(230, 81, 0, 0.08) 2px, transparent 2px),
-            radial-gradient(circle at 50% 50%, rgba(0, 136, 204, 0.06) 1.5px, transparent 1.5px);
+            radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15) 2px, transparent 2px),
+            radial-gradient(circle at 80% 70%, rgba(124, 58, 237, 0.12) 2px, transparent 2px),
+            radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.08) 1.5px, transparent 1.5px);
           background-size: 80px 80px, 100px 100px, 50px 50px;
           animation: circuitMove 40s linear infinite;
           z-index: 1;
@@ -276,8 +413,8 @@ export default function LoginPage() {
           position: absolute;
           inset: 0;
           background-image:
-            linear-gradient(rgba(0, 102, 179, 0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0, 102, 179, 0.04) 1px, transparent 1px);
+            linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
           background-size: 60px 60px;
           z-index: 1;
         }
@@ -294,13 +431,13 @@ export default function LoginPage() {
           position: absolute;
           width: 4px;
           height: 4px;
-          background: rgba(0, 136, 204, 0.6);
+          background: rgba(255, 255, 255, 0.5);
           border-radius: 50%;
           animation: particleFloat 15s ease-in-out infinite;
         }
 
         .particle:nth-child(odd) {
-          background: rgba(255, 109, 0, 0.5);
+          background: rgba(147, 51, 234, 0.6);
         }
 
         .particle-1 { left: 10%; top: 20%; animation-delay: 0s; }
@@ -372,12 +509,29 @@ export default function LoginPage() {
           text-align: center;
           margin-bottom: 36px;
           display: flex;
-          justify-content: center;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
         }
 
-        .logo-section :global(.main-logo) {
-          max-width: 100%;
-          height: auto;
+        .logo-section :global(.logo-icon) {
+          width: 80px;
+          height: 80px;
+        }
+
+        .logo-text {
+          font-size: 32px;
+          font-weight: 700;
+          color: #0891b2;
+          margin: 0;
+          letter-spacing: 4px;
+        }
+
+        .logo-tagline {
+          font-size: 14px;
+          font-weight: 500;
+          color: #6b7280;
+          margin: 0;
         }
 
         /* Error message */
@@ -393,6 +547,21 @@ export default function LoginPage() {
           font-weight: 500;
           margin-bottom: 24px;
           border: 1px solid rgba(220, 38, 38, 0.2);
+        }
+
+        /* Success message */
+        .success-message {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 14px 16px;
+          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+          color: #16a34a;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 500;
+          margin-bottom: 24px;
+          border: 1px solid rgba(22, 163, 74, 0.2);
         }
 
         /* Form styles */
@@ -422,15 +591,49 @@ export default function LoginPage() {
 
         .input-icon {
           position: absolute;
-          left: 16px;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
           color: #9ca3af;
           pointer-events: none;
           transition: color 0.2s;
+          z-index: 1;
+          flex-shrink: 0;
         }
 
         .input-wrapper input {
           width: 100%;
-          padding: 16px 50px 16px 48px;
+          padding: 16px 56px;
+          padding-left: 48px;
+          background: #f8fafc;
+          border: 2px solid #e2e8f0;
+          border-radius: 14px;
+          font-size: 15px;
+          color: #1a202c;
+          outline: none;
+          transition: all 0.25s;
+          text-indent: 0;
+        }
+
+        .input-wrapper input:focus {
+          background: #ffffff;
+          border-color: #0891b2;
+          box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.12);
+        }
+
+        .input-wrapper input:focus + .input-icon,
+        .input-wrapper:focus-within .input-icon {
+          color: #0891b2;
+        }
+
+        .input-wrapper input::placeholder {
+          color: #94a3b8;
+        }
+
+        /* Simple input without icons */
+        .simple-input {
+          width: 100%;
+          padding: 16px 20px;
           background: #f8fafc;
           border: 2px solid #e2e8f0;
           border-radius: 14px;
@@ -440,19 +643,25 @@ export default function LoginPage() {
           transition: all 0.25s;
         }
 
-        .input-wrapper input:focus {
+        .simple-input:focus {
           background: #ffffff;
-          border-color: #0066B3;
-          box-shadow: 0 0 0 4px rgba(0, 102, 179, 0.12);
+          border-color: #0891b2;
+          box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.12);
         }
 
-        .input-wrapper input:focus + .input-icon,
-        .input-wrapper:focus-within .input-icon {
-          color: #0066B3;
-        }
-
-        .input-wrapper input::placeholder {
+        .simple-input::placeholder {
           color: #94a3b8;
+        }
+
+        /* Password field with toggle */
+        .password-field {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .password-field .simple-input {
+          padding-right: 52px;
         }
 
         .password-toggle {
@@ -466,10 +675,11 @@ export default function LoginPage() {
           display: flex;
           align-items: center;
           transition: color 0.2s;
+          z-index: 2;
         }
 
         .password-toggle:hover {
-          color: #0066B3;
+          color: #0891b2;
         }
 
         /* Submit button */
@@ -480,7 +690,7 @@ export default function LoginPage() {
           gap: 10px;
           width: 100%;
           padding: 18px 24px;
-          background: linear-gradient(135deg, #0077CC 0%, #004A82 100%);
+          background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
           color: white;
           border: none;
           border-radius: 14px;
@@ -488,7 +698,7 @@ export default function LoginPage() {
           font-weight: 600;
           cursor: pointer;
           transition: all 0.3s;
-          box-shadow: 0 4px 16px rgba(0, 102, 179, 0.4);
+          box-shadow: 0 4px 16px rgba(8, 145, 178, 0.4);
           margin-top: 8px;
           position: relative;
           overflow: hidden;
@@ -512,7 +722,7 @@ export default function LoginPage() {
         .submit-button:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 8px 24px rgba(0, 102, 179, 0.5);
-          background: linear-gradient(135deg, #0088DD 0%, #005599 100%);
+          background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
         }
 
         .submit-button:active:not(:disabled) {
@@ -549,7 +759,7 @@ export default function LoginPage() {
         .forgot-password {
           background: none;
           border: none;
-          color: #0066B3;
+          color: #0891b2;
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
@@ -559,8 +769,28 @@ export default function LoginPage() {
         }
 
         .forgot-password:hover {
-          color: #004A82;
+          color: #0e7490;
           background: rgba(0, 102, 179, 0.08);
+        }
+
+        .back-to-login {
+          width: 100%;
+          padding: 14px 24px;
+          background: none;
+          border: 2px solid #e2e8f0;
+          color: #64748b;
+          font-size: 15px;
+          font-weight: 600;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.3s;
+          margin-top: 12px;
+        }
+
+        .back-to-login:hover {
+          border-color: #0891b2;
+          color: #0891b2;
+          background: rgba(8, 145, 178, 0.05);
         }
 
         /* Responsive */
@@ -598,8 +828,8 @@ export default function LoginPage() {
             font-size: 13px;
           }
 
-          .form-input {
-            padding: 12px 14px;
+          .input-wrapper input {
+            padding: 14px 48px 14px 48px;
             font-size: 14px;
           }
 
@@ -637,17 +867,17 @@ export default function LoginPage() {
             font-size: 13px;
           }
 
-          .form-input {
-            padding: 11px 12px;
+          .input-wrapper input {
+            padding: 13px 46px 13px 46px;
             font-size: 14px;
           }
 
-          .password-input {
-            padding-right: 44px;
+          .input-icon {
+            left: 14px;
           }
 
           .password-toggle {
-            right: 10px;
+            right: 14px;
           }
 
           .icon {

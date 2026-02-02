@@ -3,8 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/layout/Layout';
 import Modal from '@/components/Modal';
-import { PlayIcon, StopIcon, ClockIcon, CheckCircleIcon, FunnelIcon, EyeIcon, TrashIcon, PencilIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { PlayIcon, StopIcon, ClockIcon, CheckCircleIcon, FunnelIcon, EyeIcon, TrashIcon, PencilIcon, DocumentTextIcon, UserIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
+import { formatHoursDualCompact, formatHoursDual } from '@/utils/timeHelpers';
+import Autocomplete from '@/components/ui/Autocomplete';
+import DurationCalculator from '@/components/ui/DurationCalculator';
 
 interface ActiveSession {
   id: number;
@@ -47,10 +50,13 @@ export default function TravelerTracking() {
   const [jobNumber, setJobNumber] = useState('');
   const [workCenter, setWorkCenter] = useState('');
   const [operatorName, setOperatorName] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [trackingEntries, setTrackingEntries] = useState<TrackingEntry[]>([]);
+  const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [pauseTime, setPauseTime] = useState<Date | null>(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -116,6 +122,94 @@ export default function TravelerTracking() {
     loadTrackingEntries();
     checkActiveSession();
   }, []);
+
+  // Autocomplete fetch functions
+  const fetchJobNumbers = async (query: string) => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const url = query
+        ? `http://acidashboard.aci.local:100/api/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
+        : 'http://acidashboard.aci.local:100/api/search/autocomplete/job-numbers?limit=10';
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token || 'mock-token'}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.map((item: any) => ({
+          value: item.job_number,
+          label: item.label,
+          description: item.customer_name,
+          ...item
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching job numbers:', error);
+      return [];
+    }
+  };
+
+  const fetchWorkCenters = async (query: string) => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const url = query
+        ? `http://acidashboard.aci.local:100/api/search/autocomplete/work-centers?q=${encodeURIComponent(query)}&limit=10`
+        : 'http://acidashboard.aci.local:100/api/search/autocomplete/work-centers?limit=10';
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token || 'mock-token'}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.map((item: any) => ({
+          value: item.value,
+          label: item.label,
+          description: item.description,
+          ...item
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching work centers:', error);
+      return [];
+    }
+  };
+
+  const fetchOperators = async (query: string) => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const url = query
+        ? `http://acidashboard.aci.local:100/api/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
+        : 'http://acidashboard.aci.local:100/api/search/autocomplete/operators?limit=10';
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token || 'mock-token'}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.map((item: any) => ({
+          value: item.value,
+          label: item.label,
+          description: item.role,
+          ...item
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching operators:', error);
+      return [];
+    }
+  };
 
   // Check and auto-stop entries at 5pm
   const checkAutoStop5pm = async () => {
@@ -282,7 +376,7 @@ export default function TravelerTracking() {
 
     try {
       const token = localStorage.getItem('nexus_token');
-      const pauseTime = new Date();
+      const pauseTimeValue = new Date();
 
       const response = await fetch(`http://acidashboard.aci.local:100/api/tracking/${activeSession.id}`, {
         method: 'PUT',
@@ -291,12 +385,13 @@ export default function TravelerTracking() {
           'Authorization': `Bearer ${token || 'mock-token'}`
         },
         body: JSON.stringify({
-          pause_time: pauseTime.toISOString()
+          pause_time: pauseTimeValue.toISOString()
         })
       });
 
       if (response.ok) {
         setIsPaused(true);
+        setPauseTime(pauseTimeValue);
         setMessage('⏸️ Tracking paused');
         setTimeout(() => setMessage(''), 3000);
 
@@ -317,6 +412,7 @@ export default function TravelerTracking() {
 
   const handleResume = () => {
     setIsPaused(false);
+    setPauseTime(null);
     setMessage('▶️ Tracking resumed');
     setTimeout(() => setMessage(''), 3000);
   };
@@ -348,7 +444,7 @@ export default function TravelerTracking() {
         setWorkCenter('');
         setJobNumber('');
         setOperatorName('');
-        setMessage(`✅ Completed tracking - Duration: ${data.hours_worked.toFixed(2)} hours`);
+        setMessage(`✅ Completed tracking - Duration: ${formatHoursDual(data.hours_worked)}`);
         setTimeout(() => setMessage(''), 5000);
 
         // Reload entries
@@ -566,6 +662,64 @@ export default function TravelerTracking() {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
+  // Bulk selection functions
+  const toggleSelectEntry = (id: number) => {
+    if (selectedEntries.includes(id)) {
+      setSelectedEntries(selectedEntries.filter(entryId => entryId !== id));
+    } else {
+      setSelectedEntries([...selectedEntries, id]);
+    }
+  };
+
+  const selectAll = () => {
+    const currentPageIds = filteredEntries.map(e => e.id);
+    const allCurrentPageSelected = currentPageIds.every(id => selectedEntries.includes(id));
+
+    if (allCurrentPageSelected) {
+      // Deselect all on current page
+      setSelectedEntries(selectedEntries.filter(id => !currentPageIds.includes(id)));
+    } else {
+      // Select all on current page
+      const newSelected = [...selectedEntries];
+      currentPageIds.forEach(id => {
+        if (!newSelected.includes(id)) {
+          newSelected.push(id);
+        }
+      });
+      setSelectedEntries(newSelected);
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selectedEntries.length === 0) {
+      alert('❌ Please select entries to delete');
+      return;
+    }
+
+    if (!confirm(`⚠️ WARNING: This will permanently delete ${selectedEntries.length} tracking entry/entries!\n\nThis action cannot be undone. Are you sure?`)) return;
+
+    try {
+      const token = localStorage.getItem('nexus_token');
+      await Promise.all(
+        selectedEntries.map(id =>
+          fetch(`http://acidashboard.aci.local:100/api/tracking/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token || 'mock-token'}`
+            }
+          })
+        )
+      );
+
+      alert(`✅ Deleted ${selectedEntries.length} entry/entries!`);
+      setSelectedEntries([]);
+      loadTrackingEntries();
+    } catch (error) {
+      console.error('Error deleting entries:', error);
+      alert('❌ Failed to delete entries');
+    }
+  };
+
   // Apply filters
   const filteredEntries = trackingEntries.filter(entry => {
     const matchJobNumber = !filters.jobNumber ||
@@ -585,22 +739,28 @@ export default function TravelerTracking() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50">
-        <div className="w-full space-y-4 p-4 lg:p-6">
-          {/* Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-xl p-4 lg:p-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Live Traveler Tracking</h1>
-                <p className="text-blue-100 mt-1 text-sm lg:text-base">Track work center time and location for travelers in real-time</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50">
+        <div className="w-full space-y-4 p-2 sm:p-4 lg:p-6">
+          {/* Compact Header */}
+          <div className="bg-white/80 backdrop-blur-lg shadow-lg rounded-xl p-4 sm:p-6 border border-gray-200">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 sm:p-2.5 rounded-lg">
+                  <ClockIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Traveler Tracking</h1>
+                  <p className="text-xs sm:text-sm text-gray-500">Work center time & location</p>
+                </div>
               </div>
               {user?.role === 'ADMIN' && (
                 <button
                   onClick={() => setIsManualEntryOpen(true)}
-                  className="px-6 py-3 bg-white hover:bg-blue-50 text-blue-700 font-semibold rounded-lg transition-all shadow-lg flex items-center space-x-2 whitespace-nowrap self-start md:self-auto"
+                  className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 flex items-center space-x-2"
                 >
-                  <DocumentTextIcon className="w-5 h-5" />
-                  <span>Manual Entry</span>
+                  <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden sm:inline">Manual Entry</span>
+                  <span className="sm:hidden">Add</span>
                 </button>
               )}
             </div>
@@ -617,172 +777,242 @@ export default function TravelerTracking() {
             </div>
           )}
 
-          {/* Tracking Form */}
-          <div className="bg-white rounded-lg shadow-lg border-2 border-emerald-100 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Start Tracking
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Job Number <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={jobNumber}
-                  onChange={(e) => setJobNumber(e.target.value)}
-                  placeholder="Enter job number"
-                  className="w-full px-4 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all"
-                  disabled={!!activeSession}
-                />
+          {/* Tracking Form with Dashboard Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Main Tracking Form */}
+            <div className="lg:col-span-2 bg-white/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Tracking Controls</h2>
+                {activeSession && (
+                  <span className="flex items-center space-x-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    <span>ACTIVE</span>
+                  </span>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Work Center <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={workCenter}
-                  onChange={(e) => setWorkCenter(e.target.value)}
-                  placeholder="Enter work center"
-                  className="w-full px-4 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all"
-                  disabled={!!activeSession}
-                />
+
+              {/* Circular Timer Display */}
+              {activeSession && (
+                <div className="mb-6 flex flex-col md:flex-row items-center gap-6">
+                  {/* Circular Progress */}
+                  <div className="relative w-32 h-32 sm:w-40 sm:h-40">
+                    {/* Background circle */}
+                    <svg className="transform -rotate-90 w-full h-full">
+                      <circle
+                        cx="50%"
+                        cy="50%"
+                        r="45%"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="none"
+                        className="text-gray-200"
+                      />
+                      {/* Animated progress circle */}
+                      <circle
+                        cx="50%"
+                        cy="50%"
+                        r="45%"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="none"
+                        strokeDasharray="283"
+                        strokeDashoffset={283 - (283 * ((elapsedTime % 3600) / 3600))}
+                        className="text-emerald-500 transition-all duration-1000"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    {/* Center time display */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 font-mono">
+                        {formatTime(elapsedTime)}
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1">HH:MM:SS</span>
+                    </div>
+                  </div>
+
+                  {/* Session Details */}
+                  <div className="flex-1 w-full bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-emerald-200">
+                    <p className="text-xs font-bold text-emerald-700 mb-3 uppercase tracking-wide">Session Details</p>
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <DocumentTextIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-gray-500">Job Number</p>
+                          <p className="text-sm font-bold text-gray-900 truncate">{activeSession.job_number}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <ClockIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-gray-500">Work Center</p>
+                          <p className="text-sm font-bold text-gray-900 truncate">{activeSession.work_center}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <UserIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-gray-500">Operator</p>
+                          <p className="text-sm font-bold text-gray-900 truncate">{activeSession.operator_name}</p>
+                        </div>
+                      </div>
+                      {isPaused && pauseTime && (
+                        <div className="flex items-start space-x-2 pt-2 border-t border-emerald-200">
+                          <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-amber-600 font-semibold">PAUSED</p>
+                            <p className="text-xs text-gray-600">
+                              Since {new Date(pauseTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Input Form */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                    Job Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={jobNumber}
+                    onChange={(e) => setJobNumber(e.target.value)}
+                    placeholder="Enter job"
+                    disabled={!!activeSession}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                    Work Center <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={workCenter}
+                    onChange={(e) => setWorkCenter(e.target.value)}
+                    placeholder="Enter WC"
+                    disabled={!!activeSession}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                    Operator <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={operatorName}
+                    onChange={(e) => setOperatorName(e.target.value)}
+                    placeholder="Enter name"
+                    disabled={!!activeSession}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                    Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    disabled={!!activeSession}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Operator Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={operatorName}
-                  onChange={(e) => setOperatorName(e.target.value)}
-                  placeholder="Enter operator name"
-                  className="w-full px-4 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all"
-                  disabled={!!activeSession}
-                />
-              </div>
-              <div className="flex items-end gap-2">
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 {!activeSession ? (
                   <button
                     onClick={handleStart}
                     disabled={!jobNumber || !workCenter || !operatorName}
-                    className="flex-1 px-6 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all shadow-md flex items-center justify-center"
+                    className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                   >
-                    <PlayIcon className="w-5 h-5 mr-2" />
-                    Start Tracking
+                    <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>Start</span>
                   </button>
                 ) : (
                   <>
                     {!isPaused ? (
                       <button
                         onClick={handlePause}
-                        className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition-all shadow-md flex items-center justify-center"
+                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                       >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Pause
+                        <span>Pause</span>
                       </button>
                     ) : (
                       <button
                         onClick={handleResume}
-                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all shadow-md flex items-center justify-center"
+                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                       >
-                        <PlayIcon className="w-5 h-5 mr-2" />
-                        Resume
+                        <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span>Resume</span>
                       </button>
                     )}
                     <button
                       onClick={handleStop}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-semibold rounded-lg transition-all shadow-md flex items-center justify-center"
+                      className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                     >
-                      <StopIcon className="w-5 h-5 mr-2" />
-                      End
+                      <StopIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="hidden sm:inline">End</span>
+                      <span className="sm:hidden">Stop</span>
                     </button>
                   </>
                 )}
               </div>
             </div>
-          </div>
 
-          {/* Active Session Display */}
-          {activeSession && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-500 rounded-lg shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
-                  <h2 className="text-xl font-bold text-gray-900">Active Tracking Session</h2>
-                </div>
-                <div className="text-3xl font-mono font-bold text-blue-600">
-                  {formatTime(elapsedTime)}
+            {/* Quick Stats Cards - Right Column */}
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-4 border border-indigo-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-indigo-600 uppercase">Entries</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{trackingEntries.length}</p>
+                  </div>
+                  <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <p className="text-sm text-gray-600 mb-1">Job Number</p>
-                  <p className="text-xl font-bold text-gray-900">{activeSession.job_number}</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <p className="text-sm text-gray-600 mb-1">Work Center</p>
-                  <p className="text-xl font-bold text-gray-900">{activeSession.work_center}</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <p className="text-sm text-gray-600 mb-1">Operator Name</p>
-                  <p className="text-xl font-bold text-gray-900">{activeSession.operator_name}</p>
-                </div>
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <p className="text-sm text-gray-600 mb-1">Started At</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {new Date(activeSession.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}
-                  </p>
+              <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-emerald-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-600 uppercase">Total Hours</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                      {trackingEntries.reduce((sum, entry) => sum + entry.hours_worked, 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <ClockIcon className="w-8 h-8 text-emerald-500" />
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Entries</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{trackingEntries.length}</p>
+              <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg p-4 border border-pink-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-pink-600 uppercase">Active</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                      {activeSession ? '1' : '0'}
+                    </p>
+                  </div>
+                  <UserIcon className="w-8 h-8 text-pink-500" />
                 </div>
-                <svg className="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-            </div>
-
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Hours</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {trackingEntries.reduce((sum, entry) => sum + entry.hours_worked, 0).toFixed(2)}
-                  </p>
-                </div>
-                <ClockIcon className="w-10 h-10 text-emerald-500" />
-              </div>
-            </div>
-
-            <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Unique Jobs</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {new Set(trackingEntries.map(e => e.job_number)).size}
-                  </p>
-                </div>
-                <CheckCircleIcon className="w-10 h-10 text-emerald-500" />
               </div>
             </div>
           </div>
+
 
           {/* Job Summary Cards */}
           {(() => {
@@ -919,147 +1149,294 @@ export default function TravelerTracking() {
             )}
           </div>
 
-          {/* Tracking History Table */}
-          <div className="bg-white rounded-lg shadow-lg border-2 border-purple-100 overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 px-6 py-4 border-b-2 border-purple-200">
+          {/* Bulk Action Buttons */}
+          {user?.role === 'ADMIN' && (
+            <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 p-4">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                <button
+                  onClick={selectAll}
+                  className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md text-sm md:text-base"
+                >
+                  <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <span>{selectedEntries.length === filteredEntries.length && filteredEntries.length > 0 ? 'Deselect All' : 'Select All'}</span>
+                </button>
+
+                <button
+                  onClick={deleteSelected}
+                  disabled={selectedEntries.length === 0}
+                  className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
+                >
+                  <TrashIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <span>Delete ({selectedEntries.length})</span>
+                </button>
+
+                {selectedEntries.length > 0 && (
+                  <div className="ml-auto px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-sm font-semibold text-blue-700">
+                      {selectedEntries.length} selected
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tracking History */}
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 overflow-visible">
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-4 sm:px-6 py-4 border-b border-gray-200 rounded-t-xl">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                   Tracking History
                 </h2>
-                <span className="text-sm font-medium text-purple-600 bg-purple-100 px-3 py-1 rounded-full">{filteredEntries.length} entries</span>
+                <span className="text-xs sm:text-sm font-semibold text-indigo-600 bg-indigo-100 px-2 sm:px-3 py-1 rounded-full">{filteredEntries.length}</span>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="block lg:hidden overflow-hidden rounded-b-xl">
+              {isLoading ? (
+                <div className="p-8 text-center text-gray-500">Loading...</div>
+              ) : filteredEntries.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <ClockIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No tracking entries yet</p>
+                  <p className="text-sm text-gray-400 mt-1">Start tracking to see your work history</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {filteredEntries.map((entry) => (
+                    <div key={entry.id} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />
+                            <span className="font-bold text-gray-900">{entry.job_number}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <UserIcon className="w-4 h-4" />
+                            <span>{entry.operator_name}</span>
+                          </div>
+                        </div>
+                        {user?.role === 'ADMIN' && (
+                          <div className="relative">
+                            <button
+                              onClick={() => {
+                                const btn = document.getElementById(`menu-${entry.id}`);
+                                btn?.classList.toggle('hidden');
+                              }}
+                              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                              <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                              </svg>
+                            </button>
+                            <div id={`menu-${entry.id}`} className="hidden absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                              <button
+                                onClick={() => {
+                                  setSelectedEntry(entry);
+                                  setIsModalOpen(true);
+                                  document.getElementById(`menu-${entry.id}`)?.classList.add('hidden');
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                              >
+                                <EyeIcon className="w-4 h-4 text-blue-600" />
+                                <span>View Details</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  openEditModal(entry);
+                                  document.getElementById(`menu-${entry.id}`)?.classList.add('hidden');
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                              >
+                                <PencilIcon className="w-4 h-4 text-green-600" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEntryToDelete(entry);
+                                  setIsDeleteModalOpen(true);
+                                  document.getElementById(`menu-${entry.id}`)?.classList.add('hidden');
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2 text-red-600"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs text-gray-500">Work Center</p>
+                          <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">
+                            {entry.sequence_number ? `${entry.sequence_number}. ${entry.work_center}` : entry.work_center}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Total Hours</p>
+                          <p className="text-sm font-bold text-emerald-600 mt-1">{formatHoursDualCompact(entry.hours_worked)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Date</p>
+                          <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Start Time</p>
+                          <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden lg:block rounded-b-xl">
+              <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Job Number
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Operator Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Work Center
-                    </th>
-                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Start Time
-                    </th>
-                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Pause Duration
-                    </th>
-                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      End Time
-                    </th>
-                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Hours
-                    </th>
-                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    {user?.role === 'ADMIN' && (
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={filteredEntries.length > 0 && filteredEntries.every(e => selectedEntries.includes(e.id))}
+                          onChange={selectAll}
+                          className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                        />
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Job</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Operator</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Work Center</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Start</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pause</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">End</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Hours</th>
+                    {user?.role === 'ADMIN' && (
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={user?.role === 'ADMIN' ? 10 : 8} className="px-6 py-8 text-center text-gray-500">
                         Loading...
                       </td>
                     </tr>
-                  ) : filteredEntries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}
+                  ) : filteredEntries.length === 0 ? (
+                    <tr>
+                      <td colSpan={user?.role === 'ADMIN' ? 10 : 8} className="px-6 py-12 text-center">
+                        <ClockIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">No tracking entries yet</p>
+                        <p className="text-sm text-gray-400 mt-1">Start tracking to see your work history</p>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <CheckCircleIcon className="w-5 h-5 text-green-500 mr-2" />
-                          <span className="font-medium text-gray-900">{entry.job_number}</span>
+                    </tr>
+                  ) : filteredEntries.map((entry) => {
+                    // Calculate pause duration if available
+                    let pauseDuration = 0;
+                    if (entry.pause_time && entry.end_time) {
+                      const pauseStart = new Date(entry.pause_time).getTime();
+                      const endTime = new Date(entry.end_time).getTime();
+                      pauseDuration = (endTime - pauseStart) / (1000 * 60 * 60); // Convert to hours
+                    }
+
+                    return (
+                    <tr
+                      key={entry.id}
+                      className={`transition-colors ${
+                        selectedEntries.includes(entry.id)
+                          ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                          : 'hover:bg-indigo-50/30'
+                      }`}
+                    >
+                      {user?.role === 'ADMIN' && (
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={selectedEntries.includes(entry.id)}
+                            onChange={() => toggleSelectEntry(entry.id)}
+                            className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                          />
+                        </td>
+                      )}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          <span className="font-semibold text-gray-900 text-sm">{entry.job_number}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                         {entry.operator_name}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">
                           {entry.sequence_number ? `${entry.sequence_number}. ${entry.work_center}` : entry.work_center}
                         </span>
                       </td>
-                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm">
-                        {entry.pause_duration && entry.pause_duration > 0 ? (
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-md font-medium">
-                            {entry.pause_duration.toFixed(2)} hrs
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        {pauseDuration > 0 ? (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-md font-semibold text-xs">
+                            {formatHoursDualCompact(pauseDuration)}
                           </span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }) : '-'}
                       </td>
-                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm font-semibold text-emerald-600">
-                          <ClockIcon className="w-4 h-4 mr-1 text-gray-400" />
-                          {entry.hours_worked.toFixed(2)} hrs
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center space-x-1 text-sm font-bold text-emerald-600">
+                          <ClockIcon className="w-4 h-4 text-gray-400" />
+                          <span>{formatHoursDualCompact(entry.hours_worked)}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user?.role === 'ADMIN' ? (
-                          <div className="flex items-center space-x-2">
+                      {user?.role === 'ADMIN' && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => {
-                                setSelectedEntry(entry);
-                                setIsModalOpen(true);
+                                openEditModal(entry);
                               }}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="View Details"
-                            >
-                              <EyeIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              onClick={() => openEditModal(entry)}
-                              className="text-green-600 hover:text-green-900"
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                               title="Edit"
                             >
-                              <PencilIcon className="h-5 w-5" />
+                              <PencilIcon className="w-5 h-5" />
                             </button>
                             <button
                               onClick={() => {
                                 setEntryToDelete(entry);
                                 setIsDeleteModalOpen(true);
                               }}
-                              className="text-red-600 hover:text-red-900"
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete"
                             >
-                              <TrashIcon className="h-5 w-5" />
+                              <TrashIcon className="w-5 h-5" />
                             </button>
                           </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
+                        </td>
+                      )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
-
-              {filteredEntries.length === 0 && (
-                <div className="text-center py-12">
-                  <ClockIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No tracking entries yet</p>
-                  <p className="text-sm text-gray-400 mt-1">Start tracking to see your work history</p>
-                </div>
-              )}
+            </div>
             </div>
           </div>
         </div>
@@ -1103,7 +1480,7 @@ export default function TravelerTracking() {
               <div>
                 <label className="text-sm font-semibold text-gray-600">Total Hours</label>
                 <p className="text-base font-semibold text-emerald-600 mt-1">
-                  {selectedEntry.hours_worked.toFixed(2)} hrs
+                  {formatHoursDual(selectedEntry.hours_worked)}
                 </p>
               </div>
             </div>
@@ -1182,7 +1559,7 @@ export default function TravelerTracking() {
               <div className="flex justify-between">
                 <span className="text-sm font-semibold text-gray-600">Hours Worked:</span>
                 <span className="text-sm font-semibold text-emerald-600">
-                  {entryToDelete.hours_worked.toFixed(2)} hrs
+                  {formatHoursDual(entryToDelete.hours_worked)}
                 </span>
               </div>
             </div>
@@ -1263,24 +1640,28 @@ export default function TravelerTracking() {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Job Number <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <Autocomplete
                 value={manualEntryData.job_number}
-                onChange={(e) => setManualEntryData({ ...manualEntryData, job_number: e.target.value })}
+                onChange={(value) => setManualEntryData({ ...manualEntryData, job_number: value })}
+                fetchSuggestions={fetchJobNumbers}
+                placeholder="Type job number or search..."
                 className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
-                placeholder="Enter job number"
+                required
+                minChars={0}
               />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Work Center <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <Autocomplete
                 value={manualEntryData.work_center}
-                onChange={(e) => setManualEntryData({ ...manualEntryData, work_center: e.target.value })}
+                onChange={(value) => setManualEntryData({ ...manualEntryData, work_center: value })}
+                fetchSuggestions={fetchWorkCenters}
+                placeholder="Type work center or search..."
                 className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
-                placeholder="Enter work center"
+                required
+                minChars={0}
               />
             </div>
           </div>
@@ -1289,39 +1670,23 @@ export default function TravelerTracking() {
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Operator Name <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
+            <Autocomplete
               value={manualEntryData.operator_name}
-              onChange={(e) => setManualEntryData({ ...manualEntryData, operator_name: e.target.value })}
+              onChange={(value) => setManualEntryData({ ...manualEntryData, operator_name: value })}
+              fetchSuggestions={fetchOperators}
+              placeholder="Type operator name or search..."
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
-              placeholder="Enter operator name"
+              required
+              minChars={0}
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Start Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={manualEntryData.start_time}
-                onChange={(e) => setManualEntryData({ ...manualEntryData, start_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                End Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={manualEntryData.end_time}
-                onChange={(e) => setManualEntryData({ ...manualEntryData, end_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
-              />
-            </div>
-          </div>
+          <DurationCalculator
+            startTime={manualEntryData.start_time}
+            endTime={manualEntryData.end_time}
+            onStartTimeChange={(value) => setManualEntryData({ ...manualEntryData, start_time: value })}
+            onEndTimeChange={(value) => setManualEntryData({ ...manualEntryData, end_time: value })}
+          />
         </div>
       </Modal>
 

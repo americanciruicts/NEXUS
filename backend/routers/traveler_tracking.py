@@ -87,8 +87,23 @@ async def start_time_entry(
 
     # Calculate hours if end_time is provided (for manual/completed entries)
     if entry_data.end_time:
+        # Validate that end_time is after start_time (prevent negative hours)
+        if entry_data.end_time <= entry_data.start_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End time must be after start time. Please check your times and try again."
+            )
         time_diff = entry_data.end_time - entry_data.start_time
-        db_entry.hours_worked = round(time_diff.total_seconds() / 3600, 2)
+        hours_worked = round(time_diff.total_seconds() / 3600, 2)
+
+        # Additional safety check for negative hours
+        if hours_worked < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated hours ({hours_worked}) is negative. End time must be after start time."
+            )
+
+        db_entry.hours_worked = hours_worked
 
     db.add(db_entry)
     db.commit()
@@ -129,18 +144,41 @@ async def update_time_entry(
 
     # Update end time and calculate hours
     if entry_data.end_time:
+        # Validate that end_time is after start_time (prevent negative hours)
+        if entry_data.end_time <= entry.start_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End time must be after start time. Please check your times and try again."
+            )
+
         entry.end_time = entry_data.end_time
 
         # Calculate total hours worked
         time_diff = entry_data.end_time - entry.start_time
         total_seconds = time_diff.total_seconds()
 
+        # Additional safety check for negative seconds
+        if total_seconds < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated time is negative. End time must be after start time."
+            )
+
         # Subtract pause duration if paused
         if entry.pause_time and entry_data.end_time > entry.pause_time:
             pause_seconds = (entry_data.end_time - entry.pause_time).total_seconds()
             entry.pause_duration = round(pause_seconds / 3600, 2)
 
-        entry.hours_worked = round(total_seconds / 3600, 2)
+        hours_worked = round(total_seconds / 3600, 2)
+
+        # Final validation that hours are not negative
+        if hours_worked < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated hours ({hours_worked}) is negative. Please verify your times."
+            )
+
+        entry.hours_worked = hours_worked
 
     if entry_data.is_completed is not None:
         entry.is_completed = entry_data.is_completed

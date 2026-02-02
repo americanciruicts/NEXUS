@@ -165,16 +165,70 @@ function ReportViewContent() {
             margin: 0 !important;
           }
         }
+        /* Mobile-specific styles */
+        .mobile-show {
+          display: none !important;
+        }
+        @media (max-width: 768px) {
+          .report-header-content {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 16px !important;
+          }
+          .report-buttons {
+            flex-direction: column !important;
+            width: 100% !important;
+          }
+          .report-buttons button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .report-inner-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+          }
+          .report-inner-header > div:last-child {
+            text-align: left !important;
+            margin-top: 8px !important;
+          }
+          /* Hide less important columns on mobile */
+          .mobile-hide {
+            display: none !important;
+          }
+          /* Show mobile-specific content */
+          .mobile-show {
+            display: table-cell !important;
+          }
+          /* Make tables scroll-free on mobile by hiding columns */
+          table {
+            min-width: 100% !important;
+          }
+          /* Stack information grid vertically on mobile */
+          .info-grid {
+            grid-template-columns: 1fr !important;
+          }
+          /* Work center report responsive */
+          .traveler-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+          }
+          .wc-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 4px !important;
+          }
+        }
       `}</style>
 
       {/* Header with Action Buttons - Digital Only */}
       <div className="no-print" style={{
         background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`,
-        padding: '20px 30px',
+        padding: '16px 20px',
         marginBottom: '20px',
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
       }}>
-        <div style={{
+        <div className="report-header-content" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -184,20 +238,20 @@ function ReportViewContent() {
           <div>
             <h1 style={{
               color: 'white',
-              fontSize: '20px',
+              fontSize: '18px',
               fontWeight: 'bold',
               margin: '0 0 8px 0'
             }}>
               {theme.name}
             </h1>
-            <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '12px' }}>
-              {displayJobNumber && <span style={{ marginRight: '20px' }}>📋 Job: <strong>{displayJobNumber}</strong></span>}
-              {displayOperator && <span style={{ marginRight: '20px' }}>👤 Operator: <strong>{displayOperator}</strong></span>}
+            <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '11px' }}>
+              {displayJobNumber && <span style={{ marginRight: '16px' }}>📋 Job: <strong>{displayJobNumber}</strong></span>}
+              {displayOperator && <span style={{ marginRight: '16px' }}>👤 Operator: <strong>{displayOperator}</strong></span>}
               <span>⏱️ Total Hours: <strong>{totalHours.toFixed(2)}</strong></span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="report-buttons" style={{ display: 'flex', gap: '12px' }}>
             <button
               onClick={() => router.back()}
               style={{
@@ -284,8 +338,8 @@ function ReportViewContent() {
       </div>
 
       {/* Digital View - Professional Layout (Also used for printing) */}
-      <div className="print-version" style={{ padding: '20px', backgroundColor: '#f5f5f5', minHeight: 'calc(100vh - 80px)' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+      <div className="print-version" style={{ padding: '12px', backgroundColor: '#f5f5f5', minHeight: 'calc(100vh - 80px)' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
 
           {/* Header Section */}
           <div style={{
@@ -295,7 +349,7 @@ function ReportViewContent() {
             borderRadius: '8px',
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div className="report-inner-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px', color: 'white' }}>AMERICAN CIRCUITS</h1>
                 <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.9)' }}>Manufacturing Tracking System</div>
@@ -329,26 +383,40 @@ function ReportViewContent() {
               {type === 'single_traveler' ? 'Traveler Information' :
                type === 'all_travelers' ? 'All Travelers Summary' :
                type === 'single_operator' ? 'Operator Information' :
-               type === 'all_operators' ? 'All Operators Summary' : 'Information'}
+               type === 'all_operators' ? 'All Operators Summary' :
+               type === 'single_work_center' ? 'Work Center Report' :
+               type === 'all_work_centers' ? 'All Work Centers Report' : 'Information'}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', fontSize: '11px' }}>
-              <div><strong>Job Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.job_number || laborData[0]?.job_number || jobNumber || 'N/A'}</span></div>
-              <div><strong>Part Number:</strong> <span style={{ color: '#495057' }}>{displayPartNumber}</span></div>
-              <div><strong>Quantity:</strong> <span style={{ color: '#495057' }}>{displayQuantity}</span></div>
-              <div><strong>Total Hours:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>{totalHours.toFixed(2)}</span></div>
+            <div className="info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', fontSize: '11px' }}>
+              {(type === 'single_work_center' || type === 'all_work_centers') ? (
+                <>
+                  {workCenter && <div><strong>Work Center:</strong> <span style={{ color: '#495057' }}>{workCenter}</span></div>}
+                  {jobNumber && <div><strong>Job Number Filter:</strong> <span style={{ color: '#495057' }}>{jobNumber}</span></div>}
+                  {workOrder && <div><strong>Work Order Filter:</strong> <span style={{ color: '#495057' }}>{workOrder}</span></div>}
+                  <div><strong>Total Entries:</strong> <span style={{ color: '#495057' }}>{laborData.length}</span></div>
+                  <div><strong>Total Hours:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>{totalHours.toFixed(2)}</span></div>
+                </>
+              ) : (
+                <>
+                  <div><strong>Job Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.job_number || laborData[0]?.job_number || jobNumber || 'N/A'}</span></div>
+                  <div><strong>Part Number:</strong> <span style={{ color: '#495057' }}>{displayPartNumber}</span></div>
+                  <div><strong>Quantity:</strong> <span style={{ color: '#495057' }}>{displayQuantity}</span></div>
+                  <div><strong>Total Hours:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>{totalHours.toFixed(2)}</span></div>
+                </>
+              )}
             </div>
           </div>
 
           {/* Traveler Tracking Table - Digital */}
           {!isLaborReport && travelerData.length > 0 && (
-            <>
-              <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', marginBottom: '0', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ overflowX: 'auto', marginBottom: '0' }}>
+              <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`, color: 'white' }}>
                     <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>WORK CENTER</th>
-                    <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>OPERATOR</th>
-                    <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>START TIME</th>
-                    <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>END TIME</th>
+                    <th className="mobile-hide" style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>OPERATOR</th>
+                    <th className="mobile-hide" style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>START TIME</th>
+                    <th className="mobile-hide" style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>END TIME</th>
                     <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'right' }}>HOURS</th>
                   </tr>
                 </thead>
@@ -356,10 +424,10 @@ function ReportViewContent() {
                   {travelerData.map((entry, i) => (
                     <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : theme.secondary }}>
                       <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>{entry.work_center}</td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                      <td className="mobile-hide" style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
                         {entry.operator_name || 'N/A'}
                       </td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                      <td className="mobile-hide" style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
                         {new Date(entry.start_time).toLocaleString('en-US', {
                           month: '2-digit',
                           day: '2-digit',
@@ -369,7 +437,7 @@ function ReportViewContent() {
                           hour12: true
                         })}
                       </td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                      <td className="mobile-hide" style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
                         {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                           month: '2-digit',
                           day: '2-digit',
@@ -387,7 +455,10 @@ function ReportViewContent() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, #ffffff 100%)` }}>
-                    <td colSpan={4} style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
+                    <td colSpan={1} className="mobile-show" style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
+                      TOTAL:
+                    </td>
+                    <td colSpan={4} className="mobile-hide" style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
                       TOTAL HOURS:
                     </td>
                     <td style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
@@ -396,19 +467,164 @@ function ReportViewContent() {
                   </tr>
                 </tfoot>
               </table>
-            </>
+            </div>
           )}
 
-          {/* Labor Tracking Table - Digital */}
-          {isLaborReport && laborData.length > 0 && (
-            <>
-              <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          {/* Work Center Reports - Grouped by Traveler */}
+          {(type === 'single_work_center' || type === 'all_work_centers') && laborData.length > 0 && (() => {
+            // Group data by traveler (job_number + work_order)
+            const travelerGroups: Record<string, any[]> = {};
+            laborData.forEach(entry => {
+              const key = `${entry.job_number || 'N/A'}_${entry.work_order || 'N/A'}`;
+              if (!travelerGroups[key]) {
+                travelerGroups[key] = [];
+              }
+              travelerGroups[key].push(entry);
+            });
+
+            return (
+              <div style={{ marginBottom: '0' }}>
+                {Object.entries(travelerGroups).map(([key, entries]) => {
+                  const [jobNumber, workOrder] = key.split('_');
+
+                  // Group by work center within this traveler
+                  const workCenterGroups: Record<string, any[]> = {};
+                  entries.forEach(entry => {
+                    const wc = entry.work_center || 'Unknown';
+                    if (!workCenterGroups[wc]) {
+                      workCenterGroups[wc] = [];
+                    }
+                    workCenterGroups[wc].push(entry);
+                  });
+
+                  const travelerTotal = entries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+
+                  return (
+                    <div key={key} style={{ marginBottom: '30px', pageBreakInside: 'avoid' }}>
+                      {/* Traveler Header */}
+                      <div className="traveler-header" style={{
+                        background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`,
+                        padding: '12px 16px',
+                        borderRadius: '8px 8px 0 0',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span>Job# {jobNumber} - Work Order# {workOrder}</span>
+                        <span>Total: {travelerTotal.toFixed(2)} hrs</span>
+                      </div>
+
+                      {/* Work Centers for this Traveler */}
+                      <div style={{ border: `2px solid ${theme.primary}`, borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                        {Object.entries(workCenterGroups).map(([workCenter, wcEntries], wcIndex) => {
+                          const wcTotal = wcEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+
+                          return (
+                            <div key={workCenter} style={{
+                              borderBottom: wcIndex < Object.keys(workCenterGroups).length - 1 ? '2px solid #e0e0e0' : 'none',
+                              padding: '16px'
+                            }}>
+                              {/* Work Center Header */}
+                              <div className="wc-header" style={{
+                                background: theme.secondary,
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                fontWeight: 'bold',
+                                fontSize: '12px',
+                                color: theme.primary,
+                                marginBottom: '12px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}>
+                                <span>🏭 {workCenter}</span>
+                                <span>Work Center Total: {wcTotal.toFixed(2)} hrs</span>
+                              </div>
+
+                              {/* Operators Table */}
+                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                                    <th style={{ padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: '#495057' }}>OPERATOR</th>
+                                    <th className="mobile-hide" style={{ padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: '#495057' }}>START TIME</th>
+                                    <th className="mobile-hide" style={{ padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: '#495057' }}>END TIME</th>
+                                    <th style={{ padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'right', color: '#495057' }}>HOURS</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {wcEntries.map((entry, i) => (
+                                    <tr key={i} style={{ borderBottom: '1px solid #e9ecef' }}>
+                                      <td style={{ padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                                        {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
+                                      </td>
+                                      <td className="mobile-hide" style={{ padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                                        {new Date(entry.start_time).toLocaleString('en-US', {
+                                          month: '2-digit',
+                                          day: '2-digit',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          hour12: true
+                                        })}
+                                      </td>
+                                      <td className="mobile-hide" style={{ padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                                        {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
+                                          month: '2-digit',
+                                          day: '2-digit',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          hour12: true
+                                        }) : '-'}
+                                      </td>
+                                      <td style={{ padding: '6px 8px', fontSize: '10px', textAlign: 'right', fontWeight: 'bold', color: '#28a745' }}>
+                                        {entry.hours_worked.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Grand Total */}
+                <div style={{
+                  background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`,
+                  padding: '16px',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '20px'
+                }}>
+                  <span>GRAND TOTAL (All Travelers)</span>
+                  <span>{totalHours.toFixed(2)} hrs</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Labor Tracking Table - Digital (for operator reports only) */}
+          {(type === 'single_operator' || type === 'all_operators') && laborData.length > 0 && (
+            <div style={{ overflowX: 'auto', marginBottom: '0' }}>
+              <table style={{ width: '100%', minWidth: '320px', borderCollapse: 'collapse', border: `2px solid ${theme.primary}`, borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <thead>
                   <tr style={{ background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primary}dd 100%)`, color: 'white' }}>
                     <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>WORK CENTER</th>
-                    <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>OPERATOR</th>
-                    <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>START TIME</th>
-                    <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>END TIME</th>
+                    <th className="mobile-hide" style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>OPERATOR</th>
+                    <th className="mobile-hide" style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>START TIME</th>
+                    <th className="mobile-hide" style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left' }}>END TIME</th>
                     <th style={{ border: '1px solid rgba(255,255,255,0.2)', padding: '8px', fontSize: '10px', fontWeight: 'bold', textAlign: 'right' }}>HOURS</th>
                   </tr>
                 </thead>
@@ -416,10 +632,10 @@ function ReportViewContent() {
                   {laborData.map((entry, i) => (
                     <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : theme.secondary }}>
                       <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>{entry.work_center}</td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                      <td className="mobile-hide" style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
                         {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
                       </td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                      <td className="mobile-hide" style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
                         {new Date(entry.start_time).toLocaleString('en-US', {
                           month: '2-digit',
                           day: '2-digit',
@@ -429,7 +645,7 @@ function ReportViewContent() {
                           hour12: true
                         })}
                       </td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
+                      <td className="mobile-hide" style={{ border: '1px solid #dee2e6', padding: '6px 8px', fontSize: '10px', color: '#495057' }}>
                         {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                           month: '2-digit',
                           day: '2-digit',
@@ -447,7 +663,10 @@ function ReportViewContent() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: `linear-gradient(135deg, ${theme.secondary} 0%, #ffffff 100%)` }}>
-                    <td colSpan={4} style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
+                    <td colSpan={1} className="mobile-show" style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
+                      TOTAL:
+                    </td>
+                    <td colSpan={4} className="mobile-hide" style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: theme.primary }}>
                       TOTAL HOURS:
                     </td>
                     <td style={{ border: `1px solid ${theme.primary}`, padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
@@ -456,7 +675,7 @@ function ReportViewContent() {
                   </tr>
                 </tfoot>
               </table>
-            </>
+            </div>
           )}
 
         </div>

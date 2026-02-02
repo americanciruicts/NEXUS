@@ -46,9 +46,7 @@ NEXUS is a comprehensive traveler management system designed specifically for Am
 - **PCB** - Printed Circuit Board manufacturing
 - **ASSY** - Assembly operations
 - **CABLE** - Cable manufacturing
-- **CABLE_ASSY** - Cable assembly operations
-- **MECHANICAL** - Mechanical component manufacturing
-- **TEST** - Testing and validation workflows
+- **PURCHASING** - Procurement and purchasing operations
 
 #### Traveler Statuses
 - `DRAFT` - Initial creation
