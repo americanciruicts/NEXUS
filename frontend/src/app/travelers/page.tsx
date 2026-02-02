@@ -479,7 +479,7 @@ export default function TravelersPage() {
           ) : (
             <>
             {/* Desktop Table View */}
-            <div className="hidden lg:block w-full overflow-x-auto">
+            <div className="w-full overflow-x-auto">
               <table className="w-full divide-y divide-gray-200">
                 <thead className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 sticky top-0 z-10" style={{ backgroundColor: '#4f46e5' }}>
                   <tr>
@@ -494,16 +494,16 @@ export default function TravelersPage() {
                     <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Job, WO & PO
                     </th>
-                    <th className="hidden sm:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Part Details
                     </th>
-                    <th className="hidden md:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Customer Info
                     </th>
                     <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Dates
                     </th>
-                    <th className="hidden lg:table-cell px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
                       Shipping
                     </th>
                     <th className="px-4 py-4 text-center text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
@@ -536,7 +536,7 @@ export default function TravelersPage() {
                           <div className="text-base font-semibold text-purple-700">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-4">
+                      <td className="px-4 py-4">
                         <div className="space-y-1">
                           <div className="text-base font-semibold text-gray-900">Part# <span className="underline">{traveler.partNumber}</span></div>
                           <div className="text-base text-gray-600 max-w-xs truncate" title={traveler.description}>{traveler.description || 'N/A'}</div>
@@ -546,7 +546,7 @@ export default function TravelersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="hidden md:table-cell px-4 py-4">
+                      <td className="px-4 py-4">
                         <div className="space-y-1">
                           <div className="text-base text-gray-600">Cust. Code: <span className="font-semibold text-gray-900 underline">{traveler.customerCode || 'N/A'}</span></div>
                           <div className="text-base text-gray-600 max-w-xs truncate" title={traveler.customerName}>Cust. Name: <span className="font-semibold text-gray-900">{traveler.customerName || 'N/A'}</span></div>
@@ -555,12 +555,12 @@ export default function TravelersPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="space-y-1">
-                          <div className="text-sm text-gray-600">Created: <span className="font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
+                          <div className="text-sm text-gray-600">Start Date: <span className="font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
                           <div className="text-sm text-gray-600">Due: <span className="font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
                           <div className="text-sm text-gray-600">Ship: <span className="font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="hidden lg:table-cell px-4 py-4">
+                      <td className="px-4 py-4">
                         <div className="space-y-1">
                           <div className="text-base text-gray-600">Ship Via: <span className="font-semibold text-gray-900">{traveler.shipVia || 'N/A'}</span></div>
                           <div className="text-base text-gray-600">From Stock: <span className="font-semibold text-gray-900">{traveler.fromStock || 'N/A'}</span></div>
@@ -702,8 +702,8 @@ export default function TravelersPage() {
               </table>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block lg:hidden">
+            {/* Mobile Card View - Hidden since we're showing full table on all devices */}
+            <div className="hidden">
               <div className="p-3 space-y-3">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
@@ -747,7 +747,7 @@ export default function TravelersPage() {
                           <div className="text-sm font-semibold text-gray-900">{traveler.customerCode || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Created</div>
+                          <div className="text-xs text-gray-500 font-semibold">Start Date</div>
                           <div className="text-sm font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</div>
                         </div>
                         <div>

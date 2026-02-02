@@ -815,7 +815,7 @@ export default function TravelerDetailPage() {
       `}</style>
       <div className={`${isEditing ? 'w-full' : 'max-w-7xl mx-auto'} p-4 lg:p-6 space-y-6`}>
         {/* Action Bar - Screen Only */}
-        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 no-print bg-white shadow rounded-lg p-3 sm:p-4">
+        <div className="sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 no-print bg-white shadow-md rounded-lg p-3 sm:p-4">
           <button
             onClick={() => router.back()}
             className="flex items-center justify-center space-x-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
