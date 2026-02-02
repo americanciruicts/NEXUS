@@ -295,8 +295,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       // In create mode, load default steps ONLY if formSteps is empty (not already auto-populated)
       console.log('❌ LOADING DEFAULT STEPS for type:', selectedType);
       loadDefaultSteps(selectedType);
-      // Set labor hours based on traveler type
-      setIncludeLaborHours(selectedType !== 'PCB' && selectedType !== 'PARTS');
+      // Set labor hours based on traveler type (only PCB doesn't have labor hours)
+      setIncludeLaborHours(selectedType !== 'PCB');
       // Keep page at top when selecting type
       setTimeout(() => window.scrollTo(0, 0), 0);
     }
@@ -604,8 +604,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       'PURCHASING': 'PURCHASING'
     };
 
-    // PCB and PARTS travelers should never have labor hours
-    const finalIncludeLaborHours = (selectedType === 'PCB' || selectedType === 'PARTS') ? false : includeLaborHours;
+    // PCB travelers should never have labor hours
+    const finalIncludeLaborHours = (selectedType === 'PCB') ? false : includeLaborHours;
 
     // Auto-increment revision when editing (if changes were made)
     const finalRevision = mode === 'edit' && initialData?.revision
@@ -1306,8 +1306,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </label>
             </div>
 
-            {/* Only show labor hours option for non-PCB and non-PARTS travelers */}
-            {selectedType !== 'PCB' && selectedType !== 'PARTS' && (
+            {/* Only show labor hours option for non-PCB travelers */}
+            {selectedType !== 'PCB' && (
               <div className={`flex items-center space-x-4 p-3 rounded border-2 transition-all ${includeLaborHours ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200'}`}>
                 <input
                   type="checkbox"
