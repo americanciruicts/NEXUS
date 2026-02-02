@@ -352,7 +352,7 @@ export default function TravelersPage() {
     <Layout fullWidth>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
         {/* Header with Stats */}
-        <div className="mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-lg p-4 md:p-6 shadow-lg">
+        <div className="sticky top-0 z-50 mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-lg p-4 md:p-6 shadow-lg">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-xl md:text-2xl font-bold mb-1">📋 Travelers Management</h1>
@@ -376,7 +376,7 @@ export default function TravelersPage() {
         </div>
 
         {/* Filters and Actions */}
-        <div className="mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
+        <div className="sticky top-24 md:top-28 z-40 mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
           <div className="flex flex-col gap-4">
             {/* Search */}
             <div className="w-full">
@@ -479,7 +479,7 @@ export default function TravelersPage() {
           ) : (
             <>
             {/* Desktop Table View */}
-            <div className="w-full overflow-x-auto">
+            <div className="hidden lg:block w-full overflow-x-auto">
               <table className="w-full divide-y divide-gray-200">
                 <thead className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 sticky top-0 z-10" style={{ backgroundColor: '#4f46e5' }}>
                   <tr>
@@ -702,8 +702,8 @@ export default function TravelersPage() {
               </table>
             </div>
 
-            {/* Mobile Card View - Hidden since we're showing full table on all devices */}
-            <div className="hidden">
+            {/* Mobile Card View */}
+            <div className="block lg:hidden">
               <div className="p-3 space-y-3">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
@@ -739,12 +739,26 @@ export default function TravelersPage() {
                         <div className="text-xs text-gray-500 font-semibold">Description</div>
                         <div className="text-sm text-gray-700">{traveler.description || 'N/A'}</div>
                       </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Revision</div>
+                          <div className="text-sm text-gray-900">{traveler.revision || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Quantity</div>
+                          <div className="text-sm text-gray-900">{traveler.quantity}</div>
+                        </div>
+                      </div>
 
-                      {/* Metrics Grid */}
+                      {/* Customer & Dates Grid */}
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
                         <div>
                           <div className="text-xs text-gray-500 font-semibold">Customer Code</div>
                           <div className="text-sm font-semibold text-gray-900">{traveler.customerCode || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Customer Name</div>
+                          <div className="text-sm font-semibold text-gray-900 truncate" title={traveler.customerName}>{traveler.customerName || 'N/A'}</div>
                         </div>
                         <div>
                           <div className="text-xs text-gray-500 font-semibold">Start Date</div>
@@ -760,29 +774,150 @@ export default function TravelersPage() {
                         </div>
                       </div>
 
+                      {/* Shipping Info */}
+                      <div className="pt-2 border-t border-gray-200">
+                        <div className="text-xs text-gray-500 font-semibold mb-1">Shipping</div>
+                        <div className="grid grid-cols-2 gap-1 text-xs">
+                          <div>Ship Via: <span className="font-semibold">{traveler.shipVia || 'N/A'}</span></div>
+                          <div>From: <span className="font-semibold">{traveler.fromStock || 'N/A'}</span></div>
+                          <div className="col-span-2">To: <span className="font-semibold">{traveler.toStock || 'N/A'}</span></div>
+                        </div>
+                      </div>
+
                       {/* Actions */}
                       <div className="pt-2 border-t border-gray-200">
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                           <Link
                             href={`/travelers/${traveler.dbId}`}
-                            className="flex items-center justify-center space-x-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm font-semibold border border-blue-200"
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                            title="View"
                           >
-                            <EyeIcon className="h-4 w-4" />
-                            <span>View</span>
+                            <EyeIcon className="h-5 w-5" />
+                            <span className="text-xs mt-1">View</span>
                           </Link>
                           <Link
                             href={`/travelers/${traveler.dbId}`}
-                            className="flex items-center justify-center space-x-1 px-3 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors text-sm font-semibold border border-green-200"
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                            title="Edit"
                           >
-                            <PencilIcon className="h-4 w-4" />
-                            <span>Edit</span>
+                            <PencilIcon className="h-5 w-5" />
+                            <span className="text-xs mt-1">Edit</span>
+                          </Link>
+                          <Link
+                            href={`/travelers/clone/${traveler.dbId}`}
+                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                            title="Clone"
+                          >
+                            <DocumentDuplicateIcon className="h-5 w-5" />
+                            <span className="text-xs mt-1">Clone</span>
                           </Link>
                           <button
                             onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
-                            className="flex items-center justify-center space-x-1 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors text-sm font-semibold border border-gray-200"
+                            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                            title="Print"
                           >
-                            <PrinterIcon className="h-4 w-4" />
-                            <span>Print</span>
+                            <PrinterIcon className="h-5 w-5" />
+                            <span className="text-xs mt-1">Print</span>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const newActiveStatus = !traveler.isActive;
+                              const action = newActiveStatus ? 'activate' : 'deactivate';
+                              if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`)) return;
+                              try {
+                                const token = localStorage.getItem('nexus_token');
+                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
+                                  method: 'PATCH',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                  },
+                                  body: JSON.stringify({ is_active: newActiveStatus })
+                                });
+                                if (response.ok) {
+                                  alert(`✅ Traveler ${traveler.jobNumber} ${action}d!`);
+                                  fetchTravelers();
+                                } else {
+                                  alert(`❌ Failed to ${action} traveler`);
+                                }
+                              } catch (error) {
+                                console.error('Error:', error);
+                                alert(`❌ Failed to ${action} traveler`);
+                              }
+                            }}
+                            className={`p-2 rounded-lg transition-colors flex flex-col items-center justify-center ${
+                              traveler.isActive
+                                ? 'text-green-600 hover:bg-green-50'
+                                : 'text-red-600 hover:bg-red-50'
+                            }`}
+                            title={traveler.isActive ? 'Mark as Inactive' : 'Mark as Active'}
+                          >
+                            {traveler.isActive ? (
+                              <CheckCircleIcon className="h-5 w-5" />
+                            ) : (
+                              <XCircleIcon className="h-5 w-5" />
+                            )}
+                            <span className="text-xs mt-1">{traveler.isActive ? 'Active' : 'Inactive'}</span>
+                          </button>
+                          {traveler.status !== 'ARCHIVED' && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Archive traveler ${traveler.jobNumber}?`)) return;
+                                try {
+                                  const token = localStorage.getItem('nexus_token');
+                                  const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                      'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({ status: 'ARCHIVED' })
+                                  });
+                                  if (response.ok) {
+                                    alert(`✅ Traveler ${traveler.jobNumber} archived!`);
+                                    fetchTravelers();
+                                  } else {
+                                    alert('❌ Failed to archive traveler');
+                                  }
+                                } catch (error) {
+                                  console.error('Error:', error);
+                                  alert('❌ Failed to archive traveler');
+                                }
+                              }}
+                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                              title="Archive"
+                            >
+                              <ArchiveBoxIcon className="h-5 w-5" />
+                              <span className="text-xs mt-1">Archive</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Are you sure you want to DELETE traveler ${traveler.jobNumber}? This cannot be undone!`)) return;
+                              try {
+                                const token = localStorage.getItem('nexus_token');
+                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`
+                                  }
+                                });
+                                if (response.ok) {
+                                  alert(`✅ Traveler ${traveler.jobNumber} deleted!`);
+                                  fetchTravelers();
+                                } else {
+                                  alert('❌ Failed to delete traveler');
+                                }
+                              } catch (error) {
+                                console.error('Error:', error);
+                                alert('❌ Failed to delete traveler');
+                              }
+                            }}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                            title="Delete"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                            <span className="text-xs mt-1">Delete</span>
                           </button>
                         </div>
                       </div>
