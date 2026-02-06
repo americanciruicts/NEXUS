@@ -1,4 +1,4 @@
-export type TravelerType = 'PCB_ASSEMBLY' | 'PCB' | 'CABLE' | 'CABLE_ASSEMBLY' | 'PCB_CABLE_ASSEMBLY' | 'PARTS' | 'ASSEMBLY';
+export type TravelerType = 'PCB_ASSEMBLY' | 'PCB' | 'CABLES' | 'PURCHASING';
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER';
 

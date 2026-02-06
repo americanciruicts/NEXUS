@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from models import UserRole
+import re
 
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
@@ -10,6 +11,15 @@ class UserBase(BaseModel):
     last_name: str = Field(..., max_length=50)
     role: UserRole = UserRole.OPERATOR
     is_approver: bool = False
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Basic email validation that allows internal domains like .local"""
+        # Allow standard email format including .local domains for internal use
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]+$', str(v)):
+            raise ValueError('Invalid email format')
+        return v
 
     class Config:
         use_enum_values = True
@@ -24,6 +34,14 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_approver: Optional[bool] = None
     is_active: Optional[bool] = None
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        """Basic email validation that allows internal domains"""
+        if v and not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]+$', str(v)):
+            raise ValueError('Invalid email format')
+        return v
 
 class User(UserBase):
     id: int

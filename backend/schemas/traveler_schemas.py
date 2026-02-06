@@ -27,11 +27,11 @@ class ProcessStepBase(BaseModel):
     operation: str
     work_center_code: str
     instructions: str
-    estimated_time: Optional[int] = None
+    estimated_time: Optional[int] = Field(None, ge=0)
     is_required: bool = True
-    quantity: Optional[int] = None
-    accepted: Optional[int] = None
-    rejected: Optional[int] = None
+    quantity: Optional[int] = Field(None, ge=0)
+    accepted: Optional[int] = Field(None, ge=0)
+    rejected: Optional[int] = Field(None, ge=0)
     sign: Optional[str] = Field(None, max_length=50)
     completed_date: Optional[str] = Field(None, max_length=20)
 

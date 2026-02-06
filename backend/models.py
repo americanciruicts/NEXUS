@@ -12,9 +12,7 @@ class TravelerType(enum.Enum):
     PCB = "PCB"
     ASSY = "ASSY"
     CABLE = "CABLE"
-    CABLE_ASSY = "CABLE_ASSY"
-    MECHANICAL = "MECHANICAL"
-    TEST = "TEST"
+    PURCHASING = "PURCHASING"
 
 class TravelerStatus(enum.Enum):
     DRAFT = "DRAFT"

@@ -15,7 +15,9 @@ class LaborEntryCreate(BaseModel):
     traveler_id: int
     step_id: Optional[int] = None
     start_time: datetime
+    end_time: Optional[datetime] = None
     description: str
+    is_completed: Optional[bool] = None
 
 class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
@@ -114,17 +116,19 @@ async def start_labor_entry(
                 work_center_name = work_center_from_desc
 
     # Check if user has an active labor entry
-    active_entry = db.query(LaborEntry).filter(
-        (LaborEntry.employee_id == current_user.id) &
-        (LaborEntry.end_time.is_(None)) &
-        (LaborEntry.is_completed == False)
-    ).first()
+    # BUT: Allow manual entries (which have end_time already set) even if user has active entry
+    if not labor_data.end_time:  # Only check for active entry if this is NOT a manual entry
+        active_entry = db.query(LaborEntry).filter(
+            (LaborEntry.employee_id == current_user.id) &
+            (LaborEntry.end_time.is_(None)) &
+            (LaborEntry.is_completed == False)
+        ).first()
 
-    if active_entry:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have an active labor entry. Please complete it first."
-        )
+        if active_entry:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You already have an active labor entry. Please complete it first."
+            )
 
     # Create labor entry
     db_labor_entry = LaborEntry(
@@ -132,10 +136,42 @@ async def start_labor_entry(
         step_id=step_id,
         employee_id=current_user.id,
         start_time=labor_data.start_time,
+        end_time=labor_data.end_time,  # Support manual entries with end_time
         description=labor_data.description,
+        is_completed=labor_data.is_completed if labor_data.is_completed is not None else False,
         work_center=work_center_name,
         sequence_number=sequence_num
     )
+
+    # If end_time is provided, calculate hours_worked automatically
+    if labor_data.end_time:
+        # Validate that end_time is after start_time (prevent negative hours)
+        if labor_data.end_time <= labor_data.start_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End time must be after start time. Please check your times and try again."
+            )
+
+        duration = labor_data.end_time - labor_data.start_time
+        total_seconds = duration.total_seconds()
+
+        # Additional safety check for negative seconds
+        if total_seconds < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated time is negative. End time must be after start time."
+            )
+
+        hours_worked = round(total_seconds / 3600, 2)
+
+        # Final validation that hours are not negative
+        if hours_worked < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated hours ({hours_worked}) is negative. Please verify your times."
+            )
+
+        db_labor_entry.hours_worked = hours_worked
 
     db.add(db_labor_entry)
     db.commit()
@@ -190,8 +226,33 @@ async def update_labor_entry(
 
     # Calculate hours worked if end_time is provided
     if labor_data.end_time and labor_entry.start_time:
+        # Validate that end_time is after start_time (prevent negative hours)
+        if labor_data.end_time <= labor_entry.start_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End time must be after start time. Please check your times and try again."
+            )
+
         time_diff = labor_data.end_time - labor_entry.start_time
-        labor_entry.hours_worked = round(time_diff.total_seconds() / 3600, 2)
+        total_seconds = time_diff.total_seconds()
+
+        # Additional safety check for negative seconds
+        if total_seconds < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated time is negative. End time must be after start time."
+            )
+
+        hours_worked = round(total_seconds / 3600, 2)
+
+        # Final validation that hours are not negative
+        if hours_worked < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Calculated hours ({hours_worked}) is negative. Please verify your times."
+            )
+
+        labor_entry.hours_worked = hours_worked
 
     db.commit()
     db.refresh(labor_entry)

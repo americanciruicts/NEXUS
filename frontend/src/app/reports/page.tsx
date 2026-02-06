@@ -8,7 +8,8 @@ import {
   ArrowPathIcon,
   TableCellsIcon,
   UserIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 
 interface LaborEntry {
@@ -30,7 +31,7 @@ interface LaborEntry {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const [reportType, setReportType] = useState<'single_traveler' | 'all_travelers' | 'single_operator' | 'all_operators' | 'traveler_labor_tracking' | ''>('');
+  const [reportType, setReportType] = useState<'single_traveler' | 'all_travelers' | 'single_operator' | 'all_operators' | 'single_work_center' | 'all_work_centers' | ''>('');
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<LaborEntry[] | null>(null);
   const [reportTitle, setReportTitle] = useState('');
@@ -38,6 +39,8 @@ export default function ReportsPage() {
   // Input fields
   const [jobNumber, setJobNumber] = useState('');
   const [operatorName, setOperatorName] = useState('');
+  const [workCenter, setWorkCenter] = useState('');
+  const [workOrder, setWorkOrder] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -83,9 +86,19 @@ export default function ReportsPage() {
         router.push(`/reports/view?type=all_operators&startDate=${startDate}&endDate=${endDate}`);
         setLoading(false);
         return;
-      } else if (reportType === 'traveler_labor_tracking') {
-        // Navigate to combined report page
-        router.push(`/reports/view?type=traveler_labor&jobNumber=${encodeURIComponent(jobNumber)}&startDate=${startDate}&endDate=${endDate}`);
+      } else if (reportType === 'single_work_center') {
+        if (!workCenter.trim()) {
+          alert('Please enter a work center name');
+          setLoading(false);
+          return;
+        }
+        // Navigate to report page
+        router.push(`/reports/view?type=single_work_center&workCenter=${encodeURIComponent(workCenter)}&jobNumber=${encodeURIComponent(jobNumber)}&workOrder=${encodeURIComponent(workOrder)}&startDate=${startDate}&endDate=${endDate}`);
+        setLoading(false);
+        return;
+      } else if (reportType === 'all_work_centers') {
+        // Navigate to report page
+        router.push(`/reports/view?type=all_work_centers&jobNumber=${encodeURIComponent(jobNumber)}&workOrder=${encodeURIComponent(workOrder)}&startDate=${startDate}&endDate=${endDate}`);
         setLoading(false);
         return;
       }
@@ -122,6 +135,27 @@ export default function ReportsPage() {
             background: white !important;
           }
         }
+        @media (max-width: 768px) {
+          .mobile-hide-report {
+            display: none !important;
+          }
+          .header-buttons {
+            flex-direction: column !important;
+            width: 100% !important;
+          }
+          .header-buttons button {
+            width: 100% !important;
+          }
+          /* Increase touch target size on mobile */
+          .report-card-btn {
+            min-height: 120px !important;
+            padding: 1.5rem !important;
+          }
+          /* Better spacing for date inputs on mobile */
+          .date-input-wrapper {
+            margin-bottom: 0.75rem !important;
+          }
+        }
       `}</style>
 
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -132,10 +166,10 @@ export default function ReportsPage() {
               <h1 className="text-2xl font-bold mb-1">📊 Reports & Analytics</h1>
               <p className="text-blue-100">Generate and print labor tracking reports</p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="header-buttons flex items-center space-x-3">
               <button
                 onClick={handleRefresh}
-                className="flex items-center space-x-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg font-semibold border border-white/30 transition-all"
+                className="flex items-center justify-center space-x-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg font-semibold border border-white/30 transition-all"
               >
                 <ArrowPathIcon className="h-5 w-5" />
                 <span>Refresh</span>
@@ -143,7 +177,7 @@ export default function ReportsPage() {
               {reportData && (
                 <button
                   onClick={handlePrint}
-                  className="flex items-center space-x-2 px-6 py-3 bg-white hover:bg-gray-100 text-indigo-600 rounded-lg font-bold shadow-lg transition-all"
+                  className="flex items-center justify-center space-x-2 px-6 py-3 bg-white hover:bg-gray-100 text-indigo-600 rounded-lg font-bold shadow-lg transition-all"
                 >
                   <PrinterIcon className="h-5 w-5" />
                   <span>Print Report</span>
@@ -157,13 +191,13 @@ export default function ReportsPage() {
         <div className="bg-white shadow-xl rounded-xl border-2 border-gray-200 p-8 mb-6 no-print">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Generate Report</h2>
 
-          {/* Report Type Selection - Compact Cards Layout */}
+          {/* Report Type Selection - 3x3 Layout */}
           <div className="flex flex-col items-center gap-3 mb-6">
-            {/* Row 1: 2 Cards */}
-            <div className="grid grid-cols-2 gap-3 w-2/3">
+            {/* Row 1: 3 Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
               <button
                 onClick={() => setReportType('single_traveler')}
-                className={`p-4 rounded-lg transition-all bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 ${
+                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 ${
                   reportType === 'single_traveler'
                     ? 'ring-4 ring-blue-300 shadow-xl scale-105'
                     : 'shadow-lg'
@@ -176,7 +210,7 @@ export default function ReportsPage() {
 
               <button
                 onClick={() => setReportType('all_travelers')}
-                className={`p-4 rounded-lg transition-all bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 ${
+                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 ${
                   reportType === 'all_travelers'
                     ? 'ring-4 ring-green-300 shadow-xl scale-105'
                     : 'shadow-lg'
@@ -186,13 +220,10 @@ export default function ReportsPage() {
                 <div className="text-center font-bold text-base text-white mb-1">All Travelers</div>
                 <div className="text-xs text-green-100 text-center">All travelers</div>
               </button>
-            </div>
 
-            {/* Row 2: 3 Cards */}
-            <div className="grid grid-cols-3 gap-3 w-full">
               <button
                 onClick={() => setReportType('single_operator')}
-                className={`p-4 rounded-lg transition-all bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 ${
+                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 ${
                   reportType === 'single_operator'
                     ? 'ring-4 ring-purple-300 shadow-xl scale-105'
                     : 'shadow-lg'
@@ -202,10 +233,13 @@ export default function ReportsPage() {
                 <div className="text-center font-bold text-base text-white mb-1">Single Operator</div>
                 <div className="text-xs text-purple-100 text-center">By operator name</div>
               </button>
+            </div>
 
+            {/* Row 2: 3 Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
               <button
                 onClick={() => setReportType('all_operators')}
-                className={`p-4 rounded-lg transition-all bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 ${
+                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 ${
                   reportType === 'all_operators'
                     ? 'ring-4 ring-orange-300 shadow-xl scale-105'
                     : 'shadow-lg'
@@ -217,16 +251,29 @@ export default function ReportsPage() {
               </button>
 
               <button
-                onClick={() => setReportType('traveler_labor_tracking')}
-                className={`p-4 rounded-lg transition-all bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 ${
-                  reportType === 'traveler_labor_tracking'
-                    ? 'ring-4 ring-red-300 shadow-xl scale-105'
+                onClick={() => setReportType('single_work_center')}
+                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 ${
+                  reportType === 'single_work_center'
+                    ? 'ring-4 ring-cyan-300 shadow-xl scale-105'
                     : 'shadow-lg'
                 }`}
               >
-                <TableCellsIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">Traveler & Labor</div>
-                <div className="text-xs text-red-100 text-center">Combined tracking</div>
+                <BuildingOfficeIcon className="h-10 w-10 mx-auto mb-2 text-white" />
+                <div className="text-center font-bold text-base text-white mb-1">Single Work Center</div>
+                <div className="text-xs text-cyan-100 text-center">By work center</div>
+              </button>
+
+              <button
+                onClick={() => setReportType('all_work_centers')}
+                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 ${
+                  reportType === 'all_work_centers'
+                    ? 'ring-4 ring-teal-300 shadow-xl scale-105'
+                    : 'shadow-lg'
+                }`}
+              >
+                <BuildingOfficeIcon className="h-10 w-10 mx-auto mb-2 text-white" />
+                <div className="text-center font-bold text-base text-white mb-1">All Work Centers</div>
+                <div className="text-xs text-teal-100 text-center">All work centers</div>
               </button>
             </div>
           </div>
@@ -259,22 +306,48 @@ export default function ReportsPage() {
               </div>
             )}
 
-            {reportType === 'traveler_labor_tracking' && (
+            {reportType === 'single_work_center' && (
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Job Number (Optional - leave blank for all)</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Work Center Name</label>
                 <input
                   type="text"
-                  value={jobNumber}
-                  onChange={(e) => setJobNumber(e.target.value)}
-                  placeholder="e.g., 8744 PART"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 font-semibold"
+                  value={workCenter}
+                  onChange={(e) => setWorkCenter(e.target.value)}
+                  placeholder="e.g., Assembly, Testing"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 font-semibold"
                 />
               </div>
             )}
 
+            {/* Job Number and Work Order for Work Center Reports */}
+            {(reportType === 'single_work_center' || reportType === 'all_work_centers') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Job Number (Optional)</label>
+                  <input
+                    type="text"
+                    value={jobNumber}
+                    onChange={(e) => setJobNumber(e.target.value)}
+                    placeholder="e.g., J12345"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Work Order (Optional)</label>
+                  <input
+                    type="text"
+                    value={workOrder}
+                    onChange={(e) => setWorkOrder(e.target.value)}
+                    placeholder="e.g., WO7890"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Date Range */}
-            {(reportType === 'traveler_labor_tracking' || reportType === 'all_travelers' || reportType === 'single_operator') && (
-              <div className="grid grid-cols-2 gap-4">
+            {(reportType === 'all_travelers' || reportType === 'single_operator' || reportType === 'single_work_center' || reportType === 'all_work_centers') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Start Date (Optional)</label>
                 <input
@@ -336,14 +409,14 @@ export default function ReportsPage() {
               <table className="w-full border-collapse border-2 border-gray-300">
                 <thead className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
                   <tr>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Date</th>
+                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Date</th>
                     <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Job #</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Part #</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Description</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Operator</th>
+                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Part #</th>
+                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Description</th>
+                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Operator</th>
                     <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Work Center</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Start Time</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">End Time</th>
+                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Start Time</th>
+                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">End Time</th>
                     <th className="px-4 py-3 text-left font-bold">Hours</th>
                   </tr>
                 </thead>
@@ -357,28 +430,28 @@ export default function ReportsPage() {
                   ) : (
                     reportData.map((entry, index) => (
                       <tr key={index} className="border-b-2 border-gray-200 hover:bg-blue-50">
-                        <td className="border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
                           {new Date(entry.start_time).toLocaleDateString()}
                         </td>
                         <td className="border-r-2 border-gray-200 px-4 py-3 font-semibold">
                           {entry.traveler?.job_number || 'N/A'}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
                           {entry.traveler?.part_number || 'N/A'}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
                           {entry.description || entry.traveler?.part_description || 'N/A'}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3 font-semibold">
+                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3 font-semibold">
                           {entry.employee?.username || 'System'}
                         </td>
                         <td className="border-r-2 border-gray-200 px-4 py-3">
                           {entry.work_center || 'N/A'}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
                           {new Date(entry.start_time).toLocaleTimeString()}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
                           {entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : 'In Progress'}
                         </td>
                         <td className="px-4 py-3 font-bold">

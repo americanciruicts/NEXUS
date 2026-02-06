@@ -173,23 +173,23 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
         <div className="w-full space-y-4 p-4 lg:p-6">
           {/* Dashboard Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-lg p-6">
-            <div className="flex items-center justify-between">
+          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-lg p-4 md:p-6">
+            <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:items-center md:justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-white mb-1 flex items-center space-x-2">
-                  <ChartBarIcon className="w-7 h-7 text-white" />
+                <h1 className="text-xl md:text-2xl font-bold text-white mb-1 flex items-center space-x-2">
+                  <ChartBarIcon className="w-6 h-6 md:w-7 md:h-7 text-white" />
                   <span>Manufacturing Dashboard</span>
                 </h1>
                 <p className="text-sm text-blue-100">Real-time operations overview</p>
               </div>
-              <div className="hidden md:flex space-x-3">
-                <Link href="/travelers/new" className="inline-flex items-center px-4 py-2.5 bg-white text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors shadow-md">
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                <Link href="/travelers/new" className="inline-flex items-center justify-center px-4 py-2.5 bg-white text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors shadow-md">
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   New Traveler
                 </Link>
-                <Link href="/travelers/tracking" className="inline-flex items-center px-4 py-2.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors shadow-md">
+                <Link href="/travelers/tracking" className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors shadow-md">
                   <CubeIcon className="w-4 h-4 mr-2" />
                   Track Traveler
                 </Link>
@@ -340,59 +340,60 @@ export default function Dashboard() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Number</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Location</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operator</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entered At</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exited At</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time in Step</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Number</th>
+                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operator</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entered At</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exited At</th>
+                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {liveUpdates.length > 0 ? (
                     liveUpdates.map((update, index) => (
                       <tr key={index} className={`hover:bg-blue-50 transition-colors ${update.is_active ? 'bg-green-50' : ''}`}>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="text-sm font-semibold text-blue-600 flex items-center space-x-2">
+                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
+                          <div className="text-xs md:text-sm font-semibold text-blue-600 flex items-center space-x-1 md:space-x-2">
                             {update.is_active && <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
                             <span>{update.job_number}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
+                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
+                          <div className="inline-flex items-center px-2 md:px-2.5 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
                             {update.work_center}
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="hidden md:table-cell px-4 py-3 whitespace-nowrap">
                           <span className="text-sm text-gray-900">{update.operator_name}</span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="hidden lg:table-cell px-4 py-3 whitespace-nowrap">
                           <span className="text-sm text-gray-700">{update.start_time}</span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="hidden lg:table-cell px-4 py-3 whitespace-nowrap">
                           <span className={`text-sm ${update.is_active ? 'text-green-600 font-semibold' : 'text-gray-700'}`}>
                             {update.end_time}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
+                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center space-x-1 md:space-x-2">
                             {update.is_active && (
-                              <svg className="w-4 h-4 text-orange-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3 h-3 md:w-4 md:h-4 text-orange-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                             )}
-                            <span className="text-sm font-medium text-gray-900">{update.time_in_step}</span>
+                            <span className="text-xs md:text-sm font-medium text-gray-900">{update.time_in_step}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2 md:px-2.5 py-1 rounded-full text-xs font-medium ${
                             update.is_active
                               ? 'bg-green-100 text-green-800'
                               : 'bg-gray-100 text-gray-800'
                           }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${update.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                            {update.is_active ? 'In Progress' : 'Completed'}
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1 md:mr-1.5 ${update.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                            <span className="hidden sm:inline">{update.is_active ? 'In Progress' : 'Completed'}</span>
+                            <span className="sm:hidden">{update.is_active ? 'Active' : 'Done'}</span>
                           </span>
                         </td>
                       </tr>
@@ -424,39 +425,39 @@ export default function Dashboard() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Number</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Description</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Center</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Number</th>
+                    <th className="hidden sm:table-cell px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Description</th>
+                    <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Center</th>
+                    <th className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                    <th className="px-3 md:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {travelers.map((traveler) => (
                     <tr key={traveler.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{traveler.job_number}</div>
+                      <td className="px-3 md:px-6 py-4 whitespace-nowrap">
+                        <div className="text-xs md:text-sm font-medium text-gray-900">{traveler.job_number}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-700">{traveler.part_description}</div>
+                      <td className="hidden sm:table-cell px-3 md:px-6 py-4 whitespace-nowrap">
+                        <div className="text-xs md:text-sm text-gray-700">{traveler.part_description}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(traveler.status)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-700">{traveler.work_center}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{traveler.quantity || '-'}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                      <td className="px-3 md:px-6 py-4 whitespace-nowrap text-right text-sm">
                         <Link
                           href={`/travelers/${traveler.job_number}`}
-                          className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors"
+                          className="inline-flex items-center px-2 md:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-md transition-colors"
                         >
-                          View
-                          <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <span className="hidden sm:inline">View</span>
+                          <svg className="w-4 h-4 sm:ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                         </Link>

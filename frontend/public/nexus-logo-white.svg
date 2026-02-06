@@ -1,20 +1,11 @@
 <svg width="280" height="80" viewBox="0 0 280 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <!-- Professional gradient - Teal to Deep Blue -->
-    <linearGradient id="hexGradLogin" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0891b2"/>
-      <stop offset="50%" style="stop-color:#0e7490"/>
-      <stop offset="100%" style="stop-color:#155e75"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Hexagon background (scaled up) -->
+  <!-- Hexagon background (white stroke) -->
   <path d="M 40 8 L 70 24 L 70 56 L 40 72 L 10 56 L 10 24 Z"
-        fill="url(#hexGradLogin)"
-        stroke="#0e7490"
+        fill="rgba(255,255,255,0.1)"
+        stroke="white"
         stroke-width="2"/>
 
-  <!-- Straight Bold N - Industrial Style -->
+  <!-- Straight Bold N - Industrial Style (white) -->
   <g fill="white">
     <!-- Left vertical bar -->
     <rect x="25" y="24" width="6" height="32" rx="1"/>
@@ -26,7 +17,7 @@
     <rect x="48" y="24" width="6" height="32" rx="1"/>
   </g>
 
-  <!-- NEXUS Text - Larger for Login -->
+  <!-- NEXUS Text - White -->
   <text x="90" y="52" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="white" letter-spacing="3">
     NEXUS
   </text>

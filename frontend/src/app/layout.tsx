@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -26,11 +27,13 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} antialiased bg-white text-gray-900`}>
-        <ThemeProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ThemeProvider>
+        <ErrorBoundary>
+          <ThemeProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </ThemeProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );
