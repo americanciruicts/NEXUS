@@ -4,9 +4,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon, Bars3Icon, XMarkIcon, HomeIcon, ClipboardDocumentListIcon, ClockIcon, ChartBarSquareIcon, QueueListIcon, PlusCircleIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon, Bars3Icon, XMarkIcon, HomeIcon, ClipboardDocumentListIcon, ClockIcon, ChartBarSquareIcon, QueueListIcon, PlusCircleIcon, MapPinIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import GlobalSearch from '@/components/GlobalSearch';
+import { toast } from 'sonner';
 
 interface Notification {
   id: number;
@@ -27,6 +28,7 @@ export default function Header() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [prevUnreadCount, setPrevUnreadCount] = useState(0);
 
   const isActive = (path: string) => {
     if (path === '/travelers') {
@@ -64,7 +66,36 @@ export default function Header() {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
-        setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+
+        const newNotifications = data.filter((n: Notification) => !n.is_read);
+        const newCount = newNotifications.length;
+        setUnreadCount(newCount);
+
+        // Show toast for NEW notifications (when count increases)
+        if (newCount > prevUnreadCount && prevUnreadCount !== 0) {
+          const latestNew = newNotifications[0]; // Most recent unread
+          if (latestNew) {
+            if (latestNew.notification_type === 'USER_LOGIN') {
+              toast.info(latestNew.title, {
+                description: latestNew.message,
+                action: {
+                  label: 'View',
+                  onClick: () => setShowNotifications(true)
+                }
+              });
+            } else {
+              // Show toast for other notification types
+              toast.info(latestNew.title, {
+                description: latestNew.message,
+                action: {
+                  label: 'View',
+                  onClick: () => setShowNotifications(true)
+                }
+              });
+            }
+          }
+        }
+        setPrevUnreadCount(newCount);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -120,7 +151,12 @@ export default function Header() {
 
   return (
     <header className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-2xl no-print sticky top-0 z-50 border-b border-white/10">
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-white rounded-full -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-white rounded-full translate-y-1/2" />
+        <div className="absolute top-0 left-2/3 w-24 h-24 bg-white rounded-full -translate-y-1/2" />
+      </div>
+      <div className="relative z-10 max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo and Title */}
           <Link href="/dashboard" className="flex items-center group">
@@ -129,12 +165,12 @@ export default function Header() {
               alt="NEXUS"
               width={200}
               height={64}
-              className="h-12 w-auto group-hover:scale-105 transition-all duration-300"
+              className="h-10 sm:h-12 w-auto group-hover:scale-105 transition-all duration-300"
             />
           </Link>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex space-x-2 items-center">
+          <nav className="hidden lg:flex space-x-2 items-center">
             <Link href="/dashboard" className={`${getLinkClasses('/dashboard')} flex items-center space-x-2`}>
               <HomeIcon className="h-4 w-4 text-yellow-300" />
               <span>Dashboard</span>
@@ -198,7 +234,7 @@ export default function Header() {
 
           {/* Mobile menu button */}
           <div className="flex items-center space-x-2">
-            <div className="md:hidden flex items-center space-x-2">
+            <div className="lg:hidden flex items-center space-x-2">
               <GlobalSearch />
               <button
                 onClick={() => setShowMobileMenu(!showMobileMenu)}
@@ -214,7 +250,7 @@ export default function Header() {
             </div>
 
             {/* Desktop User Menu */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-4">
               {/* Global Search */}
               <GlobalSearch />
 
@@ -361,6 +397,14 @@ export default function Header() {
                           <UsersIcon className="h-4 w-4 mr-3 text-purple-600" />
                           User Management
                         </Link>
+                        <Link
+                          href="/admin/work-centers"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        >
+                          <WrenchScrewdriverIcon className="h-4 w-4 mr-3 text-yellow-600" />
+                          Work Center Management
+                        </Link>
                       </>
                     )}
                     <button
@@ -384,7 +428,7 @@ export default function Header() {
 
       {/* Mobile Menu */}
       {showMobileMenu && (
-        <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
+        <div className="lg:hidden bg-white border-t border-gray-200 shadow-lg">
           <div className="px-4 pt-2 pb-4 space-y-1">
             <Link
               href="/dashboard"
@@ -485,6 +529,14 @@ export default function Header() {
                   >
                     <UsersIcon className="h-5 w-5 mr-3 text-purple-600" />
                     User Management
+                  </Link>
+                  <Link
+                    href="/admin/work-centers"
+                    onClick={() => setShowMobileMenu(false)}
+                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <WrenchScrewdriverIcon className="h-5 w-5 mr-3 text-yellow-600" />
+                    Work Center Management
                   </Link>
                 </>
               )}
