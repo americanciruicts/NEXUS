@@ -12,6 +12,7 @@ from services.email_service import send_approval_notification
 router = APIRouter()
 
 @router.post("/", response_model=ApprovalSchema)
+@router.post("", response_model=ApprovalSchema, include_in_schema=False)
 async def create_approval_request(
     approval_data: ApprovalCreate,
     db: Session = Depends(get_db),
@@ -62,6 +63,7 @@ async def create_approval_request(
     return db_approval
 
 @router.get("/", response_model=List[ApprovalSchema])
+@router.get("", response_model=List[ApprovalSchema], include_in_schema=False)
 async def get_pending_approvals(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

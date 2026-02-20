@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 import uvicorn
+import re
 
 from database import engine, get_db
 from models import Base
@@ -34,7 +35,7 @@ app = FastAPI(
     description="American Circuits Traveler Management System API",
     version="1.0.0",
     lifespan=lifespan,
-    redirect_slashes=True
+    redirect_slashes=False
 )
 
 # CORS middleware

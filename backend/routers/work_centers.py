@@ -41,6 +41,7 @@ class WorkCenterResponse(BaseModel):
 
 
 @router.get("/", response_model=List[WorkCenterResponse])
+@router.get("", response_model=List[WorkCenterResponse], include_in_schema=False)
 async def get_work_centers(
     traveler_type: Optional[str] = None,
     include_inactive: bool = False,
@@ -60,6 +61,7 @@ async def get_work_centers(
 
 
 @router.post("/", response_model=WorkCenterResponse)
+@router.post("", response_model=WorkCenterResponse, include_in_schema=False)
 async def create_work_center(
     wc_data: WorkCenterCreate,
     db: Session = Depends(get_db),

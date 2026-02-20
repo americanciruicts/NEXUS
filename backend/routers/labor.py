@@ -51,6 +51,7 @@ class LaborEntryResponse(BaseModel):
         from_attributes = True
 
 @router.post("/", response_model=LaborEntryResponse)
+@router.post("", response_model=LaborEntryResponse, include_in_schema=False)
 async def start_labor_entry(
     labor_data: LaborEntryCreate,
     db: Session = Depends(get_db),
@@ -327,6 +328,7 @@ async def delete_labor_entry(
     return {"message": "Labor entry deleted successfully", "id": labor_id}
 
 @router.get("/", response_model=List[LaborEntryResponse])
+@router.get("", response_model=List[LaborEntryResponse], include_in_schema=False)
 async def get_all_labor_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

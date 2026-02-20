@@ -9,6 +9,7 @@ from routers.auth import get_current_user
 router = APIRouter()
 
 @router.get("/")
+@router.get("", include_in_schema=False)
 async def get_work_orders(
     skip: int = 0,
     limit: int = 100,

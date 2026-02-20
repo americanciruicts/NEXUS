@@ -10,6 +10,7 @@ from routers.auth import get_current_user, get_password_hash
 router = APIRouter()
 
 @router.get("/", response_model=List[UserSchema])
+@router.get("", response_model=List[UserSchema], include_in_schema=False)
 async def get_users(
     skip: int = 0,
     limit: int = 100,
@@ -49,6 +50,7 @@ async def get_user(
     return user
 
 @router.post("/", response_model=UserSchema)
+@router.post("", response_model=UserSchema, include_in_schema=False)
 async def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
@@ -145,11 +147,12 @@ async def delete_user(
             detail="User not found"
         )
 
-    # Soft delete - deactivate user
-    user.is_active = False
+    # Hard delete - remove user from database
+    username = user.username
+    db.delete(user)
     db.commit()
 
-    return {"message": "User deactivated successfully"}
+    return {"message": f"User '{username}' deleted successfully"}
 
 @router.get("/approvers/list")
 async def get_approvers(db: Session = Depends(get_db)):

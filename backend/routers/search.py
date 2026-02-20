@@ -15,6 +15,7 @@ router = APIRouter(prefix="/search", tags=["Search"])
 
 
 @router.get("/")
+@router.get("", include_in_schema=False)
 async def global_search(
     q: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(10, ge=1, le=50, description="Maximum results per category"),

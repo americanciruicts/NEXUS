@@ -50,6 +50,7 @@ class TimeEntryResponse(BaseModel):
         from_attributes = True
 
 @router.post("/", response_model=TimeEntryResponse)
+@router.post("", response_model=TimeEntryResponse, include_in_schema=False)
 async def start_time_entry(
     entry_data: TimeEntryCreate,
     db: Session = Depends(get_db),
@@ -248,6 +249,7 @@ async def delete_time_entry(
     return {"message": "Time entry deleted successfully", "id": entry_id}
 
 @router.get("/", response_model=List[TimeEntryResponse])
+@router.get("", response_model=List[TimeEntryResponse], include_in_schema=False)
 async def get_all_time_entries(
     days: int = 30,
     db: Session = Depends(get_db),
