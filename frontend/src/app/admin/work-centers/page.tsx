@@ -14,6 +14,12 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import {
+  PCB_ASSEMBLY_WORK_CENTERS,
+  PCB_WORK_CENTERS,
+  CABLES_WORK_CENTERS,
+  PURCHASING_WORK_CENTERS,
+} from '@/data/workCenters';
 
 // Inline arrow SVGs - heroicons ArrowUp/ArrowDown fail to bundle in this project
 const ArrowUpSVG = ({ className }: { className?: string }) => (
@@ -27,12 +33,6 @@ const ArrowDownSVG = ({ className }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
   </svg>
 );
-import {
-  PCB_ASSEMBLY_WORK_CENTERS,
-  PCB_WORK_CENTERS,
-  CABLES_WORK_CENTERS,
-  PURCHASING_WORK_CENTERS,
-} from '@/data/workCenters';
 
 interface WorkCenterDB {
   id: number;
@@ -339,7 +339,14 @@ export default function WorkCenterManagementPage() {
     count: allWorkCenters.filter(wc => wc.traveler_type === tab.key).length
   }));
 
-  if (authLoading) {
+  // Redirect non-admins to dashboard (must be in useEffect, not during render)
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      router.push('/dashboard');
+    }
+  }, [authLoading, isAdmin, router]);
+
+  if (authLoading || !isAdmin) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[50vh]">
@@ -347,11 +354,6 @@ export default function WorkCenterManagementPage() {
         </div>
       </Layout>
     );
-  }
-
-  if (!isAdmin) {
-    router.push('/dashboard');
-    return null;
   }
 
   if (loading) {
