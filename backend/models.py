@@ -65,6 +65,7 @@ class WorkCenter(Base):
     code = Column(String(100), unique=True, nullable=False)
     description = Column(Text)
     traveler_type = Column(String(20), nullable=True)  # PCB_ASSEMBLY, PCB, CABLE, PURCHASING
+    sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

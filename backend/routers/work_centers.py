@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func as sql_func
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -33,11 +34,21 @@ class WorkCenterResponse(BaseModel):
     code: str
     description: Optional[str] = None
     traveler_type: Optional[str] = None
+    sort_order: int = 0
     is_active: bool
     created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class ReorderItem(BaseModel):
+    id: int
+    sort_order: int
+
+
+class ReorderRequest(BaseModel):
+    items: List[ReorderItem]
 
 
 @router.get("/", response_model=List[WorkCenterResponse])
@@ -57,7 +68,7 @@ async def get_work_centers(
     if traveler_type:
         query = query.filter(WorkCenter.traveler_type == traveler_type)
 
-    return query.order_by(WorkCenter.name).all()
+    return query.order_by(WorkCenter.sort_order, WorkCenter.id).all()
 
 
 @router.post("/", response_model=WorkCenterResponse)
@@ -67,7 +78,7 @@ async def create_work_center(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new work center (Admin only)"""
+    """Create a new work center (Admin only) - added at the bottom"""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Only admins can create work centers")
 
@@ -76,17 +87,42 @@ async def create_work_center(
     if existing:
         raise HTTPException(status_code=400, detail=f"Work center with code '{wc_data.code}' already exists")
 
+    # Get max sort_order for this type so new one goes to the bottom
+    max_order = db.query(sql_func.max(WorkCenter.sort_order)).filter(
+        WorkCenter.traveler_type == wc_data.traveler_type
+    ).scalar() or 0
+
     db_wc = WorkCenter(
         name=wc_data.name,
         code=wc_data.code,
         description=wc_data.description,
         traveler_type=wc_data.traveler_type,
+        sort_order=max_order + 1,
         is_active=wc_data.is_active
     )
     db.add(db_wc)
     db.commit()
     db.refresh(db_wc)
     return db_wc
+
+
+@router.put("/reorder", response_model=dict)
+async def reorder_work_centers(
+    reorder_data: ReorderRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reorder work centers (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can reorder work centers")
+
+    for item in reorder_data.items:
+        wc = db.query(WorkCenter).filter(WorkCenter.id == item.id).first()
+        if wc:
+            wc.sort_order = item.sort_order
+
+    db.commit()
+    return {"message": f"Reordered {len(reorder_data.items)} work centers"}
 
 
 @router.put("/{wc_id}", response_model=WorkCenterResponse)
@@ -136,18 +172,3 @@ async def delete_work_center(
     db.delete(wc)
     db.commit()
     return {"message": f"Work center '{wc.name}' deleted successfully", "id": wc_id}
-
-
-@router.post("/sync-from-static")
-async def sync_from_static_data(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Sync static work center data into the database (Admin only).
-    This imports work centers from the frontend static data if they don't already exist."""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only admins can sync work centers")
-
-    # This endpoint is called once to seed DB from static data
-    # The frontend will call this on first load of the work center page
-    return {"message": "Use frontend sync functionality to import static data"}

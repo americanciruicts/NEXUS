@@ -141,9 +141,9 @@ async def lifespan(app: FastAPI):
             }
             count = 0
             for wc_type, items in WORK_CENTER_DATA.items():
-                for name, desc in items:
+                for idx, (name, desc) in enumerate(items):
                     code = f"{wc_type}_{name.replace(' ', '_').replace('/', '_').replace('&', 'AND').upper()}"
-                    wc = WorkCenter(name=name, code=code, description=desc, traveler_type=wc_type, is_active=True)
+                    wc = WorkCenter(name=name, code=code, description=desc, traveler_type=wc_type, sort_order=idx + 1, is_active=True)
                     db.add(wc)
                     count += 1
             db.commit()

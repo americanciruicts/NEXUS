@@ -13,6 +13,8 @@ import {
   PencilIcon,
   TrashIcon,
   XMarkIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import {
   PCB_ASSEMBLY_WORK_CENTERS,
@@ -27,6 +29,7 @@ interface WorkCenterDB {
   code: string;
   description: string;
   traveler_type: string | null;
+  sort_order: number;
   is_active: boolean;
 }
 
@@ -97,13 +100,14 @@ export default function WorkCenterManagementPage() {
     const staticItems: WorkCenterDB[] = [];
     let idCounter = 1;
     Object.entries(STATIC_DATA).forEach(([type, items]) => {
-      items.forEach((item) => {
+      items.forEach((item, idx) => {
         staticItems.push({
           id: idCounter++,
           name: item.name,
           code: `${type}_${item.name.replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`,
           description: item.description,
           traveler_type: type,
+          sort_order: idx + 1,
           is_active: true,
         });
       });
@@ -169,6 +173,7 @@ export default function WorkCenterManagementPage() {
         wc.code.toLowerCase().includes(q)
       );
     }
+    filtered.sort((a, b) => a.sort_order - b.sort_order);
     setWorkCenters(filtered);
     setCurrentPage(1);
   }, [allWorkCenters, activeTab, searchTerm]);
@@ -274,6 +279,48 @@ export default function WorkCenterManagementPage() {
   const openDeleteModal = (wc: WorkCenterDB) => {
     setSelectedWC(wc);
     setIsDeleteModalOpen(true);
+  };
+
+  // Move work center up or down and renumber sequentially
+  const handleMove = async (wcId: number, direction: 'up' | 'down') => {
+    // Get the filtered list for the active tab sorted by sort_order
+    const tabItems = allWorkCenters
+      .filter(wc => wc.traveler_type === activeTab)
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    const currentIdx = tabItems.findIndex(wc => wc.id === wcId);
+    if (currentIdx < 0) return;
+    const swapIdx = direction === 'up' ? currentIdx - 1 : currentIdx + 1;
+    if (swapIdx < 0 || swapIdx >= tabItems.length) return;
+
+    // Swap in array
+    const newItems = [...tabItems];
+    [newItems[currentIdx], newItems[swapIdx]] = [newItems[swapIdx], newItems[currentIdx]];
+
+    // Renumber sequentially 1, 2, 3...
+    const reorderPayload = newItems.map((wc, idx) => ({ id: wc.id, sort_order: idx + 1 }));
+
+    // Optimistic update
+    const updatedAll = allWorkCenters.map(wc => {
+      const match = reorderPayload.find(r => r.id === wc.id);
+      return match ? { ...wc, sort_order: match.sort_order } : wc;
+    });
+    setAllWorkCenters(updatedAll);
+
+    // Save to backend
+    try {
+      const token = localStorage.getItem('nexus_token');
+      await fetch(`${API_BASE_URL}/work-centers-mgmt/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items: reorderPayload })
+      });
+    } catch {
+      toast.error('Failed to save order');
+    }
   };
 
   const tabCounts = TABS.map(tab => ({
@@ -393,27 +440,44 @@ export default function WorkCenterManagementPage() {
                   {/* Mobile Card View */}
                   <div className="block md:hidden">
                     <div className="divide-y divide-gray-200">
-                      {paginatedWCs.map((wc, index) => (
-                        <div key={wc.id} className="p-4 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
-                              {startIdx + index + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold text-gray-900">{wc.name}</div>
-                              <div className="text-sm text-gray-500 mt-0.5">{wc.description}</div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => openEditModal(wc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
-                                <PencilIcon className="h-4 w-4" />
-                              </button>
-                              <button onClick={() => openDeleteModal(wc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
+                      {paginatedWCs.map((wc, index) => {
+                        const globalIdx = startIdx + index;
+                        const isFirst = globalIdx === 0;
+                        const isLast = globalIdx === workCenters.length - 1;
+                        return (
+                          <div key={wc.id} className="p-4 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
+                                  {globalIdx + 1}
+                                </div>
+                                <div className="flex gap-0.5">
+                                  <button onClick={() => handleMove(wc.id, 'up')} disabled={isFirst}
+                                    className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
+                                    <ChevronUpIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button onClick={() => handleMove(wc.id, 'down')} disabled={isLast}
+                                    className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
+                                    <ChevronDownIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold text-gray-900">{wc.name}</div>
+                                <div className="text-sm text-gray-500 mt-0.5">{wc.description}</div>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEditModal(wc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                  <PencilIcon className="h-4 w-4" />
+                                </button>
+                                <button onClick={() => openDeleteModal(wc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                  <TrashIcon className="h-4 w-4" />
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -422,46 +486,72 @@ export default function WorkCenterManagementPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
-                          <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider w-16">#</th>
+                          <th className="px-4 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider w-20">#</th>
+                          <th className="px-4 py-4 text-center text-xs font-extrabold text-white uppercase tracking-wider w-20">Order</th>
                           <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
                           <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Description</th>
                           <th className="px-6 py-4 text-right text-xs font-extrabold text-white uppercase tracking-wider w-32">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {paginatedWCs.map((wc, index) => (
-                          <tr key={wc.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
-                                {startIdx + index + 1}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="text-sm font-semibold text-gray-900">{wc.name}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="text-sm text-gray-600">{wc.description}</span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => openEditModal(wc)}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                  title="Edit"
-                                >
-                                  <PencilIcon className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => openDeleteModal(wc)}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete"
-                                >
-                                  <TrashIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {paginatedWCs.map((wc, index) => {
+                          const globalIdx = startIdx + index;
+                          const isFirst = globalIdx === 0;
+                          const isLast = globalIdx === workCenters.length - 1;
+                          return (
+                            <tr key={wc.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+                                  {globalIdx + 1}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => handleMove(wc.id, 'up')}
+                                    disabled={isFirst}
+                                    className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                                    title="Move Up"
+                                  >
+                                    <ChevronUpIcon className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleMove(wc.id, 'down')}
+                                    disabled={isLast}
+                                    className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                                    title="Move Down"
+                                  >
+                                    <ChevronDownIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-6 py-3">
+                                <span className="text-sm font-semibold text-gray-900">{wc.name}</span>
+                              </td>
+                              <td className="px-6 py-3">
+                                <span className="text-sm text-gray-600">{wc.description}</span>
+                              </td>
+                              <td className="px-6 py-3 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => openEditModal(wc)}
+                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit"
+                                  >
+                                    <PencilIcon className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => openDeleteModal(wc)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete"
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
