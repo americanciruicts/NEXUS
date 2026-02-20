@@ -34,7 +34,7 @@ app = FastAPI(
     description="American Circuits Traveler Management System API",
     version="1.0.0",
     lifespan=lifespan,
-    redirect_slashes=False
+    redirect_slashes=True
 )
 
 # CORS middleware
