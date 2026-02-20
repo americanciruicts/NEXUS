@@ -1361,12 +1361,13 @@ export default function TravelerDetailPage() {
                   >
                     {isEditing ? (
                       <>
-                        <td className="border-r border-gray-300 px-3 py-3 text-center">
+                        <td className="border-r border-gray-300 px-2 py-2 text-center bg-yellow-50">
                           <input
                             type="number"
+                            min="1"
                             value={step.seq}
                             onChange={(e) => updateStep(index, 'seq', parseInt(e.target.value) || 0)}
-                            className="w-full border-2 border-gray-300 rounded px-3 py-2 text-center text-lg font-bold"
+                            className="w-16 border-2 border-yellow-500 rounded px-2 py-2 text-center text-lg font-bold bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                           />
                         </td>
                         <td className="border-r border-gray-300 px-1 py-1">
@@ -1399,13 +1400,24 @@ export default function TravelerDetailPage() {
                                       updateStep(index, 'workCenter', e.target.value);
                                     }
                                   }}
-                                  className="w-full border-2 border-blue-400 rounded-md px-2 py-2 text-sm md:text-base font-medium bg-white hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 transition-colors cursor-pointer overflow-hidden"
-                                  style={{ maxWidth: '100%' }}
+                                  className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                                  style={{
+                                    minHeight: '28px',
+                                    fontSize: '13px',
+                                    lineHeight: '1.2',
+                                    paddingTop: '4px',
+                                    paddingBottom: '4px',
+                                    width: '100%',
+                                    maxWidth: '100%',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden'
+                                  }}
                                 >
-                                  <option value="">Select Work Center...</option>
-                                  <option value="__CUSTOM__" className="font-bold">+ CUSTOM (Type Your Own)</option>
+                                  <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
+                                  <option value="__CUSTOM__" style={{ fontSize: '13px', fontWeight: 'bold' }}>+ CUSTOM (Type Your Own)</option>
                                   {dynamicWorkCenters.map(wc => (
-                                    <option key={wc.name} value={wc.name} title={wc.description}>{wc.name}</option>
+                                    <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
                                   ))}
                                 </select>
                               )}
@@ -1610,13 +1622,24 @@ export default function TravelerDetailPage() {
                                 updateStep(index, 'workCenter', e.target.value);
                               }
                             }}
-                            className="w-full border-2 border-blue-400 rounded-md px-2 py-2.5 text-sm font-medium bg-white hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 transition-colors cursor-pointer overflow-hidden"
-                            style={{ maxWidth: '100%' }}
+                            className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                            style={{
+                              minHeight: '28px',
+                              fontSize: '13px',
+                              lineHeight: '1.2',
+                              paddingTop: '4px',
+                              paddingBottom: '4px',
+                              width: '100%',
+                              maxWidth: '80vw',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden'
+                            }}
                           >
-                            <option value="">Select Work Center...</option>
-                            <option value="__CUSTOM__" className="font-bold">+ CUSTOM (Type Your Own)</option>
+                            <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
+                            <option value="__CUSTOM__" style={{ fontSize: '13px', fontWeight: 'bold' }}>+ CUSTOM (Type Your Own)</option>
                             {dynamicWorkCenters.map(wc => (
-                              <option key={wc.name} value={wc.name} title={wc.description}>{wc.name}</option>
+                              <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
                             ))}
                           </select>
                         )}
