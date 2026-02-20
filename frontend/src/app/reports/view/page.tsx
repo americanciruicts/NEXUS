@@ -523,7 +523,6 @@ function ReportViewContent() {
                       <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>WORK CENTER</th>
                       <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>OPERATOR</th>
                       <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>START TIME</th>
-                      <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>PAUSE TIME</th>
                       <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>END TIME</th>
                       <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '10%', wordWrap: 'break-word' }}>HOURS</th>
                     </tr>
@@ -546,16 +545,6 @@ function ReportViewContent() {
                           })}
                         </td>
                         <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                          {entry.pause_time ? new Date(entry.pause_time).toLocaleString('en-US', {
-                            month: '2-digit',
-                            day: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          }) : '-'}
-                        </td>
-                        <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
                           {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                             month: '2-digit',
                             day: '2-digit',
@@ -573,7 +562,7 @@ function ReportViewContent() {
                   </tbody>
                   <tfoot>
                     <tr style={{ background: 'linear-gradient(135deg, #e0e7ff 0%, #ffffff 100%)' }}>
-                      <td colSpan={5} style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#4338ca' }}>
+                      <td colSpan={4} style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#4338ca' }}>
                         TOTAL HOURS:
                       </td>
                       <td style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
@@ -626,16 +615,6 @@ function ReportViewContent() {
                           <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
                           <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true
-                            }) : '-'}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-gray-700 mb-1">Pause Time</label>
-                          <div className="text-sm bg-yellow-50 p-2 rounded text-center font-medium">
-                            {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', {
                               hour: '2-digit',
                               minute: '2-digit',
                               hour12: true
@@ -747,11 +726,10 @@ function ReportViewContent() {
                                 <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                                   <thead>
                                     <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '15%', wordWrap: 'break-word' }}>OPERATOR</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '25%', wordWrap: 'break-word' }}>START TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '25%', wordWrap: 'break-word' }}>PAUSE TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '25%', wordWrap: 'break-word' }}>END TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '10%', wordWrap: 'break-word' }}>HOURS</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -769,16 +747,6 @@ function ReportViewContent() {
                                             minute: '2-digit',
                                             hour12: true
                                           })}
-                                        </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                                          {entry.pause_time ? new Date(entry.pause_time).toLocaleString('en-US', {
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                            year: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            hour12: true
-                                          }) : '-'}
                                         </td>
                                         <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
@@ -840,16 +808,6 @@ function ReportViewContent() {
                                           <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
                                           <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
                                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
-                                              hour: '2-digit',
-                                              minute: '2-digit',
-                                              hour12: true
-                                            }) : '-'}
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <label className="block text-xs font-bold text-gray-700 mb-1">Pause Time</label>
-                                          <div className="text-sm bg-yellow-50 p-2 rounded text-center font-medium">
-                                            {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', {
                                               hour: '2-digit',
                                               minute: '2-digit',
                                               hour12: true
@@ -986,11 +944,10 @@ function ReportViewContent() {
                                 <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                                   <thead>
                                     <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '15%', wordWrap: 'break-word' }}>OPERATOR</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '25%', wordWrap: 'break-word' }}>START TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '25%', wordWrap: 'break-word' }}>PAUSE TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '25%', wordWrap: 'break-word' }}>END TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '10%', wordWrap: 'break-word' }}>HOURS</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1008,16 +965,6 @@ function ReportViewContent() {
                                             minute: '2-digit',
                                             hour12: true
                                           })}
-                                        </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                                          {entry.pause_time ? new Date(entry.pause_time).toLocaleString('en-US', {
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                            year: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            hour12: true
-                                          }) : '-'}
                                         </td>
                                         <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
@@ -1079,16 +1026,6 @@ function ReportViewContent() {
                                           <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
                                           <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
                                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
-                                              hour: '2-digit',
-                                              minute: '2-digit',
-                                              hour12: true
-                                            }) : '-'}
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <label className="block text-xs font-bold text-gray-700 mb-1">Pause Time</label>
-                                          <div className="text-sm bg-yellow-50 p-2 rounded text-center font-medium">
-                                            {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', {
                                               hour: '2-digit',
                                               minute: '2-digit',
                                               hour12: true
