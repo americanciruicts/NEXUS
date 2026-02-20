@@ -100,7 +100,6 @@ export default function TravelerDetailPage() {
 
   // Dynamic work centers from DB
   const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
-  const dynamicWCNames = dynamicWorkCenters.map(wc => wc.name);
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: number]: HTMLTableRowElement | null }>({});
@@ -1373,54 +1372,28 @@ export default function TravelerDetailPage() {
                         <td className="border-r border-gray-300 px-1 py-1">
                           <div className="flex flex-row items-center justify-between gap-2">
                             <div className="flex-1">
-                              {step.workCenter === '__CUSTOM__' || (step.workCenter && dynamicWCNames.length > 0 && !dynamicWCNames.includes(step.workCenter)) ? (
-                                <div className="flex gap-1">
-                                  <input
-                                    type="text"
-                                    value={step.workCenter === '__CUSTOM__' ? '' : step.workCenter}
-                                    onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                                    className="flex-1 border-2 border-blue-400 rounded-md px-2 py-2 text-sm md:text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                                    placeholder="Type custom work center name"
-                                  />
-                                  <button
-                                    onClick={() => updateStep(index, 'workCenter', dynamicWCNames[0] || '')}
-                                    className="px-2 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-sm md:text-base font-medium transition-colors"
-                                    title="Back to dropdown"
-                                  >
-                                    ↩
-                                  </button>
-                                </div>
-                              ) : (
-                                <select
-                                  value={step.workCenter}
-                                  onChange={(e) => {
-                                    if (e.target.value === '__CUSTOM__') {
-                                      updateStep(index, 'workCenter', '__CUSTOM__');
-                                    } else {
-                                      updateStep(index, 'workCenter', e.target.value);
-                                    }
-                                  }}
-                                  className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
-                                  style={{
-                                    minHeight: '28px',
-                                    fontSize: '13px',
-                                    lineHeight: '1.2',
-                                    paddingTop: '4px',
-                                    paddingBottom: '4px',
-                                    width: '100%',
-                                    maxWidth: '100%',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden'
-                                  }}
-                                >
-                                  <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
-                                  <option value="__CUSTOM__" style={{ fontSize: '13px', fontWeight: 'bold' }}>+ CUSTOM (Type Your Own)</option>
-                                  {dynamicWorkCenters.map(wc => (
-                                    <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
-                                  ))}
-                                </select>
-                              )}
+                              <select
+                                value={step.workCenter}
+                                onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
+                                className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                                style={{
+                                  minHeight: '28px',
+                                  fontSize: '13px',
+                                  lineHeight: '1.2',
+                                  paddingTop: '4px',
+                                  paddingBottom: '4px',
+                                  width: '100%',
+                                  maxWidth: '100%',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
+                                {dynamicWorkCenters.map(wc => (
+                                  <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
+                                ))}
+                              </select>
                             </div>
                             {step.id && stepQRCodes[step.id] && (
                               <img
@@ -1595,54 +1568,28 @@ export default function TravelerDetailPage() {
                     {isEditing && (
                       <div>
                         <label className="block text-xs font-bold text-gray-700 mb-1">Work Center</label>
-                        {step.workCenter === '__CUSTOM__' || (step.workCenter && dynamicWCNames.length > 0 && !dynamicWCNames.includes(step.workCenter)) ? (
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              value={step.workCenter === '__CUSTOM__' ? '' : step.workCenter}
-                              onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                              className="flex-1 border-2 border-blue-400 rounded-md px-3 py-2.5 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                              placeholder="Type custom work center name"
-                            />
-                            <button
-                              onClick={() => updateStep(index, 'workCenter', dynamicWCNames[0] || '')}
-                              className="px-3 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-base font-medium transition-colors"
-                              title="Back to dropdown"
-                            >
-                              ↩
-                            </button>
-                          </div>
-                        ) : (
-                          <select
-                            value={step.workCenter}
-                            onChange={(e) => {
-                              if (e.target.value === '__CUSTOM__') {
-                                updateStep(index, 'workCenter', '__CUSTOM__');
-                              } else {
-                                updateStep(index, 'workCenter', e.target.value);
-                              }
-                            }}
-                            className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
-                            style={{
-                              minHeight: '28px',
-                              fontSize: '13px',
-                              lineHeight: '1.2',
-                              paddingTop: '4px',
-                              paddingBottom: '4px',
-                              width: '100%',
-                              maxWidth: '80vw',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
-                            <option value="__CUSTOM__" style={{ fontSize: '13px', fontWeight: 'bold' }}>+ CUSTOM (Type Your Own)</option>
-                            {dynamicWorkCenters.map(wc => (
-                              <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
-                            ))}
-                          </select>
-                        )}
+                        <select
+                          value={step.workCenter}
+                          onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
+                          className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                          style={{
+                            minHeight: '28px',
+                            fontSize: '13px',
+                            lineHeight: '1.2',
+                            paddingTop: '4px',
+                            paddingBottom: '4px',
+                            width: '100%',
+                            maxWidth: '80vw',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
+                          {dynamicWorkCenters.map(wc => (
+                            <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
+                          ))}
+                        </select>
                       </div>
                     )}
 
