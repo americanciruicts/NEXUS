@@ -13,9 +13,20 @@ import {
   PencilIcon,
   TrashIcon,
   XMarkIcon,
-  ArrowUpIcon,
-  ArrowDownIcon,
 } from '@heroicons/react/24/outline';
+
+// Inline arrow SVGs - heroicons ArrowUp/ArrowDown fail to bundle in this project
+const ArrowUpSVG = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={className || "h-4 w-4"}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+  </svg>
+);
+
+const ArrowDownSVG = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={className || "h-4 w-4"}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+  </svg>
+);
 import {
   PCB_ASSEMBLY_WORK_CENTERS,
   PCB_WORK_CENTERS,
@@ -464,11 +475,11 @@ export default function WorkCenterManagementPage() {
                                 <div className="flex gap-0.5">
                                   <button onClick={() => handleMove(wc.id, 'up')} disabled={isFirst}
                                     className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
-                                    <ArrowUpIcon className="h-3.5 w-3.5" />
+                                    <ArrowUpSVG className="h-3.5 w-3.5" />
                                   </button>
                                   <button onClick={() => handleMove(wc.id, 'down')} disabled={isLast}
                                     className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
-                                    <ArrowDownIcon className="h-3.5 w-3.5" />
+                                    <ArrowDownSVG className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
                               </div>
@@ -523,7 +534,7 @@ export default function WorkCenterManagementPage() {
                                     className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 rounded-md disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                                     title="Move Up"
                                   >
-                                    <ArrowUpIcon className="h-4 w-4 stroke-2" />
+                                    <ArrowUpSVG className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => handleMove(wc.id, 'down')}
@@ -531,7 +542,7 @@ export default function WorkCenterManagementPage() {
                                     className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 rounded-md disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                                     title="Move Down"
                                   >
-                                    <ArrowDownIcon className="h-4 w-4 stroke-2" />
+                                    <ArrowDownSVG className="h-4 w-4" />
                                   </button>
                                 </div>
                               </td>
