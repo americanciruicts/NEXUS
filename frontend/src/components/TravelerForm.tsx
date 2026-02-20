@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { TravelerType } from '@/types';
 import { getWorkCentersByType, WorkCenterItem } from '@/data/workCenters';
+import { toast } from 'sonner';
+import { API_BASE_URL } from '@/config/api';
 import {
   PrinterIcon,
-  QrCodeIcon,
   PlusIcon,
   TrashIcon
 } from '@heroicons/react/24/outline';
@@ -146,6 +147,14 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   const [selectedType, setSelectedType] = useState<TravelerType | ''>(initialData?.traveler_type as TravelerType || '');
   const [showForm, setShowForm] = useState(mode === 'edit' || false);
 
+  // Update selectedType when initialData loads (for edit mode)
+  useEffect(() => {
+    if (mode === 'edit' && initialData?.traveler_type) {
+      setSelectedType(initialData.traveler_type as TravelerType);
+      setShowForm(true);
+    }
+  }, [mode, initialData?.traveler_type]);
+
   // Split work order into prefix (auto-generated) and suffix (user-editable)
   const splitWorkOrder = (workOrder: string): { prefix: string; suffix: string } => {
     if (!workOrder) return { prefix: '', suffix: '' };
@@ -186,7 +195,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     toStock: String(initialData?.to_stock || ''),
     shipVia: String(initialData?.ship_via || ''),
     lot: '',
-    startDate: extractDateOnly(initialData?.created_at || initialData?.start_date),
+    startDate: extractDateOnly(initialData?.start_date || initialData?.created_at),
     dueDate: extractDateOnly(initialData?.due_date),
     shipDate: extractDateOnly(initialData?.ship_date),
     comments: String(initialData?.comments || '')
@@ -201,6 +210,15 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   const [autoPopulatedRevision, setAutoPopulatedRevision] = useState<string>('');
   const [wasAutoPopulated, setWasAutoPopulated] = useState(false);
 
+  // Dynamic work centers from DB (fetched per traveler type)
+  const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
+
+  // Auto-save draft state
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [draftId, setDraftId] = useState<number | null>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedDataRef = useRef<string>('');
+
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -212,9 +230,64 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     window.scrollTo(0, 0);
   }, []);
 
+  // Fetch work centers from DB when traveler type changes, fallback to static
+  useEffect(() => {
+    if (!selectedType) return;
+    const typeMap: Record<string, string> = { 'PCB_ASSEMBLY': 'PCB_ASSEMBLY', 'PCB': 'PCB', 'CABLE': 'CABLE', 'CABLES': 'CABLE', 'PURCHASING': 'PURCHASING' };
+    const dbType = typeMap[selectedType] || selectedType;
+    const fetchWC = async () => {
+      try {
+        const token = localStorage.getItem('nexus_token');
+        const response = await fetch(`${API_BASE_URL}/work-centers-mgmt/?traveler_type=${dbType}`, {
+          headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.length > 0) {
+            setDynamicWorkCenters(data.map((wc: any) => ({ name: wc.name, description: wc.description || '' })));
+            return;
+          }
+        }
+      } catch { /* fallback to static */ }
+      setDynamicWorkCenters(getWorkCentersByType(selectedType));
+    };
+    fetchWC();
+  }, [selectedType]);
+
+  // Fetch next sequential work order number on create mode
+  useEffect(() => {
+    if (mode === 'create' && !initialData?.work_order_number) {
+      const fetchNextWorkOrderNumber = async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.next_work_order_prefix) {
+              setWorkOrderPrefix(data.next_work_order_prefix);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch next work order number:', error);
+        }
+      };
+      fetchNextWorkOrderNumber();
+    }
+  }, [mode, initialData?.work_order_number]);
+
   // Sync workOrderNumber when prefix or suffix changes
   useEffect(() => {
-    const fullWorkOrder = workOrderSuffix ? `${workOrderPrefix}-${workOrderSuffix}` : workOrderPrefix;
+    let fullWorkOrder = '';
+    if (workOrderPrefix && workOrderSuffix) {
+      fullWorkOrder = `${workOrderPrefix}-${workOrderSuffix}`;
+    } else if (workOrderPrefix) {
+      fullWorkOrder = workOrderPrefix;
+    } else if (workOrderSuffix) {
+      fullWorkOrder = workOrderSuffix; // Don't create "-suffix" if no prefix
+    }
     setFormData(prev => ({ ...prev, workOrderNumber: fullWorkOrder }));
   }, [workOrderPrefix, workOrderSuffix]);
 
@@ -238,11 +311,193 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     prevStepsCountRef.current = newCount;
   }, [formSteps]);
 
+  // Auto-save draft functionality
+  useEffect(() => {
+    // Only auto-save in create mode, when form is shown, and job number exists
+    if (mode !== 'create' || !showForm || !formData.jobNumber.trim()) {
+      return;
+    }
+
+    // Create a snapshot of the current form data for comparison
+    const currentDataSnapshot = JSON.stringify({
+      formData,
+      formSteps,
+      selectedType,
+      isLeadFree,
+      isITAR,
+      includeLaborHours
+    });
+
+    // Don't save if data hasn't changed
+    if (currentDataSnapshot === lastSavedDataRef.current) {
+      return;
+    }
+
+    // Clear any pending auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Debounce auto-save by 3 seconds
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        setAutoSaveStatus('saving');
+
+        // Build full job number with compliance indicators
+        let fullJobNumber = formData.jobNumber;
+        if (isLeadFree) fullJobNumber += 'L';
+        if (isITAR) fullJobNumber += 'M';
+
+        // Map traveler type to backend enum
+        const travelerTypeMap: { [key: string]: string } = {
+          'PCB_ASSEMBLY': 'PCB_ASSEMBLY',
+          'PCB': 'PCB',
+          'CABLE': 'CABLE',
+          'PURCHASING': 'PURCHASING'
+        };
+
+        // Construct proper work order number from prefix and suffix
+        let fullWorkOrderNumber = '';
+        if (workOrderPrefix && workOrderSuffix) {
+          fullWorkOrderNumber = `${workOrderPrefix}-${workOrderSuffix}`;
+        } else if (workOrderPrefix) {
+          fullWorkOrderNumber = workOrderPrefix;
+        } else if (workOrderSuffix) {
+          fullWorkOrderNumber = workOrderSuffix;
+        } else {
+          fullWorkOrderNumber = formData.workOrderNumber || fullJobNumber;
+        }
+
+        const draftData = {
+          job_number: fullJobNumber,
+          work_order_number: fullWorkOrderNumber,
+          po_number: formData.poNumber || '',
+          traveler_type: travelerTypeMap[selectedType] || 'ASSY',
+          part_number: formData.partNumber || '',
+          part_description: formData.partDescription || '',
+          revision: formData.revision || 'A',
+          customer_revision: formData.customerRevision || '',
+          part_revision: formData.partRevision || '',
+          quantity: parseInt(formData.quantity.toString()) || 1,
+          customer_code: formData.customerCode || '',
+          customer_name: formData.customerName || '',
+          priority: formData.priority || 'NORMAL',
+          work_center: formSteps[0]?.workCenter || 'ASSEMBLY',
+          status: 'DRAFT',
+          is_active: false,
+          include_labor_hours: false,
+          notes: formData.notes || '',
+          specs: formData.specs || '',
+          specs_date: formData.specsDate || '',
+          from_stock: formData.fromStock || '',
+          to_stock: formData.toStock || '',
+          ship_via: formData.shipVia || '',
+          comments: formData.comments || '',
+          start_date: formData.startDate || '',
+          due_date: formData.dueDate || '',
+          ship_date: formData.shipDate || '',
+          process_steps: formSteps.map(step => ({
+            step_number: step.sequence,
+            operation: step.workCenter,
+            work_center_code: step.workCenter.replace(/\s+/g, '_').toUpperCase(),
+            instructions: step.instruction || '',
+            estimated_time: 30,
+            is_required: true,
+            quantity: step.quantity || null,
+            accepted: step.accepted || null,
+            rejected: step.rejected || null,
+            sign: step.assign || '',
+            completed_date: step.date || ''
+          }))
+        };
+
+        const token = localStorage.getItem('nexus_token');
+        const url = draftId
+          ? `${API_BASE_URL}/travelers/${draftId}`
+          : `${API_BASE_URL}/travelers/`;
+        const method = draftId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(draftData)
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (!draftId && result.id) {
+            setDraftId(result.id);
+          }
+          lastSavedDataRef.current = currentDataSnapshot;
+          setAutoSaveStatus('saved');
+          console.log('✅ Draft auto-saved successfully');
+
+          // Reset status to idle after 2 seconds
+          setTimeout(() => setAutoSaveStatus('idle'), 2000);
+        } else {
+          console.warn('⚠️ Auto-save failed:', response.status);
+          setAutoSaveStatus('error');
+          setTimeout(() => setAutoSaveStatus('idle'), 3000);
+        }
+      } catch (error) {
+        console.error('❌ Auto-save error:', error);
+        setAutoSaveStatus('error');
+        setTimeout(() => setAutoSaveStatus('idle'), 3000);
+      }
+    }, 3000); // 3 second debounce
+
+    // Cleanup
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [formData, formSteps, selectedType, isLeadFree, isITAR, includeLaborHours, mode, showForm, draftId, workOrderPrefix, workOrderSuffix]);
+
   const travelerTypes = [
-    { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', color: 'bg-blue-600' },
-    { value: 'PCB', label: 'PCB', color: 'bg-green-600' },
-    { value: 'CABLES', label: 'Cables', color: 'bg-purple-600' },
-    { value: 'PURCHASING', label: 'Purchasing', color: 'bg-orange-600' }
+    {
+      value: 'PCB_ASSEMBLY',
+      label: 'PCB Assembly',
+      description: 'Full board assembly with components',
+      gradient: 'from-blue-500 to-blue-700',
+      hoverGradient: 'from-blue-600 to-blue-800',
+      borderColor: 'border-blue-400',
+      bgAccent: 'bg-blue-400/20',
+      iconBg: 'bg-blue-400/30'
+    },
+    {
+      value: 'PCB',
+      label: 'PCB',
+      description: 'Bare circuit board fabrication',
+      gradient: 'from-green-500 to-green-700',
+      hoverGradient: 'from-green-600 to-green-800',
+      borderColor: 'border-green-400',
+      bgAccent: 'bg-green-400/20',
+      iconBg: 'bg-green-400/30'
+    },
+    {
+      value: 'CABLE',
+      label: 'Cables',
+      description: 'Cable and wire harness assembly',
+      gradient: 'from-purple-500 to-purple-700',
+      hoverGradient: 'from-purple-600 to-purple-800',
+      borderColor: 'border-purple-400',
+      bgAccent: 'bg-purple-400/20',
+      iconBg: 'bg-purple-400/30'
+    },
+    {
+      value: 'PURCHASING',
+      label: 'Purchasing',
+      description: 'Parts and components procurement',
+      gradient: 'from-orange-500 to-orange-700',
+      hoverGradient: 'from-orange-600 to-orange-800',
+      borderColor: 'border-orange-400',
+      bgAccent: 'bg-orange-400/20',
+      iconBg: 'bg-orange-400/30'
+    }
   ];
 
   useEffect(() => {
@@ -254,6 +509,43 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       if (initialData.id) {
         setTravelerDbId(Number(initialData.id));
       }
+
+      // Update formData with initialData values
+      setFormData({
+        jobNumber: String(initialData.job_number || ''),
+        workOrderNumber: String(initialData.work_order_number || ''),
+        partNumber: String(initialData.part_number || ''),
+        partDescription: String(initialData.part_description || ''),
+        revision: String(initialData.revision || ''),
+        customerRevision: String(initialData.customer_revision || ''),
+        partRevision: String(initialData.part_revision || ''),
+        quantity: Number(initialData.quantity) || 0,
+        customerCode: String(initialData.customer_code || ''),
+        customerName: String(initialData.customer_name || ''),
+        priority: (initialData.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+        notes: String(initialData.notes || ''),
+        poNumber: String(initialData.po_number || ''),
+        operation: '',
+        pageNumber: '1',
+        totalPages: '1',
+        drawingNumber: '',
+        specs: String(initialData.specs || ''),
+        specsDate: '',
+        fromStock: String(initialData.from_stock || ''),
+        toStock: String(initialData.to_stock || ''),
+        shipVia: String(initialData.ship_via || ''),
+        lot: '',
+        startDate: extractDateOnly(initialData.start_date || initialData.created_at),
+        dueDate: extractDateOnly(initialData.due_date),
+        shipDate: extractDateOnly(initialData.ship_date),
+        comments: String(initialData.comments || '')
+      });
+
+      // Update work order prefix and suffix
+      const workOrder = String(initialData.work_order_number || '');
+      const { prefix, suffix } = splitWorkOrder(workOrder);
+      setWorkOrderPrefix(prefix);
+      setWorkOrderSuffix(suffix);
 
       // Load labor hours and active status
       if (typeof initialData.include_labor_hours === 'boolean') {
@@ -326,7 +618,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
       const fetchLatestRevision = async () => {
         try {
-          const url = `http://acidashboard.aci.local:100/api/travelers/latest-revision?job_number=${encodeURIComponent(formData.jobNumber)}&work_order=${encodeURIComponent(formData.workOrderNumber)}`;
+          const url = `${API_BASE_URL}/travelers/latest-revision?job_number=${encodeURIComponent(formData.jobNumber)}&work_order=${encodeURIComponent(formData.workOrderNumber)}`;
           console.log('🌐 Fetching:', url);
 
           const response = await fetch(url, {
@@ -425,7 +717,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               setWasAutoPopulated(true);
 
               // Show notification to user
-              alert(`Auto-populated from revision ${oldRevision}!\n\nTraveler revision has been automatically incremented to: ${newRevision}`);
+              toast.info(`Auto-populated from revision ${oldRevision}! Revision incremented to: ${newRevision}`);
 
               // Keep page at top after auto-populating
               setTimeout(() => window.scrollTo(0, 0), 0);
@@ -557,37 +849,24 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
   const handlePrint = () => {
     if (!formData.jobNumber) {
-      alert('⚠️ Please enter a Job Number before printing the traveler.');
+      toast.warning('Please enter a Job Number before printing.');
       return;
     }
-    alert(`🖨️ Printing Traveler...\n\nJob Number: ${formData.jobNumber}\n\nThe traveler document is being prepared for printing.`);
+    toast.info(`Printing Traveler: ${formData.jobNumber}`);
     setTimeout(() => {
       window.print();
     }, 500);
   };
 
-  const generateBarcode = () => {
-    if (!formData.jobNumber) {
-      alert('⚠️ Please enter a Job Number first before generating a barcode.');
-      return;
-    }
-    const barcodeId = `TRV-${formData.jobNumber}-${Date.now()}`;
-    console.log('Generated barcode:', barcodeId);
-    alert(`✅ Barcode Generated Successfully!\n\n` +
-          `Job Number: ${formData.jobNumber}\n` +
-          `Barcode ID: ${barcodeId}\n\n` +
-          `This barcode can be printed and attached to the traveler for tracking purposes.`);
-  };
-
   const handleSubmit = async () => {
     if (!formData.jobNumber || !formData.workOrderNumber || !formData.partNumber) {
-      alert('⚠️ Missing Required Fields\n\nPlease fill in the following required fields:\n• Job Number\n• Work Order Number\n• Part Number');
+      toast.warning('Missing Required Fields: Please fill in Job Number, Work Order Number, Part Number');
       return;
     }
 
     // Check if form was auto-populated and revision hasn't been changed
     if (mode === 'create' && wasAutoPopulated && formData.revision === autoPopulatedRevision) {
-      alert('⚠️ Revision Not Changed\n\nThis traveler was auto-populated from revision: ' + autoPopulatedRevision + '\n\nYou MUST change the revision number before saving.\n\nPlease update the revision field to proceed.');
+      toast.warning('Revision Not Changed: This was auto-populated from revision ' + autoPopulatedRevision + '. You MUST change the revision before saving.');
       return;
     }
 
@@ -598,9 +877,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
     // Map traveler type to backend enum - ONLY 4 types
     const travelerTypeMap: { [key: string]: string } = {
-      'PCB_ASSEMBLY': 'ASSY',
+      'PCB_ASSEMBLY': 'PCB_ASSEMBLY',
       'PCB': 'PCB',
-      'CABLES': 'CABLE',
+      'CABLE': 'CABLE',
       'PURCHASING': 'PURCHASING'
     };
 
@@ -617,7 +896,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       job_number: fullJobNumber,
       work_order_number: formData.workOrderNumber || fullJobNumber,
       po_number: formData.poNumber || '',
-      traveler_type: travelerTypeMap[selectedType] || 'ASSY',
+      traveler_type: travelerTypeMap[selectedType] || 'PCB_ASSEMBLY',
       part_number: formData.partNumber,
       part_description: formData.partDescription || 'Assembly',
       revision: finalRevision,
@@ -628,7 +907,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       customer_name: formData.customerName || '',
       priority: formData.priority || 'NORMAL',
       work_center: formSteps[0]?.workCenter || 'ASSEMBLY',
-      is_active: isActive,
+      status: 'CREATED',
+      is_active: true,
       include_labor_hours: finalIncludeLaborHours,
       notes: formData.notes || '',
       specs: formData.specs || '',
@@ -637,6 +917,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       to_stock: formData.toStock || '',
       ship_via: formData.shipVia || '',
       comments: formData.comments || '',
+      start_date: formData.startDate || '',
       due_date: formData.dueDate || '',
       ship_date: formData.shipDate || formData.dueDate || '',
       process_steps: formSteps.map(step => ({
@@ -660,10 +941,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
     try {
       // Call API to create or update traveler
-      const url = mode === 'edit'
-        ? `http://acidashboard.aci.local:100/api/travelers/${travelerDbId || travelerId}`
-        : 'http://acidashboard.aci.local:100/api/travelers/';
-      const method = mode === 'edit' ? 'PUT' : 'POST';
+      // Use draftId if available (from auto-save), otherwise use existing ID for edit mode
+      const existingId = draftId || travelerDbId || (mode === 'edit' ? travelerId : null);
+      const url = existingId
+        ? `${API_BASE_URL}/travelers/${existingId}`
+        : `${API_BASE_URL}/travelers/`;
+      const method = existingId ? 'PUT' : 'POST';
 
       console.log(`Making ${method} request to ${url}`);
 
@@ -699,12 +982,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       if (isLeadFree) complianceInfo.push('🟢 Lead Free (RoHS)');
       if (isITAR) complianceInfo.push('⚠️ ITAR Controlled');
 
-      alert(`✅ Traveler ${action} Successfully!\n\n` +
-            `Job Number: ${fullJobNumber}\n` +
-            `Part Number: ${formData.partNumber}\n` +
-            `Traveler Type: ${selectedType?.replace('_', ' ')}\n` +
-            (complianceInfo.length > 0 ? `Compliance: ${complianceInfo.join(', ')}\n` : '') +
-            `\nThe traveler has been ${action.toLowerCase()} and is now available in the travelers list.`);
+      toast.success(`Traveler ${action} Successfully! Job: ${fullJobNumber} | Part: ${formData.partNumber}`);
 
       // Redirect to travelers list
       setTimeout(() => {
@@ -713,13 +991,13 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     } catch (error: unknown) {
       console.error('Error saving traveler:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert(`❌ Error ${mode === 'edit' ? 'Updating' : 'Creating'} Traveler\n\n${errorMessage}\n\nPlease check the console for more details.`);
+      toast.error(`Error ${mode === 'edit' ? 'Updating' : 'Creating'} Traveler: ${errorMessage}`);
     }
   };
 
   const handleSaveDraft = async () => {
     if (!formData.jobNumber) {
-      alert('⚠️ Job Number Required\n\nPlease enter a Job Number to save as draft.');
+      toast.warning('Job Number Required: Please enter a Job Number to save as draft.');
       return;
     }
 
@@ -728,20 +1006,32 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     if (isLeadFree) fullJobNumber += 'L';
     if (isITAR) fullJobNumber += 'M';
 
-    // Map traveler type to backend enum - ONLY 4 types
+    // Construct proper work order number from prefix and suffix
+    let fullWorkOrderNumber = '';
+    if (workOrderPrefix && workOrderSuffix) {
+      fullWorkOrderNumber = `${workOrderPrefix}-${workOrderSuffix}`;
+    } else if (workOrderPrefix) {
+      fullWorkOrderNumber = workOrderPrefix;
+    } else if (workOrderSuffix) {
+      fullWorkOrderNumber = workOrderSuffix;
+    } else {
+      fullWorkOrderNumber = formData.workOrderNumber || fullJobNumber;
+    }
+
+    // Map traveler type to backend enum
     const travelerTypeMap: { [key: string]: string } = {
-      'PCB_ASSEMBLY': 'ASSY',
+      'PCB_ASSEMBLY': 'PCB_ASSEMBLY',
       'PCB': 'PCB',
-      'CABLES': 'CABLE',
+      'CABLE': 'CABLE',
       'PURCHASING': 'PURCHASING'
     };
 
     // Prepare API payload with DRAFT status
     const travelerData = {
       job_number: fullJobNumber,
-      work_order_number: formData.workOrderNumber || fullJobNumber,
+      work_order_number: fullWorkOrderNumber,
       po_number: formData.poNumber || '',
-      traveler_type: travelerTypeMap[selectedType] || 'ASSY',
+      traveler_type: travelerTypeMap[selectedType] || 'PCB_ASSEMBLY',
       part_number: formData.partNumber || '',
       part_description: formData.partDescription || '',
       revision: formData.revision || 'A',
@@ -762,6 +1052,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       to_stock: formData.toStock || '',
       ship_via: formData.shipVia || '',
       comments: formData.comments || '',
+      start_date: formData.startDate || '',
       due_date: formData.dueDate || '',
       ship_date: formData.shipDate || '',
       process_steps: formSteps.map(step => ({
@@ -781,11 +1072,13 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
     try {
       const token = localStorage.getItem('nexus_token');
-      const url = mode === 'edit'
-        ? `http://acidashboard.aci.local:100/api/travelers/${travelerId}`
-        : 'http://acidashboard.aci.local:100/api/travelers/';
+      // Use existing draft ID if available (from auto-save), otherwise create new or edit existing
+      const existingId = draftId || (mode === 'edit' ? travelerId : null);
+      const url = existingId
+        ? `${API_BASE_URL}/travelers/${existingId}`
+        : `${API_BASE_URL}/travelers/`;
 
-      const method = mode === 'edit' ? 'PUT' : 'POST';
+      const method = existingId ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
         method: method,
@@ -805,10 +1098,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       const result = await response.json();
       console.log('Draft saved successfully:', result);
 
-      alert(`✅ Draft Saved Successfully!\n\n` +
-            `Job Number: ${fullJobNumber}\n` +
-            `Status: DRAFT\n\n` +
-            `Your draft has been saved and can be edited later.`);
+      // Update draftId if this was a new draft
+      if (!draftId && result.id) {
+        setDraftId(result.id);
+      }
+
+      toast.success(`Draft Saved Successfully! Job: ${fullJobNumber} | Status: DRAFT`);
 
       // Redirect to travelers list
       setTimeout(() => {
@@ -817,73 +1112,145 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     } catch (error: unknown) {
       console.error('Error saving draft:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      alert(`❌ Error Saving Draft\n\n${errorMessage}`);
+      toast.error(`Error Saving Draft: ${errorMessage}`);
     }
   };
 
   // If type not selected, show type selection
   if (!showForm) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-4 lg:p-8">
-        <div className="w-full">
-          {/* Header Section */}
-          <div className="text-center mb-10">
-            <div className="inline-block p-4 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full mb-4 shadow-lg">
-              <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+      <div className="h-[calc(100vh-6rem)] bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 flex flex-col items-center justify-center -m-4 sm:-m-4 rounded-xl overflow-hidden">
+        <div className="w-full max-w-3xl px-4">
+          {/* Header */}
+          <div className="mb-4 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Create New Traveler</h1>
-            <p className="text-lg text-gray-600">Select a traveler type to get started</p>
-          </div>
-
-          {/* Type Selection Cards */}
-          <div className="bg-white rounded-2xl shadow-lg border-2 border-indigo-100 p-8 mb-8">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center">
-                <svg className="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20 mb-3">
+                <svg className="w-7 h-7 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Traveler Types
-              </h2>
-              <p className="text-gray-600 ml-8">Choose the type that matches your manufacturing process</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {travelerTypes.map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => handleTypeSelect(type.value as TravelerType)}
-                  className="group relative overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg shadow-md hover:shadow-xl transform hover:scale-105 transition-all duration-300 p-5 text-left border border-indigo-300"
-                >
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500"></div>
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-2">
-                      <svg className="w-7 h-7 text-indigo-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <svg className="w-5 h-5 text-indigo-200 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                    <h3 className="text-base font-bold mb-1">{type.label}</h3>
-                    <p className="text-xs text-indigo-100 opacity-90">Click to create</p>
-                  </div>
-                </button>
-              ))}
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-1">Select Traveler Type</h1>
+              <p className="text-sm text-blue-200/80">Choose the type that matches your manufacturing process</p>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-center space-x-4">
+          {/* Cards Grid - 2x2 */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-3">
+            {/* PCB Assembly */}
+            <button
+              onClick={() => handleTypeSelect('PCB_ASSEMBLY' as TravelerType)}
+              className="group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">PCB Assembly</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Board assembly with components</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+
+            {/* PCB */}
+            <button
+              onClick={() => handleTypeSelect('PCB' as TravelerType)}
+              className="group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-emerald-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m3-2v2m3-2v2M9 19v2m3-2v2m3-2v2M3 9h2m-2 3h2m-2 3h2M19 9h2m-2 3h2m-2 3h2M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 9h3v3H8zM13 12h3v3h-3z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">PCB</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Bare circuit board fabrication</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+
+            {/* Cables */}
+            <button
+              onClick={() => handleTypeSelect('CABLE' as TravelerType)}
+              className="group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-violet-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-violet-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v4M10 3v4M7 17v4M10 17v4M5 7h7a1 1 0 011 1v1a1 1 0 01-1 1H5a1 1 0 01-1-1V8a1 1 0 011-1zM5 15h7a1 1 0 011 1v1a1 1 0 01-1 1H5a1 1 0 01-1-1v-1a1 1 0 011-1zM13 8.5c2 0 3 1.5 3 3.5s-1 3.5-3 3.5" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">Cables</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Wire harness assembly</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+
+            {/* Purchasing */}
+            <button
+              onClick={() => handleTypeSelect('PURCHASING' as TravelerType)}
+              className="group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-amber-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4M17 12h4M7 8v8h10V8H7z" />
+                    <line x1="9.5" y1="10" x2="9.5" y2="14" />
+                    <line x1="12" y1="10" x2="12" y2="14" />
+                    <line x1="14.5" y1="10" x2="14.5" y2="14" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">Purchasing</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Parts & components procurement</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* Back Button */}
+          <div className="text-center">
             <button
               onClick={() => window.history.back()}
-              className="group px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-2 border-2 border-gray-300"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors duration-200"
             >
-              <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
               </svg>
-              <span>Cancel</span>
+              Back to Travelers
             </button>
           </div>
         </div>
@@ -896,27 +1263,56 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
   // Main form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-2 sm:p-4 lg:p-6">
-      <div className="w-full max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
+      <div className="w-full max-w-7xl mx-auto overflow-x-hidden">
         {/* Header with Type Badge - NO PRINT */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg rounded-lg p-3 sm:p-4 md:p-6 mb-3 sm:mb-4 md:mb-6 border-2 border-indigo-300 no-print">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-2xl rounded-2xl p-4 sm:p-5 md:p-8 mb-3 sm:mb-4 md:mb-6 no-print relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:space-x-4">
               <span className="px-3 py-2 bg-white text-indigo-700 rounded-lg font-bold shadow-md text-sm md:text-base">
                 {travelerTypes.find(t => t.value === selectedType)?.label}
               </span>
               <div>
-                <h2 className="text-lg md:text-xl font-bold text-white">Traveler Form</h2>
-                <p className="text-xs md:text-sm text-indigo-100">Fill in all required fields</p>
+                <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">Traveler Form</h2>
+                <p className="text-sm text-blue-200/80 mt-0.5">Fill in all required fields</p>
               </div>
             </div>
             <button
               onClick={() => setShowForm(false)}
-              className="w-full sm:w-auto px-4 py-2 bg-white text-indigo-700 rounded-lg font-semibold hover:bg-indigo-50 transition-colors shadow-md text-sm md:text-base"
+              className="w-full sm:w-auto px-4 py-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-xl font-semibold transition-colors border border-white/20 text-sm md:text-base"
             >
               Change Type
             </button>
           </div>
+        </div>
+
+        {/* Action Buttons - Top of Form */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6 no-print">
+          <button
+            onClick={handlePrint}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <PrinterIcon className="h-5 w-5" />
+            <span>Print Traveler</span>
+          </button>
+
+          <button
+            onClick={handleSaveDraft}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <span>💾 Save as Draft</span>
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+          >
+            <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
+          </button>
         </div>
 
         {/* Print Header with Barcode - PRINT ONLY */}
@@ -941,19 +1337,19 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             {/* Center - Barcode with Details */}
             <div className="flex items-center justify-center">
               <div className="text-center">
-                <div className="border border-black bg-white inline-block" style={{padding: '0px', marginBottom: '0px', lineHeight: '0'}}>
-                  <svg width="15" height="8" style={{display: 'block', margin: '0'}}>
-                    <rect x="0.5" y="0.5" width="0.3" height="5" fill="black"/>
-                    <rect x="1" y="0.5" width="0.2" height="5" fill="black"/>
-                    <rect x="1.5" y="0.5" width="0.4" height="5" fill="black"/>
-                    <rect x="2.2" y="0.5" width="0.2" height="5" fill="black"/>
-                    <rect x="2.7" y="0.5" width="0.3" height="5" fill="black"/>
-                    <rect x="3.2" y="0.5" width="0.2" height="5" fill="black"/>
-                    <rect x="3.7" y="0.5" width="0.4" height="5" fill="black"/>
-                    <rect x="4.4" y="0.5" width="0.3" height="5" fill="black"/>
-                    <rect x="5" y="0.5" width="0.2" height="5" fill="black"/>
-                    <rect x="5.4" y="0.5" width="0.3" height="5" fill="black"/>
-                    <text x="7.5" y="7" fontSize="1.2" textAnchor="middle" fontWeight="bold">*{formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}*</text>
+                <div className="border border-black bg-white inline-block" style={{padding: '1px 2px', marginBottom: '0px', lineHeight: '0'}}>
+                  <svg width="28" height="10" style={{display: 'block', margin: '0'}}>
+                    <rect x="1" y="1" width="0.6" height="6" fill="black"/>
+                    <rect x="2" y="1" width="0.4" height="6" fill="black"/>
+                    <rect x="3" y="1" width="0.8" height="6" fill="black"/>
+                    <rect x="4.5" y="1" width="0.4" height="6" fill="black"/>
+                    <rect x="5.5" y="1" width="0.6" height="6" fill="black"/>
+                    <rect x="6.5" y="1" width="0.4" height="6" fill="black"/>
+                    <rect x="7.5" y="1" width="0.8" height="6" fill="black"/>
+                    <rect x="9" y="1" width="0.6" height="6" fill="black"/>
+                    <rect x="10" y="1" width="0.4" height="6" fill="black"/>
+                    <rect x="11" y="1" width="0.6" height="6" fill="black"/>
+                    <text x="14" y="8.5" fontSize="2" textAnchor="middle" fontWeight="bold">*{formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}*</text>
                   </svg>
                 </div>
                 <div style={{fontSize: '5px', fontWeight: 'bold', lineHeight: '1', marginTop: '1px'}}>Job: {formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}</div>
@@ -1008,7 +1404,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     // Auto-populate from existing traveler with same job number
                     if (value.length >= 3 && mode === 'create') {
                       try {
-                        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/`, {
+                        const response = await fetch(`${API_BASE_URL}/travelers/`, {
                           headers: {
                             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
                           }
@@ -1022,7 +1418,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
                           if (matchingTraveler) {
                             // Fetch full traveler details with steps
-                            const detailResponse = await fetch(`http://acidashboard.aci.local:100/api/travelers/${matchingTraveler.id}`, {
+                            const detailResponse = await fetch(`${API_BASE_URL}/travelers/${matchingTraveler.id}`, {
                               headers: {
                                 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
                               }
@@ -1184,16 +1580,6 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   placeholder="PO-12345"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Operation</label>
-                <input
-                  type="text"
-                  value={formData.operation}
-                  onChange={(e) => setFormData({...formData, operation: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                  placeholder="84"
-                />
-              </div>
             </div>
 
             {/* Right Column */}
@@ -1255,57 +1641,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   placeholder="REV A"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Drawing Number</label>
-                <input
-                  type="text"
-                  value={formData.drawingNumber}
-                  onChange={(e) => setFormData({...formData, drawingNumber: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                  placeholder="DWG-88424"
-                />
-              </div>
             </div>
           </div>
 
-          {/* Compliance and Options */}
+          {/* Options */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border-2 border-indigo-200 shadow-sm">
-            <div className="flex items-center space-x-4 p-3 bg-white rounded border border-gray-200">
-              <input
-                type="checkbox"
-                id="leadFree"
-                checked={isLeadFree}
-                onChange={(e) => setIsLeadFree(e.target.checked)}
-                className="w-5 h-5 text-green-600 border border-gray-300 rounded cursor-pointer"
-              />
-              <label htmlFor="leadFree" className="flex-1 cursor-pointer">
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-green-100 text-green-800 font-bold rounded text-xs md:text-sm">L</span>
-                  <div>
-                    <p className="font-semibold text-gray-900 text-sm md:text-base">Lead Free (RoHS)</p>
-                  </div>
-                </div>
-              </label>
-            </div>
-
-            <div className="flex items-center space-x-4 p-3 bg-white rounded border border-gray-200">
-              <input
-                type="checkbox"
-                id="itar"
-                checked={isITAR}
-                onChange={(e) => setIsITAR(e.target.checked)}
-                className="w-5 h-5 text-red-600 border border-gray-300 rounded cursor-pointer"
-              />
-              <label htmlFor="itar" className="flex-1 cursor-pointer">
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-purple-100 text-purple-800 font-bold rounded text-xs md:text-sm">M</span>
-                  <div>
-                    <p className="font-semibold text-gray-900 text-sm md:text-base">ITAR Controlled</p>
-                  </div>
-                </div>
-              </label>
-            </div>
-
             {/* Only show labor hours option for non-PCB travelers */}
             {selectedType !== 'PCB' && (
               <div className={`flex items-center space-x-4 p-3 rounded border-2 transition-all ${includeLaborHours ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200'}`}>
@@ -1317,7 +1657,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     const newValue = e.target.checked;
                     setIncludeLaborHours(newValue);
                     if (newValue) {
-                      alert('✅ Labor Hours Table will be included in this traveler!\n\nThe labor tracking section will appear at the end of the traveler document.');
+                      toast.success('Labor Hours Table will be included in this traveler!');
                     }
                   }}
                   className="w-5 h-5 text-blue-600 border border-gray-300 rounded cursor-pointer"
@@ -1342,9 +1682,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   const newValue = e.target.checked;
                   setIsActive(newValue);
                   if (newValue) {
-                    alert('✅ Traveler will be marked as ACTIVE\n\nThis traveler will appear in active travelers list.');
+                    toast.success('Traveler will be marked as ACTIVE');
                   } else {
-                    alert('⚠️ Traveler will be marked as INACTIVE\n\nThis traveler will be archived and hidden from main lists.');
+                    toast.warning('Traveler will be marked as INACTIVE');
                   }
                 }}
                 className="w-5 h-5 text-blue-600 border border-gray-300 rounded cursor-pointer"
@@ -1419,7 +1759,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Process Steps - Card-Based Layout */}
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 shadow-sm">
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 shadow-sm max-w-full overflow-hidden" style={{ maxWidth: '100%' }}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
               <h3 className="text-lg md:text-xl font-bold text-gray-900">Process Steps (Routing)</h3>
               <button
@@ -1431,17 +1771,18 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </button>
             </div>
 
-            <div className="space-y-3 md:space-y-4">
+            <div className="space-y-3 md:space-y-4 overflow-x-hidden w-full" style={{ maxWidth: '100%' }}>
               {formSteps.map((step, index) => (
                 <div
                   key={step.id}
                   ref={(el) => {
                     stepRowRefs.current[step.id] = el;
                   }}
-                  className="bg-white border-2 border-indigo-200 rounded-lg p-3 md:p-4 shadow-sm transition-colors duration-300"
+                  className="bg-white border-2 border-indigo-200 rounded-lg p-3 md:p-4 shadow-sm transition-colors duration-300 overflow-x-hidden max-w-full"
+                  style={{ maxWidth: '100%', width: '100%' }}
                 >
                   {/* Step Header */}
-                  <div className="mb-4 pb-3 border-b border-gray-200">
+                  <div className="mb-4 pb-3 border-b border-gray-200 overflow-hidden">
                     <div className="flex items-center justify-between mb-2">
                       <span className="bg-blue-600 text-white font-bold px-3 py-1.5 rounded text-sm">
                         Step {index + 1}
@@ -1475,20 +1816,31 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   </div>
 
                   {/* Step Fields - RESPONSIVE COLUMNS */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 overflow-x-hidden w-full" style={{ maxWidth: '100%' }}>
                     {/* Row 1: Work Center - Full Width on Mobile */}
-                    <div className="w-full">
-                      <div className="relative group">
-                        <label className="block text-xs md:text-sm font-bold text-gray-700 mb-2">Work Center</label>
+                    <div className="w-full overflow-x-hidden" style={{ maxWidth: '100%' }}>
+                      <label className="block text-xs font-bold text-gray-700 mb-2">Work Center</label>
+                      <div className="w-full overflow-hidden" style={{ maxWidth: '100%' }}>
                         <select
                           value={step.workCenter}
                           onChange={(e) => updateStep(step.id, 'workCenter', e.target.value)}
-                          className="w-full border-2 border-blue-500 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer appearance-none"
-                          style={{ minHeight: '42px' }}
+                          className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                          style={{
+                            minHeight: '28px',
+                            fontSize: '13px',
+                            lineHeight: '1.2',
+                            paddingTop: '4px',
+                            paddingBottom: '4px',
+                            width: '100%',
+                            maxWidth: '80vw',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden'
+                          }}
                         >
-                          <option value="">-- Select Work Center --</option>
-                          {getWorkCentersByType(selectedType).map(wc => (
-                            <option key={wc.name} value={wc.name} title={wc.description}>
+                          <option value="" style={{ fontSize: '13px' }}>Select Work Center...</option>
+                          {dynamicWorkCenters.map(wc => (
+                            <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>
                               {wc.name}
                             </option>
                           ))}
@@ -1496,14 +1848,14 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                         {step.workCenter && (
                           <div className="hidden md:group-hover:block absolute left-0 top-full mt-1 z-50 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-xl max-w-xs">
                             <div className="font-bold text-yellow-300 mb-1">{step.workCenter}</div>
-                            <div>{getWorkCentersByType(selectedType).find(wc => wc.name === step.workCenter)?.description || ''}</div>
+                            <div>{dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.description || ''}</div>
                           </div>
                         )}
                       </div>
                     </div>
 
                     {/* Row 2: Quantity, Rejected, Accepted, Sign, Date - RESPONSIVE */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 md:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 md:gap-3 overflow-hidden">
                       <div className="col-span-1">
                         <label className="block text-xs font-bold text-gray-700 mb-2 text-center">Quantity</label>
                         <input
@@ -1547,7 +1899,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           type="date"
                           value={step.date}
                           onChange={(e) => updateStep(step.id, 'date', e.target.value)}
-                          className="w-full border-2 border-gray-300 rounded px-2 py-2 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                          className="w-full border-2 border-gray-300 rounded px-1.5 md:px-2 py-2 text-xs md:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 overflow-hidden"
+                          style={{ maxWidth: '100%' }}
                         />
                       </div>
                     </div>
@@ -1599,55 +1952,45 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
+        {/* Auto-Save Status Indicator */}
+        {mode === 'create' && formData.jobNumber && (
+          <div className="flex items-center justify-end mb-2 px-1">
+            {autoSaveStatus === 'saving' && (
+              <span className="flex items-center text-sm text-blue-600">
+                <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Auto-saving draft...
+              </span>
+            )}
+            {autoSaveStatus === 'saved' && (
+              <span className="flex items-center text-sm text-green-600">
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                Draft saved automatically
+              </span>
+            )}
+            {autoSaveStatus === 'error' && (
+              <span className="flex items-center text-sm text-red-600">
+                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Auto-save failed
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Action Buttons - Bottom of Form */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200">
           <button
             onClick={handlePrint}
             className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
           >
             <PrinterIcon className="h-5 w-5" />
             <span>Print Traveler</span>
-          </button>
-
-          <button
-            onClick={generateBarcode}
-            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
-          >
-            <QrCodeIcon className="h-5 w-5" />
-            <span>Generate Barcode</span>
-          </button>
-
-          <button
-            onClick={handleSaveDraft}
-            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
-          >
-            <span>💾 Save as Draft</span>
-          </button>
-
-          <button
-            onClick={handleSubmit}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
-          >
-            <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
-          </button>
-        </div>
-
-        {/* Action Buttons - Bottom (Duplicate) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200">
-          <button
-            onClick={handlePrint}
-            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
-          >
-            <PrinterIcon className="h-5 w-5" />
-            <span>Print Traveler</span>
-          </button>
-
-          <button
-            onClick={generateBarcode}
-            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
-          >
-            <QrCodeIcon className="h-5 w-5" />
-            <span>Generate Barcode</span>
           </button>
 
           <button

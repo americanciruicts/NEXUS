@@ -40,6 +40,11 @@ class TimeEntryResponse(BaseModel):
     pause_duration: float
     is_completed: bool
     created_at: datetime
+    # Traveler information
+    work_order: Optional[str] = None
+    po_number: Optional[str] = None
+    part_number: Optional[str] = None
+    quantity: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -248,7 +253,7 @@ async def get_all_time_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all time entries"""
+    """Get all time entries with traveler information"""
 
     start_date = datetime.now() - timedelta(days=days)
 
@@ -263,7 +268,34 @@ async def get_all_time_entries(
             (TravelerTimeEntry.created_at >= start_date)
         ).order_by(TravelerTimeEntry.created_at.desc()).all()
 
-    return entries
+    # Batch-fetch all related travelers to avoid N+1 queries
+    traveler_ids = list(set(e.traveler_id for e in entries if e.traveler_id))
+    travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
+
+    enriched_entries = []
+    for entry in entries:
+        traveler = travelers.get(entry.traveler_id)
+        entry_dict = {
+            "id": entry.id,
+            "traveler_id": entry.traveler_id,
+            "job_number": entry.job_number,
+            "work_center": entry.work_center,
+            "operator_name": entry.operator_name,
+            "start_time": entry.start_time,
+            "pause_time": entry.pause_time,
+            "end_time": entry.end_time,
+            "hours_worked": entry.hours_worked,
+            "pause_duration": entry.pause_duration,
+            "is_completed": entry.is_completed,
+            "created_at": entry.created_at,
+            "work_order": traveler.work_order_number if traveler else None,
+            "po_number": traveler.po_number if traveler else None,
+            "part_number": traveler.part_number if traveler else None,
+            "quantity": traveler.quantity if traveler else None
+        }
+        enriched_entries.append(entry_dict)
+
+    return enriched_entries
 
 @router.get("/active", response_model=Optional[TimeEntryResponse])
 async def get_active_entry(

@@ -41,6 +41,11 @@ class LaborEntryResponse(BaseModel):
     work_center: Optional[str] = None
     sequence_number: Optional[int] = None
     created_at: datetime
+    # Traveler information
+    work_order: Optional[str] = None
+    po_number: Optional[str] = None
+    part_number: Optional[str] = None
+    quantity: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -330,11 +335,17 @@ async def get_all_labor_entries(
 
     labor_entries = db.query(LaborEntry).order_by(LaborEntry.created_at.desc()).all()
 
-    # Add employee names and job numbers
+    # Batch-fetch all related users and travelers to avoid N+1 queries
+    employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
+    traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
+
+    employees = {u.id: u for u in db.query(User).filter(User.id.in_(employee_ids)).all()} if employee_ids else {}
+    travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
+
     result = []
     for entry in labor_entries:
-        employee = db.query(User).filter(User.id == entry.employee_id).first()
-        traveler = db.query(Traveler).filter(Traveler.id == entry.traveler_id).first()
+        employee = employees.get(entry.employee_id)
+        traveler = travelers.get(entry.traveler_id)
 
         entry_dict = {
             "id": entry.id,
@@ -351,7 +362,11 @@ async def get_all_labor_entries(
             "is_completed": entry.is_completed,
             "work_center": entry.work_center,
             "sequence_number": entry.sequence_number,
-            "created_at": entry.created_at
+            "created_at": entry.created_at,
+            "work_order": traveler.work_order_number if traveler else None,
+            "po_number": traveler.po_number if traveler else None,
+            "part_number": traveler.part_number if traveler else None,
+            "quantity": traveler.quantity if traveler else None
         }
         result.append(LaborEntryResponse(**entry_dict))
 
@@ -414,17 +429,24 @@ async def get_my_labor_entries(
     if current_user.role.value == "ADMIN":
         labor_entries = db.query(LaborEntry).filter(
             LaborEntry.created_at >= start_date
-        ).all()
+        ).order_by(LaborEntry.created_at.desc()).all()
     else:
         labor_entries = db.query(LaborEntry).filter(
             (LaborEntry.employee_id == current_user.id) &
             (LaborEntry.created_at >= start_date)
-        ).all()
+        ).order_by(LaborEntry.created_at.desc()).all()
+
+    # Batch-fetch all related users and travelers to avoid N+1 queries
+    employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
+    traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
+
+    employees = {u.id: u for u in db.query(User).filter(User.id.in_(employee_ids)).all()} if employee_ids else {}
+    travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
 
     result = []
     for entry in labor_entries:
-        # Get the employee who created this entry
-        employee = db.query(User).filter(User.id == entry.employee_id).first()
+        employee = employees.get(entry.employee_id)
+        traveler = travelers.get(entry.traveler_id)
 
         entry_dict = {
             "id": entry.id,
@@ -432,6 +454,7 @@ async def get_my_labor_entries(
             "step_id": entry.step_id,
             "employee_id": entry.employee_id,
             "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
+            "job_number": traveler.job_number if traveler else None,
             "start_time": entry.start_time,
             "pause_time": entry.pause_time,
             "end_time": entry.end_time,
@@ -440,7 +463,11 @@ async def get_my_labor_entries(
             "is_completed": entry.is_completed,
             "work_center": entry.work_center,
             "sequence_number": entry.sequence_number,
-            "created_at": entry.created_at
+            "created_at": entry.created_at,
+            "work_order": traveler.work_order_number if traveler else None,
+            "po_number": traveler.po_number if traveler else None,
+            "part_number": traveler.part_number if traveler else None,
+            "quantity": traveler.quantity if traveler else None
         }
         result.append(LaborEntryResponse(**entry_dict))
 

@@ -7,7 +7,7 @@ import uvicorn
 
 from database import engine, get_db
 from models import Base
-from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, traveler_tracking, notifications, search
+from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, traveler_tracking, notifications, search, dashboard, work_centers
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -33,7 +33,8 @@ app = FastAPI(
     title="NEXUS API",
     description="American Circuits Traveler Management System API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # CORS middleware
@@ -56,6 +57,8 @@ app.include_router(barcodes.router, prefix="/barcodes", tags=["barcodes"])
 app.include_router(traveler_tracking.router, prefix="/tracking", tags=["traveler-tracking"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 app.include_router(search.router, prefix="/search", tags=["search"])
+app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+app.include_router(work_centers.router, prefix="/work-centers-mgmt", tags=["work-centers"])
 
 @app.get("/")
 async def root():

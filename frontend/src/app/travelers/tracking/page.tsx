@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import Layout from '@/components/layout/Layout';
 import Modal from '@/components/Modal';
 import { PlayIcon, StopIcon, ClockIcon, CheckCircleIcon, FunnelIcon, EyeIcon, TrashIcon, PencilIcon, DocumentTextIcon, UserIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { formatHoursDualCompact, formatHoursDual } from '@/utils/timeHelpers';
 import Autocomplete from '@/components/ui/Autocomplete';
-import DurationCalculator from '@/components/ui/DurationCalculator';
+import { API_BASE_URL } from '@/config/api';
+
 
 interface ActiveSession {
   id: number;
@@ -54,6 +56,7 @@ export default function TravelerTracking() {
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [trackingEntries, setTrackingEntries] = useState<TrackingEntry[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [pauseTime, setPauseTime] = useState<Date | null>(null);
@@ -95,6 +98,10 @@ export default function TravelerTracking() {
     end_time: '',
   });
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
   // Timer for active session
   useEffect(() => {
     if (activeSession && !isPaused) {
@@ -123,13 +130,18 @@ export default function TravelerTracking() {
     checkActiveSession();
   }, []);
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.jobNumber, filters.workCenter, filters.startDate, filters.endDate]);
+
   // Autocomplete fetch functions
   const fetchJobNumbers = async (query: string) => {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `http://acidashboard.aci.local:100/api/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
-        : 'http://acidashboard.aci.local:100/api/search/autocomplete/job-numbers?limit=10';
+        ? `${API_BASE_URL}/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
+        : `${API_BASE_URL}/search/autocomplete/job-numbers?limit=10`;
 
       const response = await fetch(url, {
         headers: {
@@ -157,8 +169,8 @@ export default function TravelerTracking() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `http://acidashboard.aci.local:100/api/search/autocomplete/work-centers?q=${encodeURIComponent(query)}&limit=10`
-        : 'http://acidashboard.aci.local:100/api/search/autocomplete/work-centers?limit=10';
+        ? `${API_BASE_URL}/search/autocomplete/work-centers?q=${encodeURIComponent(query)}&limit=10`
+        : `${API_BASE_URL}/search/autocomplete/work-centers?limit=10`;
 
       const response = await fetch(url, {
         headers: {
@@ -186,8 +198,8 @@ export default function TravelerTracking() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `http://acidashboard.aci.local:100/api/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
-        : 'http://acidashboard.aci.local:100/api/search/autocomplete/operators?limit=10';
+        ? `${API_BASE_URL}/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
+        : `${API_BASE_URL}/search/autocomplete/operators?limit=10`;
 
       const response = await fetch(url, {
         headers: {
@@ -215,7 +227,7 @@ export default function TravelerTracking() {
   const checkAutoStop5pm = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/tracking/check-auto-stop', {
+      const response = await fetch(`${API_BASE_URL}/tracking/check-auto-stop`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -236,7 +248,7 @@ export default function TravelerTracking() {
   const checkActiveSession = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/tracking/active', {
+      const response = await fetch(`${API_BASE_URL}/tracking/active`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -269,7 +281,7 @@ export default function TravelerTracking() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/tracking/?days=30', {
+      const response = await fetch(`${API_BASE_URL}/tracking/?days=30`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -279,7 +291,6 @@ export default function TravelerTracking() {
         const data = await response.json();
 
         const entries: TrackingEntry[] = data
-          .filter((entry: TimeEntryData) => entry.is_completed)
           .map((entry: TimeEntryData) => ({
             id: entry.id,
             job_number: entry.job_number,
@@ -287,7 +298,7 @@ export default function TravelerTracking() {
             sequence_number: undefined,
             operator_name: entry.operator_name,
             start_time: entry.start_time,
-            end_time: entry.end_time,
+            end_time: entry.end_time || '',
             pause_time: entry.pause_time,
             pause_duration: entry.pause_duration || 0,
             hours_worked: entry.hours_worked
@@ -327,7 +338,7 @@ export default function TravelerTracking() {
       const start = new Date();
 
       // Create tracking entry using the new independent API
-      const createResponse = await fetch('http://acidashboard.aci.local:100/api/tracking/', {
+      const createResponse = await fetch(`${API_BASE_URL}/tracking/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -378,7 +389,7 @@ export default function TravelerTracking() {
       const token = localStorage.getItem('nexus_token');
       const pauseTimeValue = new Date();
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/tracking/${activeSession.id}`, {
+      const response = await fetch(`${API_BASE_URL}/tracking/${activeSession.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -424,7 +435,7 @@ export default function TravelerTracking() {
       const token = localStorage.getItem('nexus_token');
       const endTime = new Date();
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/tracking/${activeSession.id}`, {
+      const response = await fetch(`${API_BASE_URL}/tracking/${activeSession.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -467,7 +478,7 @@ export default function TravelerTracking() {
 
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch(`http://acidashboard.aci.local:100/api/tracking/${entryToDelete.id}`, {
+      const response = await fetch(`${API_BASE_URL}/tracking/${entryToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -525,7 +536,7 @@ export default function TravelerTracking() {
 
       // Create a COMPLETED entry with both start and end times
       // This ensures NO timer is started for manual entries
-      const response = await fetch('http://acidashboard.aci.local:100/api/tracking/', {
+      const response = await fetch(`${API_BASE_URL}/tracking/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -591,7 +602,7 @@ export default function TravelerTracking() {
         return;
       }
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/tracking/${editEntryData.id}`, {
+      const response = await fetch(`${API_BASE_URL}/tracking/${editEntryData.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -690,34 +701,40 @@ export default function TravelerTracking() {
     }
   };
 
-  const deleteSelected = async () => {
+  const deleteSelected = () => {
     if (selectedEntries.length === 0) {
-      alert('❌ Please select entries to delete');
+      toast.error('Please select entries to delete');
       return;
     }
 
-    if (!confirm(`⚠️ WARNING: This will permanently delete ${selectedEntries.length} tracking entry/entries!\n\nThis action cannot be undone. Are you sure?`)) return;
+    const count = selectedEntries.length;
+    setConfirmModal({
+      title: 'Delete Tracking Entries',
+      message: `This will permanently delete ${count} tracking entry/entries! This action cannot be undone. Are you sure?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const token = localStorage.getItem('nexus_token');
+          await Promise.all(
+            selectedEntries.map(id =>
+              fetch(`${API_BASE_URL}/tracking/${id}`, {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token || 'mock-token'}`
+                }
+              })
+            )
+          );
 
-    try {
-      const token = localStorage.getItem('nexus_token');
-      await Promise.all(
-        selectedEntries.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/tracking/${id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token || 'mock-token'}`
-            }
-          })
-        )
-      );
-
-      alert(`✅ Deleted ${selectedEntries.length} entry/entries!`);
-      setSelectedEntries([]);
-      loadTrackingEntries();
-    } catch (error) {
-      console.error('Error deleting entries:', error);
-      alert('❌ Failed to delete entries');
-    }
+          toast.success(`Deleted ${count} entry/entries!`);
+          setSelectedEntries([]);
+          loadTrackingEntries();
+        } catch (error) {
+          console.error('Error deleting entries:', error);
+          toast.error('Failed to delete entries');
+        }
+      }
+    });
   };
 
   // Apply filters
@@ -737,26 +754,35 @@ export default function TravelerTracking() {
     return matchJobNumber && matchWorkCenter && matchStartDate && matchEndDate;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPerPage);
+
   return (
     <Layout fullWidth>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50">
         <div className="w-full space-y-4 p-2 sm:p-4 lg:p-6">
           {/* Compact Header */}
-          <div className="bg-white/80 backdrop-blur-lg shadow-lg rounded-xl p-4 sm:p-6 border border-gray-200">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 sm:p-2.5 rounded-lg">
-                  <ClockIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+            </div>
+            <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
+                  <ClockIcon className="w-7 h-7 text-cyan-300" />
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Traveler Tracking</h1>
-                  <p className="text-xs sm:text-sm text-gray-500">Work center time & location</p>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Traveler Tracking</h1>
+                  <p className="text-sm text-blue-200/80 mt-0.5">Work center time & location</p>
                 </div>
               </div>
               {user?.role === 'ADMIN' && (
                 <button
                   onClick={() => setIsManualEntryOpen(true)}
-                  className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 flex items-center space-x-2"
+                  className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white text-sm font-bold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 flex items-center space-x-2"
                 >
                   <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="hidden sm:inline">Manual Entry</span>
@@ -1182,21 +1208,25 @@ export default function TravelerTracking() {
           )}
 
           {/* Tracking History */}
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 overflow-visible">
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-4 sm:px-6 py-4 border-b border-gray-200 rounded-t-xl">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  Tracking History
-                </h2>
-                <span className="text-xs sm:text-sm font-semibold text-indigo-600 bg-indigo-100 px-2 sm:px-3 py-1 rounded-full">{filteredEntries.length}</span>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            {/* Table Header + Pagination */}
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10 pointer-events-none">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+              </div>
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xs sm:text-sm font-bold text-white">Tracking History</h2>
+                  <span className="text-xs font-semibold text-white bg-white/20 px-2 py-0.5 rounded-full">
+                    {filteredEntries.length}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Mobile Card View */}
-            <div className="block lg:hidden overflow-hidden rounded-b-xl">
+            <div className="block lg:hidden overflow-hidden">
               {isLoading ? (
                 <div className="p-8 text-center text-gray-500">Loading...</div>
               ) : filteredEntries.length === 0 ? (
@@ -1207,7 +1237,7 @@ export default function TravelerTracking() {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {filteredEntries.map((entry) => (
+                  {paginatedEntries.map((entry) => (
                     <div key={entry.id} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
@@ -1289,6 +1319,18 @@ export default function TravelerTracking() {
                           <p className="text-xs text-gray-500">Start Time</p>
                           <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
                         </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Pause Time</p>
+                          <p className="text-sm text-gray-900 mt-1">
+                            {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">End Time</p>
+                          <p className="text-sm text-gray-900 mt-1">
+                            {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1297,13 +1339,19 @@ export default function TravelerTracking() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden lg:block rounded-b-xl">
+            <div className="hidden lg:block">
               <div className="overflow-x-auto">
+              <div className="relative">
+              <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden pointer-events-none z-20">
+                <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
+                <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
+                <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
+              </div>
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
                     {user?.role === 'ADMIN' && (
-                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-3 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">
                         <input
                           type="checkbox"
                           checked={filteredEntries.length > 0 && filteredEntries.every(e => selectedEntries.includes(e.id))}
@@ -1312,16 +1360,16 @@ export default function TravelerTracking() {
                         />
                       </th>
                     )}
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Job</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Operator</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Work Center</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Start</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pause</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">End</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Hours</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Job</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Operator</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Start</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Pause</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">End</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Total Hours</th>
                     {user?.role === 'ADMIN' && (
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Actions</th>
                     )}
                   </tr>
                 </thead>
@@ -1340,7 +1388,7 @@ export default function TravelerTracking() {
                         <p className="text-sm text-gray-400 mt-1">Start tracking to see your work history</p>
                       </td>
                     </tr>
-                  ) : filteredEntries.map((entry) => {
+                  ) : paginatedEntries.map((entry) => {
                     // Calculate pause duration if available
                     let pauseDuration = 0;
                     if (entry.pause_time && entry.end_time) {
@@ -1436,8 +1484,46 @@ export default function TravelerTracking() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
             </div>
+
+            {/* Bottom Pagination */}
+            {filteredEntries.length > 0 && (
+              <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+                <div className="absolute inset-0 opacity-10 pointer-events-none">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+                </div>
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="pagination-select">
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span className="text-xs text-white/80">{startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredEntries.length)} of {filteredEntries.length}</span>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">«</button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">‹</button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let page: number;
+                      if (totalPages <= 5) page = i + 1;
+                      else if (currentPage <= 3) page = i + 1;
+                      else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
+                      else page = currentPage - 2 + i;
+                      return (
+                        <button key={page} onClick={() => setCurrentPage(page)} className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${currentPage === page ? 'bg-white text-indigo-700 shadow-sm' : 'bg-white/20 border border-white/30 text-white hover:bg-white/30'}`}>{page}</button>
+                      );
+                    })}
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">›</button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">»</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1681,12 +1767,32 @@ export default function TravelerTracking() {
             />
           </div>
 
-          <DurationCalculator
-            startTime={manualEntryData.start_time}
-            endTime={manualEntryData.end_time}
-            onStartTimeChange={(value) => setManualEntryData({ ...manualEntryData, start_time: value })}
-            onEndTimeChange={(value) => setManualEntryData({ ...manualEntryData, end_time: value })}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Start Time <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={manualEntryData.start_time}
+                onChange={(e) => setManualEntryData({ ...manualEntryData, start_time: e.target.value })}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                End Time <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={manualEntryData.end_time}
+                onChange={(e) => setManualEntryData({ ...manualEntryData, end_time: e.target.value })}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                required
+              />
+            </div>
+          </div>
         </div>
       </Modal>
 
@@ -1781,6 +1887,29 @@ export default function TravelerTracking() {
           </div>
         </div>
       </Modal>
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

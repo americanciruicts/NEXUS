@@ -10,8 +10,10 @@ class UserRole(enum.Enum):
 
 class TravelerType(enum.Enum):
     PCB = "PCB"
-    ASSY = "ASSY"
+    PCB_ASSEMBLY = "PCB_ASSEMBLY"
+    ASSY = "ASSY"  # Legacy alias
     CABLE = "CABLE"
+    CABLES = "CABLES"  # Legacy alias
     PURCHASING = "PURCHASING"
 
 class TravelerStatus(enum.Enum):
@@ -45,6 +47,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.OPERATOR)
     is_approver = Column(Boolean, default=False)
+    is_itar = Column(Boolean, default=False)  # ITAR access - can view travelers with 'M' in job number
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -61,6 +64,7 @@ class WorkCenter(Base):
     name = Column(String(100), nullable=False)
     code = Column(String(20), unique=True, nullable=False)
     description = Column(Text)
+    traveler_type = Column(String(20), nullable=True)  # PCB_ASSEMBLY, PCB, CABLE, PURCHASING
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -94,12 +98,14 @@ class Traveler(Base):
     part_number = Column(String(50), nullable=False)
     part_description = Column(String(200), nullable=False)
     revision = Column(String(20), nullable=False)
+    customer_revision = Column(String(50))  # Customer revision
     quantity = Column(Integer, nullable=False)
     customer_code = Column(String(20))
     customer_name = Column(String(100))
     priority = Column(Enum(Priority), default=Priority.NORMAL)
     work_center = Column(String(20), nullable=False)
     status = Column(Enum(TravelerStatus), default=TravelerStatus.CREATED)
+    previous_status = Column(String(20))  # Status before archiving, for restore
     is_active = Column(Boolean, default=True)  # Whether traveler is active in production
     notes = Column(Text)
     specs = Column(Text)  # Specifications
@@ -108,6 +114,7 @@ class Traveler(Base):
     to_stock = Column(String(100))  # To Stock location
     ship_via = Column(String(100))  # Shipping method
     comments = Column(Text)  # Comments section
+    start_date = Column(String(20))  # Start date (user-entered)
     due_date = Column(String(20))  # Due date
     ship_date = Column(String(20))  # Ship date
     include_labor_hours = Column(Boolean, default=False)  # Whether to include labor hours table
@@ -285,6 +292,7 @@ class NotificationType(enum.Enum):
     TRACKING_ENTRY_CREATED = "TRACKING_ENTRY_CREATED"
     TRACKING_ENTRY_UPDATED = "TRACKING_ENTRY_UPDATED"
     TRACKING_ENTRY_DELETED = "TRACKING_ENTRY_DELETED"
+    USER_LOGIN = "USER_LOGIN"
 
 class Notification(Base):
     __tablename__ = "notifications"

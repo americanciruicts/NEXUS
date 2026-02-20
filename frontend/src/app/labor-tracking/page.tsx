@@ -7,7 +7,8 @@ import { ClockIcon, UserIcon, DocumentTextIcon, PlayIcon, StopIcon, PencilIcon, 
 import { useAuth } from '@/context/AuthContext';
 import { formatHoursDualCompact, formatHoursDual } from '@/utils/timeHelpers';
 import Autocomplete from '@/components/ui/Autocomplete';
-import DurationCalculator from '@/components/ui/DurationCalculator';
+import { toast } from 'sonner';
+import { API_BASE_URL } from '@/config/api';
 
 interface LaborEntry {
   id: number;
@@ -81,6 +82,10 @@ export default function LaborTrackingPage() {
     end_time: '',
   });
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
 
@@ -95,8 +100,8 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `http://acidashboard.aci.local:100/api/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
-        : 'http://acidashboard.aci.local:100/api/search/autocomplete/job-numbers?limit=10';
+        ? `${API_BASE_URL}/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
+        : `${API_BASE_URL}/search/autocomplete/job-numbers?limit=10`;
 
       const response = await fetch(url, {
         headers: {
@@ -124,8 +129,8 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `http://acidashboard.aci.local:100/api/search/autocomplete/work-centers?q=${encodeURIComponent(query)}&limit=10`
-        : 'http://acidashboard.aci.local:100/api/search/autocomplete/work-centers?limit=10';
+        ? `${API_BASE_URL}/search/autocomplete/work-centers?q=${encodeURIComponent(query)}&limit=10`
+        : `${API_BASE_URL}/search/autocomplete/work-centers?limit=10`;
 
       const response = await fetch(url, {
         headers: {
@@ -153,8 +158,8 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `http://acidashboard.aci.local:100/api/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
-        : 'http://acidashboard.aci.local:100/api/search/autocomplete/operators?limit=10';
+        ? `${API_BASE_URL}/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
+        : `${API_BASE_URL}/search/autocomplete/operators?limit=10`;
 
       const response = await fetch(url, {
         headers: {
@@ -182,7 +187,7 @@ export default function LaborTrackingPage() {
   const checkAutoStop5pm = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/labor/check-auto-stop', {
+      const response = await fetch(`${API_BASE_URL}/labor/check-auto-stop`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -191,7 +196,7 @@ export default function LaborTrackingPage() {
       if (response.ok) {
         const data = await response.json();
         if (data.completed_count > 0) {
-          alert(`⏰ Auto-stopped ${data.completed_count} entries at 5pm cutoff`);
+          toast.warning(`Auto-stopped ${data.completed_count} entries at 5pm cutoff`);
         }
       }
     } catch (error) {
@@ -266,10 +271,20 @@ export default function LaborTrackingPage() {
     return true;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter.jobNumber, filter.workCenter, filter.operatorName, filter.startDate, filter.endDate]);
+
   const checkActiveEntry = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/labor/active', {
+      const response = await fetch(`${API_BASE_URL}/labor/active`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -304,7 +319,7 @@ export default function LaborTrackingPage() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/labor/my-entries?days=30', {
+      const response = await fetch(`${API_BASE_URL}/labor/my-entries?days=30`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -312,32 +327,8 @@ export default function LaborTrackingPage() {
 
       if (response.ok) {
         const data = await response.json();
-        // Fetch traveler info for each entry to get job number
-        const entriesWithTravelerInfo = await Promise.all(
-          data.map(async (entry: LaborEntry) => {
-            try {
-              const travelerResponse = await fetch(`http://acidashboard.aci.local:100/api/travelers/${entry.traveler_id}`, {
-                headers: {
-                  'Authorization': `Bearer ${token || 'mock-token'}`
-                }
-              });
-              if (travelerResponse.ok) {
-                const traveler = await travelerResponse.json();
-                return {
-                  ...entry,
-                  job_number: traveler.job_number,
-                  work_center: traveler.work_center || 'N/A'
-                };
-              }
-            } catch (err) {
-              console.error('Error fetching traveler info:', err);
-            }
-            return entry;
-          })
-        );
-
-        // Filter out entries with negative hours
-        const validEntries = entriesWithTravelerInfo.filter(entry => entry.hours_worked >= 0);
+        // Backend now returns job_number and work_center directly - no need for N+1 calls
+        const validEntries = data.filter((entry: LaborEntry) => entry.hours_worked >= 0);
         setLaborEntries(validEntries);
       } else {
         console.error('Failed to fetch labor entries');
@@ -351,7 +342,7 @@ export default function LaborTrackingPage() {
 
   const startTimer = async () => {
     if (!newEntry.job_number || !newEntry.work_center || !newEntry.operator_name) {
-      alert('❌ Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
 
@@ -359,14 +350,14 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
 
       // First, find the traveler by job number
-      const travelersResponse = await fetch('http://acidashboard.aci.local:100/api/travelers/', {
+      const travelersResponse = await fetch(`${API_BASE_URL}/travelers/`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
       });
 
       if (!travelersResponse.ok) {
-        alert('❌ Failed to fetch travelers');
+        toast.error('Failed to fetch travelers');
         return;
       }
 
@@ -377,7 +368,7 @@ export default function LaborTrackingPage() {
       );
 
       if (!traveler) {
-        alert(`❌ Job number ${newEntry.job_number} not found`);
+        toast.error(`Job number ${newEntry.job_number} not found`);
         return;
       }
 
@@ -391,7 +382,7 @@ export default function LaborTrackingPage() {
         description: description
       };
 
-      const response = await fetch('http://acidashboard.aci.local:100/api/labor/', {
+      const response = await fetch(`${API_BASE_URL}/labor/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -406,23 +397,23 @@ export default function LaborTrackingPage() {
         setStartTime(now);
         setElapsedTime(0);
         setIsTimerRunning(true);
-        alert('✅ Timer started!');
+        toast.success('Timer started!');
 
         // Reload entries to show new entry in table
         fetchLaborEntries();
       } else {
         const error = await response.json();
-        alert(`❌ Error: ${error.detail || 'Failed to start timer'}`);
+        toast.error(`Error: ${error.detail || 'Failed to start timer'}`);
       }
     } catch (error) {
       console.error('Error starting timer:', error);
-      alert('❌ Error starting timer');
+      toast.error('Error starting timer');
     }
   };
 
   const pauseTimer = async () => {
     if (!activeEntryId) {
-      alert('❌ No active timer found');
+      toast.error('No active timer found');
       return;
     }
 
@@ -430,7 +421,7 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
       const currentPauseTime = new Date();
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/labor/${activeEntryId}`, {
+      const response = await fetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -444,29 +435,29 @@ export default function LaborTrackingPage() {
       if (response.ok) {
         setIsPaused(true);
         setPauseTime(currentPauseTime);
-        alert('⏸️ Timer paused!');
+        toast.info('Timer paused!');
 
         // Reload entries to update table
         fetchLaborEntries();
       } else {
         const error = await response.json();
-        alert(`❌ Error: ${error.detail || 'Failed to pause timer'}`);
+        toast.error(`Error: ${error.detail || 'Failed to pause timer'}`);
       }
     } catch (error) {
       console.error('Error pausing timer:', error);
-      alert('❌ Error pausing timer');
+      toast.error('Error pausing timer');
     }
   };
 
   const resumeTimer = () => {
     setIsPaused(false);
     setPauseTime(null);
-    alert('▶️ Timer resumed!');
+    toast.info('Timer resumed!');
   };
 
   const stopTimer = async () => {
     if (!activeEntryId) {
-      alert('❌ No active timer found');
+      toast.error('No active timer found');
       return;
     }
 
@@ -474,7 +465,7 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
       const endTime = new Date();
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/labor/${activeEntryId}`, {
+      const response = await fetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -499,15 +490,15 @@ export default function LaborTrackingPage() {
           operator_name: '',
           date: new Date().toISOString().slice(0, 10),
         });
-        alert('✅ Timer stopped and entry saved!');
+        toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else {
         const error = await response.json();
-        alert(`❌ Error: ${error.detail || 'Failed to stop timer'}`);
+        toast.error(`Error: ${error.detail || 'Failed to stop timer'}`);
       }
     } catch (error) {
       console.error('Error stopping timer:', error);
-      alert('❌ Error stopping timer');
+      toast.error('Error stopping timer');
     }
   };
 
@@ -516,7 +507,7 @@ export default function LaborTrackingPage() {
 
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch(`http://acidashboard.aci.local:100/api/labor/${entryToDelete.id}`, {
+      const response = await fetch(`${API_BASE_URL}/labor/${entryToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -525,18 +516,18 @@ export default function LaborTrackingPage() {
       });
 
       if (response.ok) {
-        alert('✅ Entry deleted successfully!');
+        toast.success('Entry deleted successfully!');
         fetchLaborEntries();
         setIsDeleteModalOpen(false);
         setEntryToDelete(null);
       } else {
         const errorData = await response.json();
-        alert(`❌ Failed to delete entry: ${errorData.detail || 'Unknown error'}`);
+        toast.error(`Failed to delete entry: ${errorData.detail || 'Unknown error'}`);
         console.error('Delete failed:', errorData);
       }
     } catch (error) {
       console.error('Error deleting entry:', error);
-      alert('❌ Network error while deleting entry');
+      toast.error('Network error while deleting entry');
     }
   };
 
@@ -545,7 +536,7 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
       const endTime = new Date().toISOString();
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/labor/${entryId}`, {
+      const response = await fetch(`${API_BASE_URL}/labor/${entryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -558,15 +549,15 @@ export default function LaborTrackingPage() {
       });
 
       if (response.ok) {
-        alert('✅ Labor entry completed!');
+        toast.success('Labor entry completed!');
         fetchLaborEntries();
       } else {
         const error = await response.json();
-        alert(`❌ Error: ${error.detail || 'Failed to complete labor entry'}`);
+        toast.error(`Error: ${error.detail || 'Failed to complete labor entry'}`);
       }
     } catch (error) {
       console.error('Error completing labor entry:', error);
-      alert('❌ Error completing labor entry');
+      toast.error('Error completing labor entry');
     }
   };
 
@@ -596,7 +587,7 @@ export default function LaborTrackingPage() {
   // This creates a COMPLETED historical entry and does NOT start a timer
   const handleManualEntry = async () => {
     if (!manualEntryData.job_number || !manualEntryData.work_center || !manualEntryData.operator_name || !manualEntryData.start_time || !manualEntryData.end_time) {
-      alert('❌ Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
 
@@ -604,12 +595,12 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
 
       // Find traveler by job number
-      const travelersResponse = await fetch('http://acidashboard.aci.local:100/api/travelers/', {
+      const travelersResponse = await fetch(`${API_BASE_URL}/travelers/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!travelersResponse.ok) {
-        alert('❌ Failed to fetch travelers');
+        toast.error('Failed to fetch travelers');
         return;
       }
 
@@ -619,7 +610,7 @@ export default function LaborTrackingPage() {
       );
 
       if (!traveler) {
-        alert(`❌ Job number ${manualEntryData.job_number} not found`);
+        toast.error(`Job number ${manualEntryData.job_number} not found`);
         return;
       }
 
@@ -628,13 +619,13 @@ export default function LaborTrackingPage() {
 
       // Validate that end time is after start time
       if (new Date(endTimeISO) <= new Date(startTimeISO)) {
-        alert('❌ End time must be after start time');
+        toast.error('End time must be after start time');
         return;
       }
 
       // Create a COMPLETED entry with both start and end times
       // This ensures NO timer is started for manual entries
-      const response = await fetch('http://acidashboard.aci.local:100/api/labor/', {
+      const response = await fetch(`${API_BASE_URL}/labor/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -650,7 +641,7 @@ export default function LaborTrackingPage() {
       });
 
       if (response.ok) {
-        alert('✅ Manual entry created successfully!');
+        toast.success('Manual entry created successfully!');
         setIsManualEntryOpen(false);
         setManualEntryData({
           job_number: '',
@@ -663,11 +654,11 @@ export default function LaborTrackingPage() {
         fetchLaborEntries();
       } else {
         const error = await response.json();
-        alert(`❌ Error: ${error.detail || 'Failed to create entry'}`);
+        toast.error(`Error: ${error.detail || 'Failed to create entry'}`);
       }
     } catch (error) {
       console.error('Error creating manual entry:', error);
-      alert('❌ Error creating manual entry');
+      toast.error('Error creating manual entry');
     }
   };
 
@@ -678,7 +669,7 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/labor/${editEntryData.id}`, {
+      const response = await fetch(`${API_BASE_URL}/labor/${editEntryData.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -692,16 +683,16 @@ export default function LaborTrackingPage() {
       });
 
       if (response.ok) {
-        alert('✅ Entry updated successfully!');
+        toast.success('Entry updated successfully!');
         setIsEditModalOpen(false);
         fetchLaborEntries();
       } else {
         const error = await response.json();
-        alert(`❌ Error: ${error.detail || 'Failed to update entry'}`);
+        toast.error(`Error: ${error.detail || 'Failed to update entry'}`);
       }
     } catch (error) {
       console.error('Error updating entry:', error);
-      alert('❌ Error updating entry');
+      toast.error('Error updating entry');
     }
   };
 
@@ -776,17 +767,15 @@ export default function LaborTrackingPage() {
 
   const deleteSelected = async () => {
     if (selectedEntries.length === 0) {
-      alert('❌ Please select entries to delete');
+      toast.error('Please select entries to delete');
       return;
     }
-
-    if (!confirm(`⚠️ WARNING: This will permanently delete ${selectedEntries.length} labor entry/entries!\n\nThis action cannot be undone. Are you sure?`)) return;
 
     try {
       const token = localStorage.getItem('nexus_token');
       await Promise.all(
         selectedEntries.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/labor/${id}`, {
+          fetch(`${API_BASE_URL}/labor/${id}`, {
             method: 'DELETE',
             headers: {
               'Authorization': `Bearer ${token}`
@@ -795,12 +784,12 @@ export default function LaborTrackingPage() {
         )
       );
 
-      alert(`✅ Deleted ${selectedEntries.length} entry/entries!`);
+      toast.success(`Deleted ${selectedEntries.length} entry/entries!`);
       setSelectedEntries([]);
       fetchLaborEntries();
     } catch (error) {
       console.error('Error deleting entries:', error);
-      alert('❌ Failed to delete entries');
+      toast.error('Failed to delete entries');
     }
   };
 
@@ -809,21 +798,25 @@ export default function LaborTrackingPage() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50">
         <div className="w-full space-y-4 p-2 sm:p-4 lg:p-6">
           {/* Compact Header */}
-          <div className="bg-white/80 backdrop-blur-lg shadow-lg rounded-xl p-4 sm:p-6 border border-gray-200">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 sm:p-2.5 rounded-lg">
-                  <ClockIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+            </div>
+            <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
+                  <ClockIcon className="w-7 h-7 text-green-300" />
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Labor Tracking</h1>
-                  <p className="text-xs sm:text-sm text-gray-500">Real-time production hours</p>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Labor Tracking</h1>
+                  <p className="text-sm text-blue-200/80 mt-0.5">Real-time production hours</p>
                 </div>
               </div>
               {user?.role === 'ADMIN' && (
                 <button
                   onClick={() => setIsManualEntryOpen(true)}
-                  className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 flex items-center space-x-2"
+                  className="px-4 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white text-sm font-bold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 flex items-center space-x-2"
                 >
                   <DocumentTextIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span className="hidden sm:inline">Manual Entry</span>
@@ -1249,18 +1242,25 @@ export default function LaborTrackingPage() {
           )}
 
           {/* Labor Entries */}
-          <div className="bg-white/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 overflow-visible">
-            <div className="bg-gradient-to-r from-blue-50 to-emerald-50 px-4 sm:px-6 py-4 border-b border-gray-200 rounded-t-xl">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900">Labor Entries</h2>
-                <span className="text-xs sm:text-sm font-semibold text-emerald-600 bg-emerald-100 px-2 sm:px-3 py-1 rounded-full">
-                  {filteredEntries.length} {filteredEntries.length !== laborEntries.length && `of ${laborEntries.length}`}
-                </span>
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            {/* Table Header + Pagination */}
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10 pointer-events-none">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+              </div>
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xs sm:text-sm font-bold text-white">Labor Entries</h2>
+                  <span className="text-xs font-semibold text-white bg-white/20 px-2 py-0.5 rounded-full">
+                    {filteredEntries.length}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Mobile Card View */}
-            <div className="block lg:hidden overflow-hidden rounded-b-xl">
+            <div className="block lg:hidden overflow-hidden">
               {isLoading ? (
                 <div className="p-8 text-center text-gray-500">Loading...</div>
               ) : filteredEntries.length === 0 ? (
@@ -1277,7 +1277,7 @@ export default function LaborTrackingPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {filteredEntries.map((entry) => {
+                  {paginatedEntries.map((entry) => {
                     const parts = entry.description?.split(' - ') || [];
                     const workCenter = parts[0] || entry.work_center || 'N/A';
                     const operatorName = parts[1] || entry.employee_name || 'N/A';
@@ -1365,6 +1365,18 @@ export default function LaborTrackingPage() {
                             <p className="text-xs text-gray-500">Start Time</p>
                             <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
                           </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Pause Time</p>
+                            <p className="text-sm text-gray-900 mt-1">
+                              {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">End Time</p>
+                            <p className="text-sm text-gray-900 mt-1">
+                              {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1374,7 +1386,7 @@ export default function LaborTrackingPage() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden lg:block rounded-b-xl">
+            <div className="hidden lg:block">
               <div className="overflow-x-auto">
               {isLoading ? (
                 <div className="p-8 text-center text-gray-500">Loading...</div>
@@ -1391,11 +1403,17 @@ export default function LaborTrackingPage() {
                   </p>
                 </div>
               ) : (
+                <div className="relative">
+                <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden pointer-events-none z-20">
+                  <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
+                  <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
+                  <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
+                </div>
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
                       {user?.role === 'ADMIN' && (
-                        <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <th className="px-3 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">
                           <input
                             type="checkbox"
                             checked={filteredEntries.length > 0 && filteredEntries.every(e => selectedEntries.includes(e.id))}
@@ -1404,21 +1422,21 @@ export default function LaborTrackingPage() {
                           />
                         </th>
                       )}
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Job</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Operator</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Work Center</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Start</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pause</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">End</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Hours</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Job</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Operator</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Start</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Pause</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">End</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Total Hours</th>
                       {user?.role === 'ADMIN' && (
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                        <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Actions</th>
                       )}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredEntries.map((entry) => {
+                    {paginatedEntries.map((entry) => {
                       const parts = entry.description?.split(' - ') || [];
                       const workCenter = parts[0] || entry.work_center || 'N/A';
                       const operatorName = parts[1] || entry.employee_name || 'N/A';
@@ -1519,9 +1537,47 @@ export default function LaborTrackingPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               )}
               </div>
             </div>
+
+            {/* Bottom Pagination */}
+            {filteredEntries.length > 0 && (
+              <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+                <div className="absolute inset-0 opacity-10 pointer-events-none">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+                </div>
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="pagination-select">
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span className="text-xs text-white/80">{startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredEntries.length)} of {filteredEntries.length}</span>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">«</button>
+                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">‹</button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let page: number;
+                      if (totalPages <= 5) page = i + 1;
+                      else if (currentPage <= 3) page = i + 1;
+                      else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
+                      else page = currentPage - 2 + i;
+                      return (
+                        <button key={page} onClick={() => setCurrentPage(page)} className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${currentPage === page ? 'bg-white text-indigo-700 shadow-sm' : 'bg-white/20 border border-white/30 text-white hover:bg-white/30'}`}>{page}</button>
+                      );
+                    })}
+                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">›</button>
+                    <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">»</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1721,15 +1777,6 @@ export default function LaborTrackingPage() {
         }
       >
         <div className="space-y-4">
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 mb-4">
-            <p className="text-sm font-semibold text-amber-900">
-              ⚠️ Manual Entry Mode - For Backdating Only
-            </p>
-            <p className="text-xs text-amber-800 mt-1">
-              This feature is for admins to create historical entries when operators forgot to start/stop their timers.
-              No timer will be started - this creates a completed entry with your specified times.
-            </p>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1776,12 +1823,32 @@ export default function LaborTrackingPage() {
             />
           </div>
 
-          <DurationCalculator
-            startTime={manualEntryData.start_time}
-            endTime={manualEntryData.end_time}
-            onStartTimeChange={(value) => setManualEntryData({ ...manualEntryData, start_time: value })}
-            onEndTimeChange={(value) => setManualEntryData({ ...manualEntryData, end_time: value })}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Start Time <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={manualEntryData.start_time}
+                onChange={(e) => setManualEntryData({ ...manualEntryData, start_time: e.target.value })}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                End Time <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={manualEntryData.end_time}
+                onChange={(e) => setManualEntryData({ ...manualEntryData, end_time: e.target.value })}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                required
+              />
+            </div>
+          </div>
         </div>
       </Modal>
 
