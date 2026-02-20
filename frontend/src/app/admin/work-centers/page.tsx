@@ -49,7 +49,7 @@ const STATIC_DATA: Record<string, { name: string; description: string }[]> = {
 };
 
 export default function WorkCenterManagementPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>('PCB_ASSEMBLY');
   const [searchTerm, setSearchTerm] = useState('');
@@ -327,6 +327,16 @@ export default function WorkCenterManagementPage() {
     ...tab,
     count: allWorkCenters.filter(wc => wc.traveler_type === tab.key).length
   }));
+
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      </Layout>
+    );
+  }
 
   if (!isAdmin) {
     router.push('/dashboard');
