@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
 import {
   WrenchScrewdriverIcon,
-  MagnifyingGlassIcon,
   PlusIcon,
   PencilIcon,
   TrashIcon,
@@ -391,16 +390,13 @@ export default function WorkCenterManagementPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search work centers..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2.5 rounded-xl border-0 w-full sm:w-64 focus:ring-2 focus:ring-white/50 shadow-md text-sm"
-                  />
-                </div>
+                <input
+                  type="text"
+                  placeholder="Search work centers..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border-0 w-full sm:w-64 focus:ring-2 focus:ring-white/50 shadow-md text-sm"
+                />
                 <button
                   onClick={() => { setFormData({ name: '', code: '', description: '' }); setIsAddModalOpen(true); }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-100 text-indigo-700 rounded-xl font-bold shadow-lg transition-all text-sm"
