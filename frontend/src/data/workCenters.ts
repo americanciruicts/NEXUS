@@ -3,12 +3,19 @@
 export interface WorkCenterItem {
   name: string;
   description: string;
+  code?: string;
 }
 
 // PCB Assembly work centers with descriptions
 export const PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'ENGINEERING', description: 'Reverse engineering and design' },
+  { name: 'GENERATE CAD', description: 'Generate CAD files for manufacturing' },
   { name: 'VERIFY BOM', description: 'Verify no BOM or rev changes' },
+  { name: 'GENERATE GERBER', description: 'Generate Gerber files for PCB fabrication' },
+  { name: 'VERIFY GERBER', description: 'Verify Gerber files are correct' },
+  { name: 'MAKE SILKSCREEN', description: 'Create silkscreen artwork for PCB' },
+  { name: 'PROGRAM AOI', description: 'Program Automated Optical Inspection machine' },
+  { name: 'SMT PROGRAMING', description: 'Program SMT placement machine' },
   { name: 'KITTING', description: 'Pull parts from inventory to place in a kit for manufacturing' },
   { name: 'COMPONENT PREP', description: 'Pre-bending of parts or any necessary alteration of a part prior to production' },
   { name: 'PROGRAM PART', description: 'Parts that need to be programmed prior to SMT' },
@@ -39,6 +46,7 @@ export const PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'SEND TO ESS', description: 'Operator to sign and ship to ESS' },
   { name: 'RETURN FROM ESS', description: 'Operator to sign when received from ESS' },
   { name: 'VISUAL INSPECTION', description: 'Human visual inspection parts and coating, no AOI' },
+  { name: 'FINAL INSPECTION', description: 'Quality Control inspection before shipping' },
   { name: 'MANUAL ASSEMBLY', description: 'Put the assembly together by hand' },
   { name: 'BOX ASSEMBLY', description: 'Mechanical build consisting of the PCBA, hardware, and/or housings' },
   { name: 'HARDWARE', description: 'Adding screws, nuts, bolts, brackets, displays, etc. that need to be installed or individually packaged for shipment to customer' },
@@ -47,6 +55,14 @@ export const PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
 
 // PCB work centers
 export const PCB_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'ENGINEERING', description: 'Reverse engineering and design' },
+  { name: 'GENERATE CAD', description: 'Generate CAD files for manufacturing' },
+  { name: 'VERIFY BOM', description: 'Verify no BOM or rev changes' },
+  { name: 'GENERATE GERBER', description: 'Generate Gerber files for PCB fabrication' },
+  { name: 'VERIFY GERBER', description: 'Verify Gerber files are correct' },
+  { name: 'MAKE SILKSCREEN', description: 'Create silkscreen artwork for PCB' },
+  { name: 'PROGRAM AOI', description: 'Program Automated Optical Inspection machine' },
+  { name: 'SMT PROGRAMING', description: 'Program SMT placement machine' },
   { name: 'JOB NUMBER', description: 'ACI job number' },
   { name: 'NUMBER OF LAYERS', description: 'Quantity of different board layers such as signal, power, ground layers, etc.' },
   { name: 'BOARD SIZE', description: 'Physical dimensions of the board' },
@@ -61,24 +77,42 @@ export const PCB_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'GENERATE GERBER/PANELIZATION', description: 'Create a zip file for the PCB vendor that specifies the copper traces, solder mask, silkscreen, etc. along with a drill file and panelization' },
   { name: 'ORDER/PURCHASE PCB', description: 'Name of the PCB vendor and quantity needed' },
   { name: 'RECEIVING', description: 'Receive parts from vendors and put into ACI inventory' },
+  { name: 'MANUAL INSERTION', description: 'Install prepared parts before wave' },
   { name: 'VSCORE', description: 'Use a machine to break a panel into individual boards' },
+  { name: 'PRODUCT PICTURES', description: 'Take pictures of product before shipping' },
+  { name: 'LABELING', description: 'Place a label on the board per BOM instructions' },
   { name: 'FINAL INSPECTION', description: 'Sample inspection of the PCB artwork by Quality Control' },
   { name: 'SHIPPING', description: 'Send product to customer per packing request' }
 ];
 
 // Cables work centers
 export const CABLES_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'ENGINEERING', description: 'Reverse engineering and design' },
+  { name: 'GENERATE CAD', description: 'Generate CAD files for manufacturing' },
+  { name: 'VERIFY BOM', description: 'Verify no BOM or rev changes' },
+  { name: 'GENERATE GERBER', description: 'Generate Gerber files for fabrication' },
+  { name: 'VERIFY GERBER', description: 'Verify Gerber files are correct' },
+  { name: 'MAKE SILKSCREEN', description: 'Create silkscreen artwork' },
+  { name: 'PROGRAM AOI', description: 'Program Automated Optical Inspection machine' },
+  { name: 'SMT PROGRAMING', description: 'Program SMT placement machine' },
   { name: 'WIRE CUT', description: 'Cut wire to length needed' },
   { name: 'STRIP WIRE', description: 'Remove insulation to necessary length' },
   { name: 'HEAT SHRINK', description: 'Cut and shrink (heat shrink or flex loom)' },
   { name: 'TINNING', description: 'Dip wire end into solder' },
   { name: 'CRIMPING', description: 'Fold into ridges by pinching together' },
   { name: 'INSERT', description: 'Install pins into connector' },
-  { name: 'PULL TEST', description: 'Make sure crimps don\'t fall off' }
+  { name: 'PULL TEST', description: 'Make sure crimps don\'t fall off' },
+  { name: 'MANUAL INSERTION', description: 'Install prepared parts' },
+  { name: 'PRODUCT PICTURES', description: 'Take pictures of product before shipping' },
+  { name: 'LABELING', description: 'Place a label per instructions' },
+  { name: 'FINAL INSPECTION', description: 'Quality Control inspection before shipping' },
+  { name: 'SHIPPING', description: 'Send product to customer per packing request' }
 ];
 
 // Purchasing work centers
 export const PURCHASING_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'ENGINEERING', description: 'Reverse engineering and design' },
+  { name: 'MAKE BOM', description: 'Create or update Bill of Materials' },
   { name: 'PURCHASING', description: 'Procure parts in sufficient quantities for build at the lowest price' },
   { name: 'QUOTE', description: 'Estimation of material, labor, and PCB costs to build an assembly' },
   { name: 'INVENTORY', description: 'Add to inventory and track stock levels' }
@@ -92,6 +126,7 @@ export const getWorkCentersByType = (type: string): WorkCenterItem[] => {
     case 'PCB':
       return PCB_WORK_CENTERS;
     case 'CABLES':
+    case 'CABLE':
       return CABLES_WORK_CENTERS;
     case 'PURCHASING':
       return PURCHASING_WORK_CENTERS;

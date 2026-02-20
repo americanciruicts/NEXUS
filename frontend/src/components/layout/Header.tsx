@@ -8,6 +8,7 @@ import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronD
 import { useAuth } from '@/context/AuthContext';
 import GlobalSearch from '@/components/GlobalSearch';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '@/config/api';
 
 interface Notification {
   id: number;
@@ -58,7 +59,7 @@ export default function Header() {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch('http://acidashboard.aci.local:100/api/notifications/?limit=10', {
+      const response = await fetch(`${API_BASE_URL}/notifications/?limit=10`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -105,7 +106,7 @@ export default function Header() {
   const markAsRead = async (notificationId: number) => {
     try {
       const token = localStorage.getItem('nexus_token');
-      await fetch(`http://acidashboard.aci.local:100/api/notifications/${notificationId}`, {
+      await fetch(`${API_BASE_URL}/notifications/${notificationId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -122,7 +123,7 @@ export default function Header() {
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      await fetch('http://acidashboard.aci.local:100/api/notifications/mark-all-read', {
+      await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

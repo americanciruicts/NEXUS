@@ -61,6 +61,10 @@ export default function WorkCenterManagementPage() {
   const [selectedWC, setSelectedWC] = useState<WorkCenterDB | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '', description: '' });
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
   const isAdmin = user?.role === 'ADMIN';
 
   const fetchWorkCenters = async () => {
@@ -97,7 +101,7 @@ export default function WorkCenterManagementPage() {
         staticItems.push({
           id: idCounter++,
           name: item.name,
-          code: item.name.replace(/\s+/g, '_').toUpperCase(),
+          code: `${type}_${item.name.replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`,
           description: item.description,
           traveler_type: type,
           is_active: true,
@@ -122,7 +126,7 @@ export default function WorkCenterManagementPage() {
             },
             body: JSON.stringify({
               name: item.name,
-              code: `${type}_${item.name.replace(/\s+/g, '_').toUpperCase()}`,
+              code: `${type}_${item.name.replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`,
               description: item.description,
               traveler_type: type,
               is_active: true
@@ -166,6 +170,7 @@ export default function WorkCenterManagementPage() {
       );
     }
     setWorkCenters(filtered);
+    setCurrentPage(1);
   }, [allWorkCenters, activeTab, searchTerm]);
 
   const handleAdd = async () => {
@@ -175,7 +180,7 @@ export default function WorkCenterManagementPage() {
     }
     try {
       const token = localStorage.getItem('nexus_token');
-      const code = `${activeTab}_${formData.code || formData.name.replace(/\s+/g, '_').toUpperCase()}`;
+      const code = `${activeTab}_${(formData.code || formData.name).replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`;
       const response = await fetch(`${API_BASE_URL}/work-centers-mgmt/`, {
         method: 'POST',
         headers: {
@@ -378,105 +383,153 @@ export default function WorkCenterManagementPage() {
               </div>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block md:hidden">
-              <div className="divide-y divide-gray-200">
-                {workCenters.map((wc, index) => (
-                  <div key={wc.id} className="p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-900">{wc.name}</div>
-                        <div className="text-sm text-gray-500 mt-0.5">{wc.description}</div>
+            {(() => {
+              const totalPages = Math.ceil(workCenters.length / pageSize);
+              const startIdx = (currentPage - 1) * pageSize;
+              const paginatedWCs = workCenters.slice(startIdx, startIdx + pageSize);
+
+              return (
+                <>
+                  {/* Mobile Card View */}
+                  <div className="block md:hidden">
+                    <div className="divide-y divide-gray-200">
+                      {paginatedWCs.map((wc, index) => (
+                        <div key={wc.id} className="p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
+                              {startIdx + index + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-gray-900">{wc.name}</div>
+                              <div className="text-sm text-gray-500 mt-0.5">{wc.description}</div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => openEditModal(wc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                <PencilIcon className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => openDeleteModal(wc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
+                          <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider w-16">#</th>
+                          <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
+                          <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Description</th>
+                          <th className="px-6 py-4 text-right text-xs font-extrabold text-white uppercase tracking-wider w-32">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {paginatedWCs.map((wc, index) => (
+                          <tr key={wc.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+                                {startIdx + index + 1}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-semibold text-gray-900">{wc.name}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm text-gray-600">{wc.description}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => openEditModal(wc)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  <PencilIcon className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => openDeleteModal(wc)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {workCenters.length === 0 && (
+                    <div className="text-center py-12">
+                      <WrenchScrewdriverIcon className="mx-auto h-12 w-12 text-gray-400" />
+                      <h3 className="mt-2 text-sm font-semibold text-gray-900">No work centers found</h3>
+                      <p className="mt-1 text-sm text-gray-500">Add a new work center or try a different search term.</p>
+                    </div>
+                  )}
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+                      <div className="text-sm text-gray-600">
+                        Showing {startIdx + 1}-{Math.min(startIdx + pageSize, workCenters.length)} of {workCenters.length}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModal(wc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
-                          <PencilIcon className="h-4 w-4" />
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Previous
                         </button>
-                        <button onClick={() => openDeleteModal(wc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                          <TrashIcon className="h-4 w-4" />
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-lg border ${
+                              currentPage === page
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Next
                         </button>
                       </div>
                     </div>
+                  )}
+
+                  {/* Bottom Bar */}
+                  <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+                    <div className="absolute inset-0 opacity-10 pointer-events-none">
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+                      <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+                    </div>
+                    <div className="relative z-10 flex items-center justify-between">
+                      <span className="text-xs text-white/80">
+                        Showing {workCenters.length} work centers (Page {currentPage} of {totalPages || 1})
+                      </span>
+                      <span className="text-xs text-white/80 font-medium">
+                        {TABS.find(t => t.key === activeTab)?.label}
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
-                    <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider w-16">#</th>
-                    <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
-                    <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-4 text-right text-xs font-extrabold text-white uppercase tracking-wider w-32">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {workCenters.map((wc, index) => (
-                    <tr key={wc.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
-                          {index + 1}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-semibold text-gray-900">{wc.name}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-600">{wc.description}</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openEditModal(wc)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => openDeleteModal(wc)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {workCenters.length === 0 && (
-              <div className="text-center py-12">
-                <WrenchScrewdriverIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-semibold text-gray-900">No work centers found</h3>
-                <p className="mt-1 text-sm text-gray-500">Add a new work center or try a different search term.</p>
-              </div>
-            )}
-
-            {/* Bottom Bar */}
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
-              <div className="absolute inset-0 opacity-10 pointer-events-none">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
-                <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
-              </div>
-              <div className="relative z-10 flex items-center justify-between">
-                <span className="text-xs text-white/80">
-                  Showing {workCenters.length} work centers
-                </span>
-                <span className="text-xs text-white/80 font-medium">
-                  {TABS.find(t => t.key === activeTab)?.label}
-                </span>
-              </div>
-            </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -512,8 +565,9 @@ export default function WorkCenterManagementPage() {
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 />
               </div>
-              <div className="text-sm text-gray-500">
-                Type: <span className="font-semibold text-indigo-600">{TABS.find(t => t.key === activeTab)?.label}</span>
+              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg px-4 py-3">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Traveler Type</label>
+                <span className="text-lg font-extrabold text-indigo-700">{TABS.find(t => t.key === activeTab)?.label}</span>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

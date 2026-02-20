@@ -4,8 +4,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/layout/Layout';
 import { ArrowLeftIcon, PrinterIcon, CheckIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
-import { WORK_CENTERS } from '@/data/workCenters';
+import { getWorkCentersByType, WorkCenterItem } from '@/data/workCenters';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
+import { API_BASE_URL } from '@/config/api';
 
 // Helper function to format YYYY-MM-DD to MM/DD/YYYY without timezone conversion
 const formatDateDisplay = (dateStr: string): string => {
@@ -77,6 +79,7 @@ interface Traveler {
   comments: string;
   steps: ProcessStep[];
   laborEntries: LaborEntry[];
+  travelerType: string;
   isActive: boolean;
   includeLaborHours: boolean;
 }
@@ -93,6 +96,11 @@ export default function TravelerDetailPage() {
   const [editedTraveler, setEditedTraveler] = useState<Traveler | null>(null);
   const [stepQRCodes, setStepQRCodes] = useState<Record<number, string>>({});
   const [headerBarcode, setHeaderBarcode] = useState<string>('');
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
+  // Dynamic work centers from DB
+  const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
+  const dynamicWCNames = dynamicWorkCenters.map(wc => wc.name);
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: number]: HTMLTableRowElement | null }>({});
@@ -102,11 +110,35 @@ export default function TravelerDetailPage() {
     window.scrollTo(0, 0);
   }, []);
 
+  // Fetch dynamic work centers when traveler type is known
+  useEffect(() => {
+    if (!traveler?.travelerType) return;
+    const typeMap: Record<string, string> = { 'PCB_ASSEMBLY': 'PCB_ASSEMBLY', 'PCB': 'PCB', 'CABLE': 'CABLE', 'CABLES': 'CABLE', 'ASSY': 'PCB_ASSEMBLY', 'PURCHASING': 'PURCHASING' };
+    const dbType = typeMap[traveler.travelerType] || 'PCB_ASSEMBLY';
+    const fetchWC = async () => {
+      try {
+        const token = localStorage.getItem('nexus_token');
+        const response = await fetch(`${API_BASE_URL}/work-centers-mgmt/?traveler_type=${dbType}`, {
+          headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.length > 0) {
+            setDynamicWorkCenters(data.map((wc: Record<string, string>) => ({ name: wc.name, description: wc.description || '', code: wc.code || '' })));
+            return;
+          }
+        }
+      } catch { /* fallback */ }
+      setDynamicWorkCenters(getWorkCentersByType(traveler.travelerType));
+    };
+    fetchWC();
+  }, [traveler?.travelerType]);
+
   // Load traveler from API
   useEffect(() => {
     const fetchTraveler = async () => {
       try {
-        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${travelerId}`, {
+        const response = await fetch(`${API_BASE_URL}/travelers/${travelerId}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
           }
@@ -156,6 +188,7 @@ export default function TravelerDetailPage() {
             toStock: String(data.to_stock || ''),
             shipVia: String(data.ship_via || ''),
             comments: String(data.comments || ''),
+            travelerType: String(data.traveler_type || 'PCB_ASSEMBLY'),
             isActive: Boolean(data.is_active),
             includeLaborHours: Boolean(data.include_labor_hours),
             steps: (data.process_steps || []).map((step: Record<string, unknown>) => ({
@@ -203,7 +236,7 @@ export default function TravelerDetailPage() {
         const token = localStorage.getItem('nexus_token');
         console.log('Fetching header barcode for traveler', travelerDbId);
 
-        const response = await fetch(`http://acidashboard.aci.local:100/api/barcodes/traveler/${travelerDbId}`, {
+        const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}`, {
           headers: {
             'Authorization': `Bearer ${token || 'mock-token'}`
           }
@@ -228,7 +261,7 @@ export default function TravelerDetailPage() {
         const token = localStorage.getItem('nexus_token');
         console.log('Fetching QR codes for traveler', travelerDbId, 'with token:', token ? 'exists' : 'missing');
 
-        const response = await fetch(`http://acidashboard.aci.local:100/api/barcodes/traveler/${travelerDbId}/steps-qr`, {
+        const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`, {
           headers: {
             'Authorization': `Bearer ${token || 'mock-token'}`
           }
@@ -329,14 +362,14 @@ export default function TravelerDetailPage() {
         comments: editedTraveler.comments || '',
         is_active: editedTraveler.isActive !== undefined ? editedTraveler.isActive : true,
         include_labor_hours: editedTraveler.includeLaborHours !== undefined ? editedTraveler.includeLaborHours : false,
-        traveler_type: 'ASSY',
+        traveler_type: editedTraveler.travelerType || 'PCB_ASSEMBLY',
         priority: 'NORMAL',
         work_center: editedTraveler.steps.length > 0 ? (editedTraveler.steps[0].workCenter || 'ASSEMBLY') : 'ASSEMBLY',
         notes: '',
         process_steps: editedTraveler.steps.map(step => ({
           step_number: Number(step.seq) || 0,
           operation: step.workCenter || '',
-          work_center_code: (step.workCenter || '').replace(/\s+/g, '_').toUpperCase() || 'UNKNOWN',
+          work_center_code: dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.code || (step.workCenter || '').replace(/\s+/g, '_').toUpperCase() || 'UNKNOWN',
           instructions: step.instruction || '',
           estimated_time: 30,
           is_required: true,
@@ -352,7 +385,7 @@ export default function TravelerDetailPage() {
 
       console.log('Sending update payload:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${editedTraveler.travelerId}`, {
+      const response = await fetch(`${API_BASE_URL}/travelers/${editedTraveler.travelerId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -368,7 +401,7 @@ export default function TravelerDetailPage() {
       if (response.ok) {
         setTraveler(editedTraveler);
         setIsEditing(false);
-        alert('✅ Traveler updated successfully!');
+        toast.success('Traveler updated successfully!');
         // Reload to fetch fresh data from server
         window.location.reload();
       } else {
@@ -384,7 +417,7 @@ export default function TravelerDetailPage() {
     } catch (error) {
       console.error('Error updating traveler:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`❌ Error updating traveler\n\n${errorMessage}\n\nCheck the console for more details.`);
+      toast.error(`Error updating traveler: ${errorMessage}. Check the console for more details.`);
     }
   };
 
@@ -525,8 +558,8 @@ export default function TravelerDetailPage() {
       <style>{`
         * { font-family: Arial, Helvetica, sans-serif !important; }
 
-        /* Mobile responsive styles - hide less important columns on small screens */
-        @media (max-width: 768px) {
+        /* Mobile responsive styles - hide less important columns on small screens (but not when printing) */
+        @media screen and (max-width: 768px) {
           .mobile-hide {
             display: none !important;
           }
@@ -558,8 +591,8 @@ export default function TravelerDetailPage() {
           }
         }
 
-        /* Mobile: Hide labor table, show cards */
-        @media (max-width: 768px) {
+        /* Mobile: Hide labor table, show cards (but not when printing) */
+        @media screen and (max-width: 768px) {
           .labor-table-desktop {
             display: none !important;
           }
@@ -615,6 +648,20 @@ export default function TravelerDetailPage() {
           /* Override mobile-hide to show all columns when printing */
           .mobile-hide {
             display: table-cell !important;
+          }
+
+          /* Show desktop table and hide mobile cards for print */
+          .routing-table-desktop {
+            display: table !important;
+          }
+          .routing-cards-mobile {
+            display: none !important;
+          }
+          .labor-table-desktop {
+            display: table !important;
+          }
+          .labor-cards-mobile {
+            display: none !important;
           }
 
           @page {
@@ -815,59 +862,67 @@ export default function TravelerDetailPage() {
       `}</style>
       <div className={`${isEditing ? 'w-full' : 'max-w-7xl mx-auto'} p-4 lg:p-6 space-y-6`}>
         {/* Action Bar - Screen Only */}
-        <div className="sticky top-0 z-50 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 no-print bg-white shadow-md rounded-lg p-3 sm:p-4">
+        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-2 md:gap-3 no-print bg-white shadow-md rounded-lg p-3 md:p-4">
           <button
             onClick={() => router.back()}
-            className="flex items-center justify-center space-x-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
+            className="flex items-center justify-center md:justify-start space-x-2 px-3 md:px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm md:text-base font-medium"
           >
-            <ArrowLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-            <span>Back</span>
+            <ArrowLeftIcon className="h-4 md:h-5 w-4 md:w-5" />
+            <span>Back to Travelers</span>
           </button>
-          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2">
             {!isEditing ? (
               <>
                 {user?.role !== 'OPERATOR' && (
                   <>
                     <button
                       onClick={handlePrint}
-                      className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
+                      className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <PrinterIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                      <span>Print</span>
+                      <PrinterIcon className="h-4 md:h-5 w-4 md:w-5" />
+                      <span className="hidden sm:inline">Print</span>
+                      <span className="sm:hidden">Print</span>
                     </button>
                     <button
                       onClick={handleEdit}
-                      className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
+                      className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <PencilIcon className="h-4 md:h-5 w-4 md:w-5" />
                       <span>Edit</span>
                     </button>
                     <button
-                      onClick={async () => {
-                        if (!confirm(`Are you sure you want to delete traveler ${displayTraveler.jobNumber}?`)) return;
-                        try {
-                          const token = localStorage.getItem('nexus_token');
-                          const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${displayTraveler.travelerId}`, {
-                            method: 'DELETE',
-                            headers: {
-                              'Authorization': `Bearer ${token}`
+                      onClick={() => {
+                        setConfirmModal({
+                          title: 'Delete Traveler',
+                          message: `Are you sure you want to delete traveler ${displayTraveler.jobNumber}?`,
+                          onConfirm: async () => {
+                            setConfirmModal(null);
+                            try {
+                              const token = localStorage.getItem('nexus_token');
+                              const response = await fetch(`${API_BASE_URL}/travelers/${displayTraveler.travelerId}`, {
+                                method: 'DELETE',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`
+                                }
+                              });
+                              if (response.ok) {
+                                toast.success(`Traveler ${displayTraveler.jobNumber} deleted!`);
+                                router.push('/travelers');
+                              } else {
+                                toast.error('Failed to delete traveler');
+                              }
+                            } catch (error) {
+                              console.error('Error:', error);
+                              toast.error('Failed to delete traveler');
                             }
-                          });
-                          if (response.ok) {
-                            alert(`✅ Traveler ${displayTraveler.jobNumber} deleted!`);
-                            router.push('/travelers');
-                          } else {
-                            alert('❌ Failed to delete traveler');
                           }
-                        } catch (error) {
-                          console.error('Error:', error);
-                          alert('❌ Failed to delete traveler');
-                        }
+                        });
                       }}
-                      className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
+                      className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                      <span>Delete</span>
+                      <TrashIcon className="h-4 md:h-5 w-4 md:w-5" />
+                      <span className="hidden sm:inline">Delete</span>
+                      <span className="sm:hidden">Del</span>
                     </button>
                   </>
                 )}
@@ -876,17 +931,17 @@ export default function TravelerDetailPage() {
               <>
                 <button
                   onClick={handleCancel}
-                  className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
+                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <XMarkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <XMarkIcon className="h-4 md:h-5 w-4 md:w-5" />
                   <span>Cancel</span>
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center justify-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm sm:text-base whitespace-nowrap"
+                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <CheckIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span>Save</span>
+                  <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <span>Save Changes</span>
                 </button>
               </>
             )}
@@ -897,92 +952,174 @@ export default function TravelerDetailPage() {
         <div className="bg-white shadow-lg border-2 border-black overflow-x-auto" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
           <div className="min-w-0 lg:min-w-[800px]">
           {/* Header Section */}
-          <div className="bg-gray-100 border-b-2 border-black p-2 sm:p-3 md:p-4 print:p-0.5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-2 print:gap-1">
-              {/* Left */}
-              <div className="space-y-1 sm:space-y-0.5 print:space-y-0">
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Code:</span>
+          <div className="bg-gray-100 border-b-2 border-black p-2 sm:p-3 md:p-4 print:p-2">
+            {/* Mobile Layout - Barcode First */}
+            <div className="block md:hidden print:hidden mb-4">
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="text-base sm:text-lg font-black mb-2" style={{color: 'black', fontWeight: '900'}}>
+                  {isEditing ? (
+                    <div className="flex items-center gap-1 justify-center flex-wrap">
+                      <span className="text-sm sm:text-base">Job:</span>
+                      <input
+                        type="text"
+                        value={editedTraveler.jobNumber}
+                        onChange={(e) => updateField('jobNumber', e.target.value)}
+                        className="w-20 sm:w-24 border border-gray-300 rounded px-1 py-0.5 text-sm sm:text-base font-black"
+                        style={{color: 'black'}}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-base sm:text-lg font-bold">Job: {displayTraveler.jobNumber}</span>
+                  )}
+                </div>
+                <div className="border-2 border-black p-2 bg-white inline-block rounded">
+                  {headerBarcode ? (
+                    <img
+                      src={`data:image/png;base64,${headerBarcode}`}
+                      alt={`Barcode for ${displayTraveler.jobNumber}`}
+                      className="mx-auto w-32 h-10 sm:w-40 sm:h-12"
+                      style={{ objectFit: 'contain' }}
+                      onError={(e) => {
+                        console.error('Failed to load header barcode');
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center w-32 h-10 sm:w-40 sm:h-12">
+                      <span className="text-xs text-gray-400">Loading barcode...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Mobile Info - Organized by Sections */}
+              <div className="space-y-3 text-xs">
+                {/* Customer Information */}
+                <div className="bg-blue-50 border-l-4 border-blue-600 p-2 rounded">
+                  <div className="font-bold text-blue-800 mb-1 text-sm">Customer Information</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between"><span className="font-semibold">Code:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.customerCode} onChange={(e) => updateField('customerCode', e.target.value)} className="w-32 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.customerCode || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Name:</span> <span className="text-right" style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.customerName} onChange={(e) => updateField('customerName', e.target.value)} className="w-40 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.customerName || '-')}</span></div>
+                  </div>
+                </div>
+
+                {/* Order Information */}
+                <div className="bg-green-50 border-l-4 border-green-600 p-2 rounded">
+                  <div className="font-bold text-green-800 mb-1 text-sm">Order Information</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex justify-between"><span className="font-semibold">WO:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.workOrder} onChange={(e) => updateField('workOrder', e.target.value)} className="w-20 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.workOrder || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">PO:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.poNumber || ''} onChange={(e) => updateField('poNumber', e.target.value)} className="w-20 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.poNumber || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Quantity:</span> <span style={{color: 'black'}}>{isEditing ? <input type="number" value={editedTraveler.quantity} onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)} className="w-16 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : displayTraveler.quantity}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Traveler Rev:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.revision || '- -')}</span></div>
+                  </div>
+                </div>
+
+                {/* Part Information */}
+                <div className="bg-purple-50 border-l-4 border-purple-600 p-2 rounded">
+                  <div className="font-bold text-purple-800 mb-1 text-sm">Part Information</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between"><span className="font-semibold">Part No:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.partNumber} onChange={(e) => updateField('partNumber', e.target.value)} className="w-32 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.partNumber || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Description:</span> <span className="text-right truncate ml-2" style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.description} onChange={(e) => updateField('description', e.target.value)} className="w-40 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.description || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Cust. Rev:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editedTraveler.customerRevision || ''} onChange={(e) => updateField('customerRevision', e.target.value)} className="w-20 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.customerRevision || '- -')}</span></div>
+                  </div>
+                </div>
+
+                {/* Important Dates */}
+                <div className="bg-orange-50 border-l-4 border-orange-600 p-2 rounded">
+                  <div className="font-bold text-orange-800 mb-1 text-sm">Important Dates</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex justify-between"><span className="font-semibold">Start:</span> <span style={{color: 'black'}}>{isEditing ? <input type="date" value={editedTraveler.createdAt} onChange={(e) => updateField('createdAt', e.target.value)} className="w-28 border border-gray-300 rounded px-1 text-[10px]" style={{color: 'black'}}/> : (formatDateDisplay(displayTraveler.createdAt) || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Due:</span> <span style={{color: 'black'}}>{isEditing ? <input type="date" value={editedTraveler.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-28 border border-gray-300 rounded px-1 text-[10px]" style={{color: 'black'}}/> : (formatDateDisplay(displayTraveler.dueDate) || '-')}</span></div>
+                    <div className="col-span-2 flex justify-between"><span className="font-semibold">Ship Date:</span> <span style={{color: 'black'}}>{isEditing ? <input type="date" value={editedTraveler.shipDate} onChange={(e) => updateField('shipDate', e.target.value)} className="w-28 border border-gray-300 rounded px-1 text-[10px]" style={{color: 'black'}}/> : (formatDateDisplay(displayTraveler.shipDate) || '-')}</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop & Print Layout - Original 3 Columns */}
+            <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-start lg:items-center overflow-hidden">
+              {/* Left Column */}
+              <div className="space-y-1 md:space-y-1.5 lg:space-y-0.5 print:space-y-0.5 flex flex-col items-start overflow-hidden">
+                <div className="flex items-baseline gap-1 md:gap-2 print:gap-1 w-full overflow-hidden">
+                  <span className="font-bold text-xs md:text-sm min-w-[90px] md:min-w-[110px] lg:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Cust. Code:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.customerCode}
                       onChange={(e) => updateField('customerCode', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm md:text-base max-w-full"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="flex-1 text-xs print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.customerCode || '-'}</span>
+                    <span className="flex-1 text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.customerCode || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Name:</span>
+                <div className="flex items-baseline gap-1 md:gap-2 print:gap-1 w-full overflow-hidden">
+                  <span className="font-bold text-xs md:text-sm min-w-[90px] md:min-w-[110px] lg:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Cust. Name:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.customerName}
                       onChange={(e) => updateField('customerName', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm md:text-base max-w-full"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="flex-1 text-[10px] sm:text-xs truncate" style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
+                    <span className="flex-1 text-sm md:text-base print:text-[8px] truncate overflow-hidden" style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Work Order:</span>
+                <div className="flex items-baseline gap-1 md:gap-2 print:gap-1 w-full overflow-hidden">
+                  <span className="font-bold text-xs md:text-sm min-w-[90px] md:min-w-[110px] lg:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Work Order:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.workOrder}
                       onChange={(e) => updateField('workOrder', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm md:text-base text-left max-w-full"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.workOrder || '-'}</span>
+                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.workOrder || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">PO Number:</span>
+                <div className="flex items-baseline gap-1 md:gap-2 print:gap-1 w-full overflow-hidden">
+                  <span className="font-bold text-xs md:text-sm min-w-[90px] md:min-w-[110px] lg:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">PO Number:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.poNumber || ''}
                       onChange={(e) => updateField('poNumber', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm md:text-base text-left max-w-full"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.poNumber || '-'}</span>
+                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.poNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Quantity:</span>
+                <div className="flex items-baseline gap-1 md:gap-2 print:gap-1 w-full overflow-hidden">
+                  <span className="font-bold text-xs md:text-sm min-w-[90px] md:min-w-[110px] lg:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Quantity:</span>
                   {isEditing ? (
                     <input
                       type="number"
                       value={editedTraveler.quantity}
                       onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm md:text-base text-left max-w-full"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.quantity}</span>
+                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.quantity}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Traveler Rev:</span>
+                <div className="flex items-baseline gap-1 md:gap-2 print:gap-1 w-full overflow-hidden">
+                  <span className="font-bold text-xs md:text-sm min-w-[90px] md:min-w-[110px] lg:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Traveler Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.revision}
                       onChange={(e) => updateField('revision', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm md:text-base text-left max-w-full"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>
+                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>
                       {displayTraveler.revision ? displayTraveler.revision : '- -'}
                     </span>
                   )}
@@ -990,7 +1127,7 @@ export default function TravelerDetailPage() {
               </div>
 
               {/* Center - Barcode with Details */}
-              <div className="flex items-center justify-center my-4 md:my-0">
+              <div className="flex flex-col items-center justify-center">
                 <div className="text-center">
                   <div className="text-base sm:text-lg md:text-xl font-black mb-2 print:mb-0 print:text-[10px] print:leading-tight" style={{color: 'black', fontWeight: '900'}}>
                     {isEditing ? (
@@ -1028,93 +1165,93 @@ export default function TravelerDetailPage() {
                 </div>
               </div>
 
-              {/* Right */}
-              <div className="space-y-1 sm:space-y-0.5 print:space-y-0">
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Part No:</span>
+              {/* Right Column */}
+              <div className="space-y-1 sm:space-y-0.5 print:space-y-0.5 flex flex-col items-end">
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight">Part No:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.partNumber}
                       onChange={(e) => updateField('partNumber', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.partNumber || '-'}</span>
+                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Description:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight">Description:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.description}
                       onChange={(e) => updateField('description', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs break-words" style={{color: 'black'}}>{displayTraveler.description || '-'}</span>
+                    <span className="flex-1 text-right text-xs print:text-[8px] break-words" style={{color: 'black'}}>{displayTraveler.description || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Cust. Revision:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight">Cust. Revision:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTraveler.customerRevision || ''}
                       onChange={(e) => updateField('customerRevision', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
                       style={{color: 'black'}}
                       placeholder="Cust. Revision"
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>
+                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>
                       {displayTraveler.customerRevision ? displayTraveler.customerRevision : '- -'}
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Start Date:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight">Start Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
                       value={editedTraveler.createdAt}
                       onChange={(e) => updateField('createdAt', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
+                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Due Date:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight">Due Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
                       value={editedTraveler.dueDate}
                       onChange={(e) => updateField('dueDate', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
+                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-0.5">
-                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[60px] print:leading-tight">Ship Date:</span>
+                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
+                  <span className="font-bold text-xs sm:text-sm min-w-[90px] sm:min-w-[100px] print:text-[8px] print:min-w-[70px] print:leading-tight">Ship Date:</span>
                   {isEditing ? (
                     <input
                       type="date"
                       value={editedTraveler.shipDate}
                       onChange={(e) => updateField('shipDate', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
                       style={{color: 'black'}}
                     />
                   ) : (
-                    <span className="text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
+                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
                   )}
                 </div>
               </div>
@@ -1201,7 +1338,7 @@ export default function TravelerDetailPage() {
               <thead>
                 <tr className="bg-gray-200 border-b-2 border-gray-400">
                   <th className="border-r-2 border-gray-400 px-3 py-3 w-20 text-center font-bold text-base print:px-1 print:py-1 print:text-[10px]">SQ</th>
-                  <th className="border-r-2 border-gray-400 px-3 py-3 w-32 text-left font-bold text-base print:px-1 print:py-1 print:text-[10px]">WORK CENTER</th>
+                  <th className="border-r-2 border-gray-400 px-3 py-3 w-52 text-left font-bold text-base print:px-1 print:py-1 print:text-[10px]">WORK CENTER</th>
                   <th className="border-r-2 border-gray-400 px-3 py-3 text-left font-bold text-base print:px-1 print:py-1 print:text-[10px]">INSTRUCTIONS</th>
                   <th className="border-r-2 border-gray-400 px-3 py-3 w-20 text-center font-bold text-base print:px-1 print:py-1 print:text-[10px]">TIME</th>
                   <th className="border-r-2 border-gray-400 px-3 py-3 w-24 text-center font-bold text-base print:px-1 print:py-1 print:text-[10px]">QTY</th>
@@ -1235,18 +1372,18 @@ export default function TravelerDetailPage() {
                         <td className="border-r border-gray-300 px-1 py-1">
                           <div className="flex flex-row items-center justify-between gap-2">
                             <div className="flex-1">
-                              {step.workCenter === '__CUSTOM__' || (step.workCenter && !WORK_CENTERS.includes(step.workCenter as typeof WORK_CENTERS[number])) ? (
+                              {step.workCenter === '__CUSTOM__' || (step.workCenter && dynamicWCNames.length > 0 && !dynamicWCNames.includes(step.workCenter)) ? (
                                 <div className="flex gap-1">
                                   <input
                                     type="text"
                                     value={step.workCenter === '__CUSTOM__' ? '' : step.workCenter}
                                     onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                                    className="flex-1 border border-blue-400 rounded px-1 py-0.5 text-xs"
+                                    className="flex-1 border-2 border-blue-400 rounded-md px-2 py-2 text-sm md:text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                     placeholder="Type custom work center name"
                                   />
                                   <button
-                                    onClick={() => updateStep(index, 'workCenter', WORK_CENTERS[0])}
-                                    className="px-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs"
+                                    onClick={() => updateStep(index, 'workCenter', dynamicWCNames[0] || '')}
+                                    className="px-2 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-sm md:text-base font-medium transition-colors"
                                     title="Back to dropdown"
                                   >
                                     ↩
@@ -1262,12 +1399,13 @@ export default function TravelerDetailPage() {
                                       updateStep(index, 'workCenter', e.target.value);
                                     }
                                   }}
-                                  className="w-full border border-gray-300 rounded px-1 py-0.5 text-xs"
+                                  className="w-full border-2 border-blue-400 rounded-md px-2 py-2 text-sm md:text-base font-medium bg-white hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 transition-colors cursor-pointer overflow-hidden"
+                                  style={{ maxWidth: '100%' }}
                                 >
-                                  <option value="">Select...</option>
-                                  <option value="__CUSTOM__" className="font-bold bg-yellow-100">➕ CUSTOM (Type Your Own)</option>
-                                  {WORK_CENTERS.map(wc => (
-                                    <option key={wc} value={wc}>{wc}</option>
+                                  <option value="">Select Work Center...</option>
+                                  <option value="__CUSTOM__" className="font-bold">+ CUSTOM (Type Your Own)</option>
+                                  {dynamicWorkCenters.map(wc => (
+                                    <option key={wc.name} value={wc.name} title={wc.description}>{wc.name}</option>
                                   ))}
                                 </select>
                               )}
@@ -1445,18 +1583,18 @@ export default function TravelerDetailPage() {
                     {isEditing && (
                       <div>
                         <label className="block text-xs font-bold text-gray-700 mb-1">Work Center</label>
-                        {step.workCenter === '__CUSTOM__' || (step.workCenter && !WORK_CENTERS.includes(step.workCenter as typeof WORK_CENTERS[number])) ? (
+                        {step.workCenter === '__CUSTOM__' || (step.workCenter && dynamicWCNames.length > 0 && !dynamicWCNames.includes(step.workCenter)) ? (
                           <div className="flex gap-1">
                             <input
                               type="text"
                               value={step.workCenter === '__CUSTOM__' ? '' : step.workCenter}
                               onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                              className="flex-1 border border-blue-400 rounded px-2 py-1.5 text-sm"
+                              className="flex-1 border-2 border-blue-400 rounded-md px-3 py-2.5 text-base font-medium focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                               placeholder="Type custom work center name"
                             />
                             <button
-                              onClick={() => updateStep(index, 'workCenter', WORK_CENTERS[0])}
-                              className="px-2 bg-gray-500 hover:bg-gray-600 text-white rounded text-sm"
+                              onClick={() => updateStep(index, 'workCenter', dynamicWCNames[0] || '')}
+                              className="px-3 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-base font-medium transition-colors"
                               title="Back to dropdown"
                             >
                               ↩
@@ -1472,12 +1610,13 @@ export default function TravelerDetailPage() {
                                 updateStep(index, 'workCenter', e.target.value);
                               }
                             }}
-                            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                            className="w-full border-2 border-blue-400 rounded-md px-2 py-2.5 text-sm font-medium bg-white hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 transition-colors cursor-pointer overflow-hidden"
+                            style={{ maxWidth: '100%' }}
                           >
-                            <option value="">Select...</option>
-                            <option value="__CUSTOM__" className="font-bold bg-yellow-100">➕ CUSTOM (Type Your Own)</option>
-                            {WORK_CENTERS.map(wc => (
-                              <option key={wc} value={wc}>{wc}</option>
+                            <option value="">Select Work Center...</option>
+                            <option value="__CUSTOM__" className="font-bold">+ CUSTOM (Type Your Own)</option>
+                            {dynamicWorkCenters.map(wc => (
+                              <option key={wc.name} value={wc.name} title={wc.description}>{wc.name}</option>
                             ))}
                           </select>
                         )}
@@ -1678,9 +1817,9 @@ export default function TravelerDetailPage() {
                       const newValue = e.target.checked;
                       setEditedTraveler({ ...editedTraveler, includeLaborHours: newValue });
                       if (newValue) {
-                        alert('✅ Labor Hours Table will be included in this traveler!\n\nThe labor tracking section will appear at the end of the traveler document when printed.');
+                        toast.success('Labor Hours Table will be included in this traveler! The labor tracking section will appear at the end of the traveler document when printed.');
                       } else {
-                        alert('⚠️ Labor Hours Table will be removed from this traveler!\n\nThe labor tracking section will NOT appear in the printed document.');
+                        toast.warning('Labor Hours Table will be removed from this traveler! The labor tracking section will NOT appear in the printed document.');
                       }
                     }}
                     className="w-5 h-5 text-blue-600 border border-gray-300 rounded cursor-pointer"
@@ -1917,6 +2056,29 @@ export default function TravelerDetailPage() {
           </div>
         </div>
       </div>
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

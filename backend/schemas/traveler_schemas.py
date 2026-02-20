@@ -73,6 +73,7 @@ class TravelerBase(BaseModel):
     part_number: str = Field(..., max_length=50)
     part_description: str = Field(..., max_length=200)
     revision: str = Field(..., max_length=20)
+    customer_revision: Optional[str] = Field(None, max_length=50)
     quantity: int = Field(..., gt=0)
     customer_code: Optional[str] = Field(None, max_length=20)
     customer_name: Optional[str] = Field(None, max_length=100)
@@ -86,11 +87,13 @@ class TravelerBase(BaseModel):
     to_stock: Optional[str] = Field(None, max_length=100)
     ship_via: Optional[str] = Field(None, max_length=100)
     comments: Optional[str] = None
+    start_date: Optional[str] = Field(None, max_length=20)
     due_date: Optional[str] = Field(None, max_length=20)
     ship_date: Optional[str] = Field(None, max_length=20)
     include_labor_hours: bool = False
 
 class TravelerCreate(TravelerBase):
+    status: Optional[TravelerStatus] = None
     process_steps: List[ProcessStepCreate] = []
     manual_steps: List[ManualStepCreate] = []
 
@@ -102,6 +105,7 @@ class TravelerUpdate(BaseModel):
     part_number: Optional[str] = Field(None, max_length=50)
     part_description: Optional[str] = Field(None, max_length=200)
     revision: Optional[str] = Field(None, max_length=20)
+    customer_revision: Optional[str] = Field(None, max_length=50)
     quantity: Optional[int] = Field(None, gt=0)
     customer_code: Optional[str] = Field(None, max_length=20)
     customer_name: Optional[str] = Field(None, max_length=100)
@@ -116,6 +120,7 @@ class TravelerUpdate(BaseModel):
     to_stock: Optional[str] = Field(None, max_length=100)
     ship_via: Optional[str] = Field(None, max_length=100)
     comments: Optional[str] = None
+    start_date: Optional[str] = Field(None, max_length=20)
     due_date: Optional[str] = Field(None, max_length=20)
     ship_date: Optional[str] = Field(None, max_length=20)
     include_labor_hours: Optional[bool] = None
@@ -137,10 +142,12 @@ class TravelerList(BaseModel):
     id: int
     job_number: str
     work_order_number: Optional[str]
+    po_number: Optional[str] = None
     traveler_type: TravelerType
     part_number: str
     part_description: str
-    revision: str
+    revision: str  # Traveler Revision
+    customer_revision: Optional[str] = None  # Customer Revision
     quantity: int
     customer_code: Optional[str] = None
     customer_name: Optional[str] = None
@@ -148,7 +155,9 @@ class TravelerList(BaseModel):
     status: TravelerStatus
     work_center: str
     is_active: bool = True
+    start_date: Optional[str] = None
     due_date: Optional[str] = None
+    ship_date: Optional[str] = None
     created_at: datetime
     created_by: int
 

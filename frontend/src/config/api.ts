@@ -3,9 +3,18 @@
  * Centralizes API endpoint configuration
  */
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://acidashboard.aci.local:100/api';
+// Use env var, or detect local network, or default to relative /api for Vercel rewrites
+const getApiBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined' && (
+    window.location.hostname.includes('192.168.') ||
+    window.location.hostname.includes('.local') ||
+    window.location.hostname === 'localhost'
+  )) return 'http://acidashboard.aci.local:100/api';
+  return '/api';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export const API_ENDPOINTS = {
   // Auth

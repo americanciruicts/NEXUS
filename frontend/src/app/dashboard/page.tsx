@@ -4,18 +4,44 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import { useAuth } from '@/context/AuthContext';
-import { DocumentTextIcon, ClockIcon, ChartBarIcon, CheckCircleIcon, PlayIcon, ArrowTrendingUpIcon, CubeIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { useDashboardData } from '@/hooks/useDashboardData';
+import {
+  Squares2X2Icon,
+  PlusCircleIcon,
+  MapPinIcon,
+  SignalIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/solid';
+
+// Dashboard components
+import DateRangePicker from './components/DateRangePicker';
+import MetricsGrid from './components/MetricsGrid';
+import StatusDistributionChart from './components/StatusDistributionChart';
+import LaborTrendsChart from './components/LaborTrendsChart';
+import WorkCenterUtilizationChart from './components/WorkCenterUtilizationChart';
+import AlertsSummaryCard from './components/AlertsSummaryCard';
+import TodaySnapshotGrid from './components/TodaySnapshotGrid';
+import WorkCenterStatusCard from './components/WorkCenterStatusCard';
+import RecentActivityFeed from './components/RecentActivityFeed';
+import OperatorDashboard from './components/OperatorDashboard';
+import { API_BASE_URL } from '@/config/api';
 
 interface Traveler {
   id: number;
   job_number: string;
   part_description: string;
-  revision: string;
   status: string;
-  work_center: string;
-  created_at: string;
-  quantity?: number;
   due_date?: string;
+  is_active?: boolean;
+}
+
+interface RawTrackingEntry {
+  job_number: string;
+  work_center: string;
+  operator_name: string;
+  start_time: string;
+  end_time: string | null;
+  hours_worked: number;
 }
 
 interface LiveUpdate {
@@ -30,88 +56,103 @@ interface LiveUpdate {
   is_active: boolean;
 }
 
+interface OverdueJob {
+  id: number;
+  job_number: string;
+  part_description: string;
+  due_date: string;
+  status: string;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
-  const [travelers, setTravelers] = useState<Traveler[]>([]);
-  const [liveUpdates, setLiveUpdates] = useState<LiveUpdate[]>([]);
-  const [stats, setStats] = useState({
-    inProgress: 0,
-    completed: 0,
+
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return date;
   });
+  const [endDate, setEndDate] = useState(new Date());
+
+  const { data: dashboardData, loading, error, refetch } = useDashboardData(startDate, endDate);
+
+  const [travelers, setTravelers] = useState<Traveler[]>([]);
+  const [trackingEntries, setTrackingEntries] = useState<RawTrackingEntry[]>([]);
+  const [liveUpdates, setLiveUpdates] = useState<LiveUpdate[]>([]);
+  const [overdueJobs, setOverdueJobs] = useState<OverdueJob[]>([]);
 
   useEffect(() => {
     fetchTravelers();
-    // Fetch live updates every 1 hour
-    const interval = setInterval(() => {
-      fetchLiveUpdates();
-    }, 3600000); // 3600000ms = 1 hour
+    fetchTrackingEntries();
 
-    fetchLiveUpdates(); // Initial fetch
+    const interval = setInterval(() => {
+      fetchTrackingEntries();
+    }, 300000); // Refresh every 5 minutes
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Derive overdue jobs from travelers
+  useEffect(() => {
+    const today = new Date();
+    const overdue = travelers
+      .filter((t) => {
+        if (t.status !== 'IN_PROGRESS' || !t.due_date) return false;
+        let dueDate: Date;
+        if (t.due_date.indexOf('-') === 4) {
+          dueDate = new Date(t.due_date + 'T23:59:59');
+        } else {
+          dueDate = new Date(t.due_date);
+        }
+        return dueDate < today;
+      })
+      .map((t) => ({
+        id: t.id,
+        job_number: t.job_number,
+        part_description: t.part_description,
+        due_date: t.due_date!,
+        status: t.status
+      }));
+
+    setOverdueJobs(overdue);
+  }, [travelers]);
+
+  const handleDateChange = (start: Date, end: Date) => {
+    setStartDate(start);
+    setEndDate(end);
+  };
 
   const fetchTravelers = async () => {
     try {
-      const response = await fetch('http://acidashboard.aci.local:100/api/travelers/', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
-        }
+      const response = await fetch(`${API_BASE_URL}/travelers/`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
       });
-
       if (response.ok) {
         const data = await response.json();
-        const activeTravelers = data.filter((t: Traveler & { is_active?: boolean }) => t.is_active !== false);
-
-        // Calculate stats from ALL travelers
-        const inProgress = activeTravelers.filter((t: Traveler) =>
-          t.status === 'IN_PROGRESS'
-        ).length;
-
-        const completed = activeTravelers.filter((t: Traveler) =>
-          t.status === 'COMPLETED'
-        ).length;
-
-        // Set recent 5 for display in table
-        setTravelers(activeTravelers.slice(0, 5));
-
-        // Set stats calculated from ALL travelers
-        setStats({
-          inProgress,
-          completed,
-        });
+        setTravelers(data.filter((t: Traveler) => t.is_active !== false));
       }
-    } catch (error) {
-      console.error('Error fetching travelers:', error);
+    } catch (err) {
+      console.error('Error fetching travelers:', err);
     }
   };
 
-  const fetchLiveUpdates = async () => {
+  const fetchTrackingEntries = async () => {
     try {
-      const response = await fetch('http://acidashboard.aci.local:100/api/tracking/?limit=20', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
-        }
+      const response = await fetch(`${API_BASE_URL}/tracking/?limit=100`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
       });
-
       if (response.ok) {
-        const data = await response.json();
-        // Map tracking entries to live updates format
-        const updates: LiveUpdate[] = data.map((entry: {
-          job_number: string;
-          work_center: string;
-          operator_name: string;
-          start_time: string;
-          end_time?: string | null;
-          hours_worked: number;
-        }) => {
+        const data: RawTrackingEntry[] = await response.json();
+        setTrackingEntries(data);
+
+        // Derive liveUpdates for the tracking table
+        const updates: LiveUpdate[] = data.map((entry) => {
           const startTime = new Date(entry.start_time);
           const endTime = entry.end_time ? new Date(entry.end_time) : new Date();
           const diffMs = endTime.getTime() - startTime.getTime();
           const hours = Math.floor(diffMs / (1000 * 60 * 60));
           const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-          const isActive = !entry.end_time; // No end_time means still in progress
+          const isActive = !entry.end_time;
 
           return {
             job_number: entry.job_number,
@@ -126,350 +167,223 @@ export default function Dashboard() {
           };
         });
 
-        // Sort: active entries first, then by start time descending
         updates.sort((a, b) => {
           if (a.is_active && !b.is_active) return -1;
           if (!a.is_active && b.is_active) return 1;
           return 0;
         });
 
-        setLiveUpdates(updates.slice(0, 10)); // Show top 10
+        setLiveUpdates(updates.slice(0, 15));
       }
-    } catch (error) {
-      console.error('Error fetching live updates:', error);
+    } catch (err) {
+      console.error('Error fetching tracking entries:', err);
     }
   };
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { bg: string; text: string; dot: string }> = {
-      'IN_PROGRESS': {
-        bg: 'bg-blue-50',
-        text: 'text-blue-700',
-        dot: 'bg-blue-500'
-      },
-      'COMPLETED': {
-        bg: 'bg-green-50',
-        text: 'text-green-700',
-        dot: 'bg-green-500'
-      },
-      'ON_HOLD': {
-        bg: 'bg-yellow-50',
-        text: 'text-yellow-700',
-        dot: 'bg-yellow-500'
-      }
+      'IN_PROGRESS': { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+      'COMPLETED': { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+      'ON_HOLD': { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+      'DRAFT': { bg: 'bg-gray-50', text: 'text-gray-700', dot: 'bg-gray-500' }
     };
 
     const statusInfo = statusMap[status] || statusMap['IN_PROGRESS'];
     return (
       <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${statusInfo.bg} ${statusInfo.text}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} mr-1.5`}></span>
+        <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} mr-1.5 ${status === 'COMPLETED' ? '' : 'animate-pulse'}`}></span>
         {status.replace('_', ' ')}
       </span>
     );
   };
 
+  // Show operator dashboard for non-admin users
+  if (user && user.role !== 'ADMIN') {
+    return (
+      <Layout fullWidth>
+        <OperatorDashboard username={user.username} firstName={user.first_name} />
+      </Layout>
+    );
+  }
+
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
-        <div className="w-full space-y-4 p-4 lg:p-6">
-          {/* Dashboard Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-lg p-4 md:p-6">
-            <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-white mb-1 flex items-center space-x-2">
-                  <ChartBarIcon className="w-6 h-6 md:w-7 md:h-7 text-white" />
-                  <span>Manufacturing Dashboard</span>
-                </h1>
-                <p className="text-sm text-blue-100">Real-time operations overview</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 sm:p-6 lg:p-8">
+        {/* Dashboard Header */}
+        <div className="mb-6 sm:mb-8 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+          {/* Background pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+          </div>
+
+          <div className="relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
+                  <Squares2X2Icon className="w-7 h-7 text-blue-300" />
+                </div>
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Manufacturing Dashboard</h1>
+                  <p className="text-sm text-blue-200/80 mt-0.5">Real-time operations overview with complete analytics</p>
+                </div>
               </div>
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                <Link href="/travelers/new" className="inline-flex items-center justify-center px-4 py-2.5 bg-white text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors shadow-md">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <Link href="/travelers/new" className="inline-flex items-center justify-center px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-500/30 transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/40 hover:-translate-y-0.5 gap-2">
+                  <PlusCircleIcon className="w-5 h-5" />
                   New Traveler
                 </Link>
-                <Link href="/travelers/tracking" className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors shadow-md">
-                  <CubeIcon className="w-4 h-4 mr-2" />
+                <Link href="/travelers/tracking" className="inline-flex items-center justify-center px-5 py-2.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-sm font-bold rounded-xl border border-white/25 shadow-lg transition-all duration-200 hover:-translate-y-0.5 gap-2">
+                  <MapPinIcon className="w-5 h-5" />
                   Track Traveler
                 </Link>
               </div>
             </div>
+            <DateRangePicker startDate={startDate} endDate={endDate} onDateChange={handleDateChange} />
           </div>
+        </div>
 
-          {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* In Progress */}
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <dt className="text-sm font-medium text-blue-100 mb-1 uppercase tracking-wide">In Progress</dt>
-                    <dd className="text-4xl font-bold text-white">{stats.inProgress}</dd>
-                    <p className="text-xs text-blue-100 mt-2 flex items-center">
-                      <ArrowTrendingUpIcon className="w-3 h-3 mr-1" />
-                      Active travelers
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 bg-white/20 p-3 rounded-lg">
-                    <DocumentTextIcon className="h-10 w-10 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <ArrowPathIcon className="w-10 h-10 text-blue-500 animate-spin mb-3" />
+            <p className="text-sm text-gray-500 font-medium">Loading dashboard data...</p>
+          </div>
+        )}
 
-            {/* Completed */}
-            <div className="bg-gradient-to-br from-emerald-500 to-green-600 overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <dt className="text-sm font-medium text-green-100 mb-1 uppercase tracking-wide">Completed</dt>
-                    <dd className="text-4xl font-bold text-white">{stats.completed}</dd>
-                    <p className="text-xs text-green-100 mt-2">Total completed travelers</p>
-                  </div>
-                  <div className="flex-shrink-0 bg-white/20 p-3 rounded-lg">
-                    <CheckCircleIcon className="h-10 w-10 text-white" />
-                  </div>
-                </div>
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 rounded-xl p-5 mb-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="bg-red-100 p-2 rounded-lg">
+                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
               </div>
+              <div>
+                <p className="text-red-800 text-sm font-semibold">Error loading dashboard data</p>
+                <p className="text-red-600 text-xs mt-0.5">{error}</p>
+              </div>
+              <button onClick={() => refetch()} className="ml-auto px-4 py-1.5 text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors">
+                Retry
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Quick Actions */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Quick Actions</h2>
-              <p className="text-xs text-gray-500">Access your most important features</p>
+        {!loading && !error && dashboardData && (
+          <>
+            {/* Traveler Overview Section */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span className="text-xs font-bold uppercase tracking-wider">Traveler Overview</span>
+              </div>
+              <div className="flex-1 h-px bg-gradient-to-r from-blue-200 to-transparent" />
             </div>
-            <div className={`grid grid-cols-2 sm:grid-cols-3 ${user?.role === 'ADMIN' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3`}>
-              {/* View Travelers Card */}
-              <Link href="/travelers" className="group bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-lg p-4 transition-colors">
-                <div className="flex flex-col items-center text-center space-y-2">
-                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center">
-                    <DocumentTextIcon className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-sm">View Travelers</h3>
-                    <p className="text-xs text-blue-100 mt-1">Browse travelers</p>
-                  </div>
-                </div>
-              </Link>
+            <MetricsGrid data={dashboardData} />
 
-              {/* Traveler Tracking Card */}
-              <Link href="/travelers/tracking" className="group bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 rounded-lg p-4 transition-colors">
-                <div className="flex flex-col items-center text-center space-y-2">
-                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center">
-                    <CubeIcon className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-sm">Traveler Tracking</h3>
-                    <p className="text-xs text-purple-100 mt-1">Track locations</p>
-                  </div>
-                </div>
-              </Link>
+            {/* Labor & Tracking Section */}
+            <div className="flex items-center gap-3 mt-8 mb-3">
+              <div className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg">
+                <SignalIcon className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Labor & Tracking</span>
+              </div>
+              <div className="flex-1 h-px bg-gradient-to-r from-emerald-200 to-transparent" />
+            </div>
+            <TodaySnapshotGrid entries={trackingEntries} />
 
-              {/* Labor Tracking Card */}
-              <Link href="/labor-tracking" className="group bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 rounded-lg p-4 transition-colors">
-                <div className="flex flex-col items-center text-center space-y-2">
-                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center">
-                    <ClockIcon className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-sm">Labor Tracking</h3>
-                    <p className="text-xs text-indigo-100 mt-1">Track hours</p>
-                  </div>
-                </div>
-              </Link>
+            {/* Charts Row */}
+            <div className="flex items-center gap-3 mt-8 mb-3">
+              <div className="flex items-center gap-2 bg-violet-100 text-violet-700 px-3 py-1.5 rounded-lg">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+                <span className="text-xs font-bold uppercase tracking-wider">Analytics</span>
+              </div>
+              <div className="flex-1 h-px bg-gradient-to-r from-violet-200 to-transparent" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <StatusDistributionChart data={dashboardData.status_distribution} />
+              <WorkCenterUtilizationChart data={dashboardData.labor_by_work_center} />
+            </div>
 
-              {/* Reports Card */}
-              <Link href="/reports" className="group bg-gradient-to-br from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 rounded-lg p-4 transition-colors">
-                <div className="flex flex-col items-center text-center space-y-2">
-                  <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center">
-                    <ChartBarIcon className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-sm">Reports</h3>
-                    <p className="text-xs text-green-100 mt-1">View reports</p>
-                  </div>
-                </div>
-              </Link>
+            {/* Labor Trends */}
+            <div className="mt-6 sm:mt-8">
+              <LaborTrendsChart data={dashboardData.labor_trend} />
+            </div>
 
-              {/* User Management Card - Admin Only */}
-              {user?.role === 'ADMIN' && (
-                <Link href="/users" className="group bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 rounded-lg p-4 transition-colors">
-                  <div className="flex flex-col items-center text-center space-y-2">
-                    <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center">
-                      <UserGroupIcon className="h-6 w-6 text-white" />
+            {/* Live Status + Alerts */}
+            <div className="flex items-center gap-3 mt-8 mb-3">
+              <div className="flex items-center gap-2 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                <span className="text-xs font-bold uppercase tracking-wider">Live Operations</span>
+              </div>
+              <div className="flex-1 h-px bg-gradient-to-r from-amber-200 to-transparent" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <WorkCenterStatusCard liveUpdates={liveUpdates} />
+              <AlertsSummaryCard data={dashboardData} overdueJobs={overdueJobs} />
+            </div>
+
+            {/* Live Tracking Table + Activity Feed */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 mt-6 sm:mt-8">
+              {/* Live Tracking Table */}
+              <div className="xl:col-span-2 bg-white shadow-lg rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 px-5 sm:px-6 py-4 flex items-center justify-between relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="relative z-10 flex items-center gap-3">
+                    <div className="bg-white/15 backdrop-blur-sm p-2 rounded-xl border border-white/20">
+                      <SignalIcon className="w-5 h-5 text-emerald-300" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-sm">User Management</h3>
-                      <p className="text-xs text-orange-100 mt-1">Manage users</p>
+                      <h2 className="text-base sm:text-lg font-bold text-white">Live Traveler Tracking</h2>
+                      <p className="text-xs text-blue-200/80">Real-time work center activity</p>
                     </div>
                   </div>
-                </Link>
-              )}
-            </div>
-          </div>
-
-          {/* Live Traveler Tracking */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                    <div className="absolute inset-0 w-3 h-3 bg-green-400 rounded-full animate-ping"></div>
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Live Traveler Tracking</h2>
-                    <p className="text-xs text-gray-500">Real-time traveler location and work center activity</p>
-                  </div>
-                </div>
-                <Link
-                  href="/travelers/tracking"
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1"
-                >
-                  <span>View All</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Number</th>
-                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                    <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operator</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entered At</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exited At</th>
-                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                    <th className="px-3 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {liveUpdates.length > 0 ? (
-                    liveUpdates.map((update, index) => (
-                      <tr key={index} className={`hover:bg-blue-50 transition-colors ${update.is_active ? 'bg-green-50' : ''}`}>
-                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
-                          <div className="text-xs md:text-sm font-semibold text-blue-600 flex items-center space-x-1 md:space-x-2">
-                            {update.is_active && <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
-                            <span>{update.job_number}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
-                          <div className="inline-flex items-center px-2 md:px-2.5 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
-                            {update.work_center}
-                          </div>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 whitespace-nowrap">
-                          <span className="text-sm text-gray-900">{update.operator_name}</span>
-                        </td>
-                        <td className="hidden lg:table-cell px-4 py-3 whitespace-nowrap">
-                          <span className="text-sm text-gray-700">{update.start_time}</span>
-                        </td>
-                        <td className="hidden lg:table-cell px-4 py-3 whitespace-nowrap">
-                          <span className={`text-sm ${update.is_active ? 'text-green-600 font-semibold' : 'text-gray-700'}`}>
-                            {update.end_time}
-                          </span>
-                        </td>
-                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center space-x-1 md:space-x-2">
-                            {update.is_active && (
-                              <svg className="w-3 h-3 md:w-4 md:h-4 text-orange-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            )}
-                            <span className="text-xs md:text-sm font-medium text-gray-900">{update.time_in_step}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 md:px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 md:px-2.5 py-1 rounded-full text-xs font-medium ${
-                            update.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1 md:mr-1.5 ${update.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                            <span className="hidden sm:inline">{update.is_active ? 'In Progress' : 'Completed'}</span>
-                            <span className="sm:hidden">{update.is_active ? 'Active' : 'Done'}</span>
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center">
-                        <div className="text-gray-400">
-                          <svg className="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                          </svg>
-                          <p className="text-sm">No tracking entries found</p>
-                          <p className="text-xs mt-1">Start tracking on the Traveler Tracking page</p>
-                        </div>
-                      </td>
-                    </tr>
+                  {liveUpdates.length > 0 && (
+                    <span className="relative z-10 bg-emerald-500/20 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-500/30">
+                      {liveUpdates.filter(u => u.is_active).length} live
+                    </span>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50/80">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Job Number</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Operator</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Entry Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Exit Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-50">
+                      {liveUpdates.map((update, index) => (
+                        <tr key={index} className={`${update.is_active ? 'bg-emerald-50/50' : ''} hover:bg-gray-50/80 transition-colors`}>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">{update.job_number}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{update.work_center}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{update.operator_name}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">{update.start_time}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">{update.end_time}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">{update.time_in_step}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm">{getStatusBadge(update.status)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {liveUpdates.length === 0 && (
+                    <div className="text-center py-12">
+                      <SignalIcon className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                      <p className="text-gray-400 text-sm font-medium">No tracking activity</p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          {/* Recent Travelers */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Active Travelers</h2>
+              {/* Recent Activity Feed */}
+              <RecentActivityFeed entries={trackingEntries} />
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Number</th>
-                    <th className="hidden sm:table-cell px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part Description</th>
-                    <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Center</th>
-                    <th className="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                    <th className="px-3 md:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {travelers.map((traveler) => (
-                    <tr key={traveler.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-3 md:px-6 py-4 whitespace-nowrap">
-                        <div className="text-xs md:text-sm font-medium text-gray-900">{traveler.job_number}</div>
-                      </td>
-                      <td className="hidden sm:table-cell px-3 md:px-6 py-4 whitespace-nowrap">
-                        <div className="text-xs md:text-sm text-gray-700">{traveler.part_description}</div>
-                      </td>
-                      <td className="px-3 md:px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(traveler.status)}
-                      </td>
-                      <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-700">{traveler.work_center}</div>
-                      </td>
-                      <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{traveler.quantity || '-'}</div>
-                      </td>
-                      <td className="px-3 md:px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <Link
-                          href={`/travelers/${traveler.job_number}`}
-                          className="inline-flex items-center px-2 md:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-medium rounded-md transition-colors"
-                        >
-                          <span className="hidden sm:inline">View</span>
-                          <svg className="w-4 h-4 sm:ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
+          </>
+        )}
       </div>
     </Layout>
   );

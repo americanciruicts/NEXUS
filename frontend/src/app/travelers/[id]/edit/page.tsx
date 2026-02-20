@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
 import TravelerForm from '@/components/TravelerForm';
+import { API_BASE_URL } from '@/config/api';
 
 export default function EditTravelerPage() {
   const params = useParams();
@@ -16,7 +17,7 @@ export default function EditTravelerPage() {
   useEffect(() => {
     const fetchTraveler = async () => {
       try {
-        const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/by-job/${travelerId}`, {
+        const response = await fetch(`${API_BASE_URL}/travelers/${travelerId}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
           }

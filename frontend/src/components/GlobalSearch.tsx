@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { API_BASE_URL } from '@/config/api';
 import {
   UserIcon,
   DocumentTextIcon,
@@ -89,7 +90,7 @@ export default function GlobalSearch() {
     setLoading(true);
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch(`http://acidashboard.aci.local:100/api/search/?q=${encodeURIComponent(searchQuery)}&limit=5`, {
+      const response = await fetch(`${API_BASE_URL}/search/?q=${encodeURIComponent(searchQuery)}&limit=5`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import {
@@ -12,6 +13,7 @@ import {
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
+import { API_BASE_URL } from '@/config/api';
 
 type ArchivedTraveler = {
   id: number;
@@ -34,6 +36,7 @@ export default function ArchivedTravelersPage() {
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
   useEffect(() => {
     fetchArchivedTravelers();
@@ -41,7 +44,7 @@ export default function ArchivedTravelersPage() {
 
   const fetchArchivedTravelers = async () => {
     try {
-      const response = await fetch('http://acidashboard.aci.local:100/api/travelers/', {
+      const response = await fetch(`${API_BASE_URL}/travelers/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('nexus_token')}`
         }
@@ -84,64 +87,76 @@ export default function ArchivedTravelersPage() {
 
   const restoreSelected = async () => {
     if (selectedTravelers.length === 0) {
-      alert('❌ Please select travelers to restore');
+      toast.error('Please select travelers to restore');
       return;
     }
 
-    if (!confirm(`Restore ${selectedTravelers.length} traveler(s) to active status?`)) return;
+    const count = selectedTravelers.length;
+    setConfirmModal({
+      title: 'Restore Travelers',
+      message: `Restore ${count} traveler(s) to active status?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const token = localStorage.getItem('nexus_token');
+          await Promise.all(
+            selectedTravelers.map(id =>
+              fetch(`${API_BASE_URL}/travelers/${id}`, {
+                method: 'PATCH',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status: 'CREATED' })
+              })
+            )
+          );
 
-    try {
-      const token = localStorage.getItem('nexus_token');
-      await Promise.all(
-        selectedTravelers.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/travelers/${id}`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ status: 'CREATED', is_active: true })
-          })
-        )
-      );
-
-      alert(`✅ Restored ${selectedTravelers.length} traveler(s)!`);
-      setSelectedTravelers([]);
-      fetchArchivedTravelers();
-    } catch (error) {
-      console.error('Error restoring travelers:', error);
-      alert('❌ Failed to restore travelers');
-    }
+          toast.success(`Restored ${count} traveler(s)!`);
+          setSelectedTravelers([]);
+          fetchArchivedTravelers();
+        } catch (error) {
+          console.error('Error restoring travelers:', error);
+          toast.error('Failed to restore travelers');
+        }
+      }
+    });
   };
 
   const deleteSelected = async () => {
     if (selectedTravelers.length === 0) {
-      alert('❌ Please select travelers to delete');
+      toast.error('Please select travelers to delete');
       return;
     }
 
-    if (!confirm(`⚠️ PERMANENT DELETE\n\nThis will permanently delete ${selectedTravelers.length} traveler(s)!\n\nThis action CANNOT be undone. Are you absolutely sure?`)) return;
+    const count = selectedTravelers.length;
+    setConfirmModal({
+      title: 'Permanent Delete',
+      message: `This will permanently delete ${count} traveler(s)! This action CANNOT be undone. Are you absolutely sure?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const token = localStorage.getItem('nexus_token');
+          await Promise.all(
+            selectedTravelers.map(id =>
+              fetch(`${API_BASE_URL}/travelers/${id}`, {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              })
+            )
+          );
 
-    try {
-      const token = localStorage.getItem('nexus_token');
-      await Promise.all(
-        selectedTravelers.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/travelers/${id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
-        )
-      );
-
-      alert(`✅ Permanently deleted ${selectedTravelers.length} traveler(s)!`);
-      setSelectedTravelers([]);
-      fetchArchivedTravelers();
-    } catch (error) {
-      console.error('Error deleting travelers:', error);
-      alert('❌ Failed to delete travelers');
-    }
+          toast.success(`Permanently deleted ${count} traveler(s)!`);
+          setSelectedTravelers([]);
+          fetchArchivedTravelers();
+        } catch (error) {
+          console.error('Error deleting travelers:', error);
+          toast.error('Failed to delete travelers');
+        }
+      }
+    });
   };
 
   if (loading) {
@@ -156,73 +171,81 @@ export default function ArchivedTravelersPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 p-3 sm:p-4 md:p-6">
         {/* Header */}
-        <div className="mb-6 bg-gradient-to-r from-gray-700 via-gray-800 to-slate-900 text-white rounded-lg p-6 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold mb-2 flex items-center">
-                <ArchiveBoxIcon className="h-8 w-8 mr-3" />
-                Archived Travelers
-              </h1>
-              <p className="text-gray-300">View and manage archived production travelers</p>
+        <div className="mb-4 sm:mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
+                <ArchiveBoxIcon className="w-7 h-7 text-amber-300" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Archived Travelers</h1>
+                <p className="text-sm text-blue-200/80 mt-0.5">View and manage archived production travelers</p>
+              </div>
             </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-lg px-6 py-4 border border-white/30">
-              <div className="text-3xl font-bold">{travelers.length}</div>
-              <div className="text-xs text-gray-300">Total Archived</div>
+            <div className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 sm:px-6 sm:py-4 border border-white/20 text-center">
+              <div className="text-xl sm:text-3xl font-extrabold">{travelers.length}</div>
+              <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Total Archived</div>
             </div>
           </div>
         </div>
 
         {/* Actions Bar */}
-        <div className="mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-4 sm:mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             {/* Back Button */}
             <Link
               href="/travelers"
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md"
+              className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md text-sm sm:text-base"
             >
-              <ArrowLeftIcon className="h-5 w-5" />
-              <span>Back to Travelers</span>
+              <ArrowLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span>Back</span>
             </Link>
 
             {/* Search */}
-            <div className="flex-1 min-w-[300px]">
+            <div className="flex-1 min-w-0 sm:min-w-[200px]">
               <input
                 type="text"
                 placeholder="Search archived travelers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
+                className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-500 focus:ring-2 focus:ring-gray-200 text-sm sm:text-base"
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={selectAll}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md"
+                className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md text-xs sm:text-sm"
               >
-                <CheckIcon className="h-5 w-5" />
-                <span>{selectedTravelers.length === filteredTravelers.length ? 'Deselect All' : 'Select All'}</span>
+                <CheckIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden sm:inline">{selectedTravelers.length === filteredTravelers.length ? 'Deselect All' : 'Select All'}</span>
+                <span className="sm:hidden">All</span>
               </button>
 
               <button
                 onClick={restoreSelected}
                 disabled={selectedTravelers.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed"
+                className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-xs sm:text-sm"
               >
-                <ArchiveBoxXMarkIcon className="h-5 w-5" />
+                <ArchiveBoxXMarkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span>Restore ({selectedTravelers.length})</span>
               </button>
 
               <button
                 onClick={deleteSelected}
                 disabled={selectedTravelers.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed"
+                className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-xs sm:text-sm"
               >
-                <TrashIcon className="h-5 w-5" />
-                <span>Permanently Delete ({selectedTravelers.length})</span>
+                <TrashIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden sm:inline">Delete ({selectedTravelers.length})</span>
+                <span className="sm:hidden">Del ({selectedTravelers.length})</span>
               </button>
             </div>
           </div>
@@ -304,6 +327,30 @@ export default function ArchivedTravelersPage() {
           </div>
         )}
       </div>
+
+      {/* Confirm Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

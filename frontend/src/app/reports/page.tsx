@@ -3,13 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/layout/Layout';
+import { toast } from 'sonner';
 import {
   PrinterIcon,
   ArrowPathIcon,
   TableCellsIcon,
   UserIcon,
   DocumentTextIcon,
-  BuildingOfficeIcon
+  BuildingOfficeIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 
 interface LaborEntry {
@@ -46,7 +48,7 @@ export default function ReportsPage() {
 
   const generateReport = async () => {
     if (!reportType) {
-      alert('Please select a report type first');
+      toast.error('Please select a report type first');
       return;
     }
 
@@ -56,7 +58,7 @@ export default function ReportsPage() {
     try {
       if (reportType === 'single_traveler') {
         if (!jobNumber.trim()) {
-          alert('Please enter a job number');
+          toast.error('Please enter a job number');
           setLoading(false);
           return;
         }
@@ -72,7 +74,7 @@ export default function ReportsPage() {
         return;
       } else if (reportType === 'single_operator') {
         if (!operatorName.trim()) {
-          alert('Please enter an operator name');
+          toast.error('Please enter an operator name');
           setLoading(false);
           return;
         }
@@ -88,7 +90,7 @@ export default function ReportsPage() {
         return;
       } else if (reportType === 'single_work_center') {
         if (!workCenter.trim()) {
-          alert('Please enter a work center name');
+          toast.error('Please enter a work center name');
           setLoading(false);
           return;
         }
@@ -104,7 +106,7 @@ export default function ReportsPage() {
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('❌ Error generating report');
+      toast.error('Error generating report');
     } finally {
       setLoading(false);
     }
@@ -116,8 +118,11 @@ export default function ReportsPage() {
 
   const handleRefresh = () => {
     setReportData(null);
+    setReportType('');
     setJobNumber('');
     setOperatorName('');
+    setWorkCenter('');
+    setWorkOrder('');
     setStartDate('');
     setEndDate('');
   };
@@ -160,26 +165,35 @@ export default function ReportsPage() {
 
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
         {/* Header */}
-        <div className="mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-lg p-6 shadow-lg no-print">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold mb-1">📊 Reports & Analytics</h1>
-              <p className="text-blue-100">Generate and print labor tracking reports</p>
+        <div className="mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden no-print">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
+                <ChartBarIcon className="w-7 h-7 text-blue-200" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Reports & Analytics</h1>
+                <p className="text-sm text-blue-200/80 mt-0.5">Generate and print labor tracking reports</p>
+              </div>
             </div>
-            <div className="header-buttons flex items-center space-x-3">
+            <div className="header-buttons flex items-center gap-2 sm:gap-3">
               <button
                 onClick={handleRefresh}
-                className="flex items-center justify-center space-x-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-lg font-semibold border border-white/30 transition-all"
+                className="flex items-center justify-center space-x-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white/15 hover:bg-white/25 rounded-xl font-semibold border border-white/20 transition-all text-sm"
               >
-                <ArrowPathIcon className="h-5 w-5" />
-                <span>Refresh</span>
+                <ArrowPathIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span>Reset</span>
               </button>
               {reportData && (
                 <button
                   onClick={handlePrint}
-                  className="flex items-center justify-center space-x-2 px-6 py-3 bg-white hover:bg-gray-100 text-indigo-600 rounded-lg font-bold shadow-lg transition-all"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white hover:bg-gray-100 text-indigo-700 rounded-xl font-bold shadow-lg transition-all text-sm"
                 >
-                  <PrinterIcon className="h-5 w-5" />
+                  <PrinterIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span>Print Report</span>
                 </button>
               )}
@@ -191,91 +205,163 @@ export default function ReportsPage() {
         <div className="bg-white shadow-xl rounded-xl border-2 border-gray-200 p-8 mb-6 no-print">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Generate Report</h2>
 
-          {/* Report Type Selection - 3x3 Layout */}
-          <div className="flex flex-col items-center gap-3 mb-6">
-            {/* Row 1: 3 Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
-              <button
-                onClick={() => setReportType('single_traveler')}
-                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 ${
-                  reportType === 'single_traveler'
-                    ? 'ring-4 ring-blue-300 shadow-xl scale-105'
-                    : 'shadow-lg'
-                }`}
-              >
-                <DocumentTextIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">Single Traveler</div>
-                <div className="text-xs text-blue-100 text-center">By job number</div>
-              </button>
+          {/* Report Type Selection - 2x3 Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+            {/* Single Traveler */}
+            <button
+              onClick={() => setReportType('single_traveler')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'single_traveler' ? 'ring-4 ring-blue-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">Single Traveler</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">By job number</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
 
-              <button
-                onClick={() => setReportType('all_travelers')}
-                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 ${
-                  reportType === 'all_travelers'
-                    ? 'ring-4 ring-green-300 shadow-xl scale-105'
-                    : 'shadow-lg'
-                }`}
-              >
-                <TableCellsIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">All Travelers</div>
-                <div className="text-xs text-green-100 text-center">All travelers</div>
-              </button>
+            {/* All Travelers */}
+            <button
+              onClick={() => setReportType('all_travelers')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'all_travelers' ? 'ring-4 ring-green-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-emerald-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">All Travelers</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Complete traveler report</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
 
-              <button
-                onClick={() => setReportType('single_operator')}
-                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 ${
-                  reportType === 'single_operator'
-                    ? 'ring-4 ring-purple-300 shadow-xl scale-105'
-                    : 'shadow-lg'
-                }`}
-              >
-                <UserIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">Single Operator</div>
-                <div className="text-xs text-purple-100 text-center">By operator name</div>
-              </button>
-            </div>
+            {/* Single Operator */}
+            <button
+              onClick={() => setReportType('single_operator')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'single_operator' ? 'ring-4 ring-purple-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-violet-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-violet-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">Single Operator</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">By operator name</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
 
-            {/* Row 2: 3 Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
-              <button
-                onClick={() => setReportType('all_operators')}
-                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 ${
-                  reportType === 'all_operators'
-                    ? 'ring-4 ring-orange-300 shadow-xl scale-105'
-                    : 'shadow-lg'
-                }`}
-              >
-                <UserIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">All Operators</div>
-                <div className="text-xs text-orange-100 text-center">All operators</div>
-              </button>
+            {/* All Operators */}
+            <button
+              onClick={() => setReportType('all_operators')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'all_operators' ? 'ring-4 ring-orange-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500 to-amber-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">All Operators</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Complete operator report</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
 
-              <button
-                onClick={() => setReportType('single_work_center')}
-                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 ${
-                  reportType === 'single_work_center'
-                    ? 'ring-4 ring-cyan-300 shadow-xl scale-105'
-                    : 'shadow-lg'
-                }`}
-              >
-                <BuildingOfficeIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">Single Work Center</div>
-                <div className="text-xs text-cyan-100 text-center">By work center</div>
-              </button>
+            {/* Single Work Center */}
+            <button
+              onClick={() => setReportType('single_work_center')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'single_work_center' ? 'ring-4 ring-cyan-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500 to-cyan-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">Single Work Center</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">By work center name</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
 
-              <button
-                onClick={() => setReportType('all_work_centers')}
-                className={`report-card-btn p-4 rounded-lg transition-all bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 ${
-                  reportType === 'all_work_centers'
-                    ? 'ring-4 ring-teal-300 shadow-xl scale-105'
-                    : 'shadow-lg'
-                }`}
-              >
-                <BuildingOfficeIcon className="h-10 w-10 mx-auto mb-2 text-white" />
-                <div className="text-center font-bold text-base text-white mb-1">All Work Centers</div>
-                <div className="text-xs text-teal-100 text-center">All work centers</div>
-              </button>
-            </div>
+            {/* All Work Centers */}
+            <button
+              onClick={() => setReportType('all_work_centers')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'all_work_centers' ? 'ring-4 ring-teal-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-500 to-teal-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-teal-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">All Work Centers</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Complete work center report</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* Input Fields */}

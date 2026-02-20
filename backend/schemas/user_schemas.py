@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     last_name: str = Field(..., max_length=50)
     role: UserRole = UserRole.OPERATOR
     is_approver: bool = False
+    is_itar: bool = False
 
     @field_validator('email')
     @classmethod
@@ -33,6 +34,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = Field(None, max_length=50)
     role: Optional[UserRole] = None
     is_approver: Optional[bool] = None
+    is_itar: Optional[bool] = None
     is_active: Optional[bool] = None
 
     @field_validator('email')
@@ -46,6 +48,7 @@ class UserUpdate(BaseModel):
 class User(UserBase):
     id: int
     is_active: bool
+    is_itar: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
 

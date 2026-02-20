@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 from database import get_db
-from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType
+from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus
 from schemas.traveler_schemas import (
     TravelerCreate, Traveler as TravelerSchema, TravelerUpdate,
     TravelerList, ProcessStepCreate, ManualStepCreate
@@ -117,6 +117,40 @@ MANUFACTURING_STEPS = {
         }
     ]
 }
+# Add PCB_ASSEMBLY as an alias for ASSY manufacturing steps
+MANUFACTURING_STEPS["PCB_ASSEMBLY"] = MANUFACTURING_STEPS["ASSY"]
+
+@router.get("/next-work-order-number")
+async def get_next_work_order_number(db: Session = Depends(get_db)):
+    """Get the next sequential work order number (5-digit prefix).
+    Only counts non-DRAFT travelers so that deleted drafts' work orders can be reused."""
+    import re
+
+    # Query work order numbers from non-DRAFT travelers only
+    # This means drafts don't "consume" work order numbers permanently
+    # If a draft is deleted, its work order becomes available again
+    travelers = db.query(Traveler.work_order_number).filter(
+        Traveler.work_order_number.isnot(None),
+        Traveler.work_order_number != '',
+        Traveler.status != 'DRAFT'  # Exclude drafts from the count
+    ).all()
+
+    max_prefix = 26014  # Starting number if no existing travelers
+
+    for (work_order,) in travelers:
+        if work_order:
+            # Extract the numeric prefix before any dash
+            # Format: "26015-1" -> extract "26015"
+            # Format: "26015" -> extract "26015"
+            match = re.match(r'^(\d{5})', str(work_order))
+            if match:
+                prefix_num = int(match.group(1))
+                if prefix_num > max_prefix:
+                    max_prefix = prefix_num
+
+    next_number = max_prefix + 1
+    # Ensure it's 5 digits with leading zeros if needed
+    return {"next_work_order_prefix": str(next_number).zfill(5)}
 
 @router.get("/manufacturing-steps/{traveler_type}")
 async def get_manufacturing_steps(traveler_type: str):
@@ -142,7 +176,7 @@ async def get_work_order_data(identifier: str, db: Session = Depends(get_db)):
             return {
                 "job_number": "8414L",
                 "work_order_number": "8414L",
-                "traveler_type": "ASSY",
+                "traveler_type": "PCB_ASSEMBLY",
                 "part_number": "METSHIFT",
                 "part_description": "METSHIFT Assembly",
                 "revision": "V0.2",
@@ -181,7 +215,7 @@ async def get_work_order_data(identifier: str, db: Session = Depends(get_db)):
         "process_steps": process_steps
     }
 
-@router.post("/", response_model=TravelerSchema)
+@router.post("", response_model=TravelerSchema)
 async def create_traveler(
     traveler_data: TravelerCreate,
     current_user: User = Depends(get_user_or_system),
@@ -206,6 +240,7 @@ async def create_traveler(
             part_number=traveler_data.part_number,
             part_description=traveler_data.part_description,
             revision=traveler_data.revision,
+            customer_revision=traveler_data.customer_revision,
             quantity=traveler_data.quantity,
             customer_code=traveler_data.customer_code,
             customer_name=traveler_data.customer_name,
@@ -218,9 +253,12 @@ async def create_traveler(
             to_stock=traveler_data.to_stock,
             ship_via=traveler_data.ship_via,
             comments=traveler_data.comments,
+            start_date=traveler_data.start_date if traveler_data.start_date else datetime.now().strftime('%Y-%m-%d'),
             due_date=traveler_data.due_date,
             ship_date=traveler_data.ship_date,
             include_labor_hours=include_labor_hours,
+            status=traveler_data.status if traveler_data.status else TravelerStatus.CREATED,
+            is_active=traveler_data.is_active,
             created_by=current_user.id  # Use authenticated or system user
         )
 
@@ -315,14 +353,26 @@ async def create_traveler(
             detail=f"Error creating traveler: {str(e)}"
         )
 
-@router.get("/", response_model=List[TravelerList])
+@router.get("", response_model=List[TravelerList])
 async def get_travelers(
     skip: int = 0,
     limit: int = 100,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
-    """Get list of travelers"""
-    travelers = db.query(Traveler).offset(skip).limit(limit).all()
+    """Get list of travelers. ITAR travelers (job_number contains 'M') are only visible to ADMIN users or users with is_itar=True."""
+    query = db.query(Traveler)
+
+    # Filter ITAR travelers (job_number contains 'M') for non-privileged users
+    # ADMIN users and users with is_itar=True can see all travelers
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+
+    if not is_admin and not has_itar_access:
+        # Exclude travelers where job_number contains 'M' (case-insensitive)
+        query = query.filter(~Traveler.job_number.ilike('%M%'))
+
+    travelers = query.offset(skip).limit(limit).all()
     return travelers
 
 @router.get("/latest-revision")
@@ -406,6 +456,7 @@ async def get_latest_revision_traveler(
 @router.get("/by-job/{job_number}", response_model=TravelerSchema)
 async def get_traveler_by_job(
     job_number: str,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
     """Get a specific traveler by job number"""
@@ -415,20 +466,47 @@ async def get_traveler_by_job(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Traveler not found"
         )
+
+    # Check ITAR access - if job_number contains 'M', only ADMIN users or users with is_itar=True can view
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+
+    if 'M' in traveler.job_number.upper() and not is_admin and not has_itar_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ITAR restricted: You do not have permission to view this traveler"
+        )
+
     return traveler
 
 @router.get("/{traveler_id}", response_model=TravelerSchema)
 async def get_traveler(
     traveler_id: int,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
     """Get a specific traveler by ID"""
-    traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
+    from sqlalchemy.orm import joinedload
+
+    traveler = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(Traveler.id == traveler_id).first()
     if not traveler:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Traveler not found"
         )
+
+    # Check ITAR access - if job_number contains 'M', only ADMIN users or users with is_itar=True can view
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+
+    if 'M' in traveler.job_number.upper() and not is_admin and not has_itar_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ITAR restricted: You do not have permission to view this traveler"
+        )
+
     return traveler
 
 @router.put("/{traveler_id}", response_model=TravelerSchema)
@@ -473,6 +551,7 @@ async def update_traveler(
     traveler.part_number = traveler_data.part_number
     traveler.part_description = traveler_data.part_description
     traveler.revision = traveler_data.revision
+    traveler.customer_revision = traveler_data.customer_revision
     traveler.quantity = traveler_data.quantity
     traveler.customer_code = traveler_data.customer_code
     traveler.customer_name = traveler_data.customer_name
@@ -485,6 +564,9 @@ async def update_traveler(
     traveler.to_stock = traveler_data.to_stock
     traveler.ship_via = traveler_data.ship_via
     traveler.comments = traveler_data.comments
+    # Only update start_date if provided, otherwise keep existing
+    if traveler_data.start_date:
+        traveler.start_date = traveler_data.start_date
     traveler.due_date = traveler_data.due_date
     traveler.ship_date = traveler_data.ship_date
     traveler.include_labor_hours = include_labor_hours
@@ -586,6 +668,18 @@ async def patch_traveler(
 
     # Log the update for debugging
     print(f"PATCH traveler {traveler_id}: {updates}")
+
+    # If archiving, save the current status first
+    if updates.get('status') == 'ARCHIVED' and traveler.status.value != 'ARCHIVED':
+        traveler.previous_status = traveler.status.value
+        print(f"Saving previous_status: {traveler.previous_status}")
+
+    # If restoring from archive and no explicit status given, use previous_status
+    if updates.get('status') and updates['status'] != 'ARCHIVED' and traveler.status.value == 'ARCHIVED':
+        if traveler.previous_status and updates['status'] == 'CREATED':
+            # Restore to the original status instead of hardcoded CREATED
+            updates['status'] = traveler.previous_status
+            print(f"Restoring to previous_status: {traveler.previous_status}")
 
     # Update only the provided fields
     for key, value in updates.items():

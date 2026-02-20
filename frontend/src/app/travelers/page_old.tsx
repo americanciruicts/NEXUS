@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import { PlusIcon, EyeIcon, PencilIcon, PrinterIcon, TrashIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
+import { API_BASE_URL } from '@/config/api';
 
 // Helper function to format YYYY-MM-DD to MM/DD/YYYY without timezone conversion
 const formatDateDisplay = (dateStr: string): string => {
@@ -59,7 +60,7 @@ export default function TravelersPage() {
   useEffect(() => {
     const fetchTravelers = async () => {
       try {
-        const response = await fetch('http://acidashboard.aci.local:100/api/travelers/', {
+        const response = await fetch(`${API_BASE_URL}/travelers/`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
           }
@@ -160,9 +161,9 @@ export default function TravelersPage() {
     }
 
     try {
-      console.log(`Sending DELETE request to: http://acidashboard.aci.local:100/api/travelers/${travelerDbId}`);
+      console.log(`Sending DELETE request to: ${API_BASE_URL}/travelers/${travelerDbId}`);
 
-      const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${travelerDbId}`, {
+      const response = await fetch(`${API_BASE_URL}/travelers/${travelerDbId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`,
@@ -397,7 +398,7 @@ export default function TravelersPage() {
                                   const newActiveStatus = !traveler.isActive;
                                   console.log(`Toggling traveler ${traveler.dbId} from ${traveler.isActive} to ${newActiveStatus}`);
 
-                                  const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
+                                  const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
                                     method: 'PATCH',
                                     headers: {
                                       'Content-Type': 'application/json',

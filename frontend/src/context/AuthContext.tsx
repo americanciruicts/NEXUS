@@ -2,14 +2,17 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/config/api';
 
 interface User {
   id?: number;
   username: string;
   email?: string;
+  first_name?: string;
   role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER';
   isApprover: boolean;
+  isItar?: boolean;
 }
 
 interface AuthContextType {
@@ -62,6 +65,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             } else {
               setUser({
                 username: parsed.username,
+                first_name: parsed.first_name,
                 role: parsed.role,
                 isApprover: parsed.isApprover || false
               });
@@ -80,8 +84,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
-    // Redirect to login if not authenticated and not on login page
-    if (!isLoading && !user && pathname !== '/auth/login') {
+    // Redirect to login if not authenticated and not on login or SSO callback page
+    if (!isLoading && !user && pathname !== '/auth/login' && !pathname.startsWith('/sso/')) {
       router.push('/auth/login');
     }
   }, [user, isLoading, pathname, router]);
@@ -112,7 +116,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (currentTime - loginTime > eightHoursInMs) {
             // 8 hours have passed, logout automatically
             console.log('Session expired after 8 hours - auto logout');
-            alert('Your session has expired after 8 hours. Please log in again.');
+            toast.warning('Your session has expired after 8 hours. Please log in again.');
             logout();
           }
         }
@@ -152,6 +156,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           id: backendUser.id,
           username: backendUser.username,
           email: backendUser.email,
+          first_name: backendUser.first_name,
           role: backendUser.role,
           isApprover: backendUser.is_approver
         };
@@ -163,6 +168,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           localStorage.setItem('nexus_token', accessToken);
           localStorage.setItem('nexus_auth', JSON.stringify({
             username: userData.username,
+            first_name: userData.first_name,
             role: userData.role,
             isApprover: userData.isApprover,
             isAuthenticated: true,

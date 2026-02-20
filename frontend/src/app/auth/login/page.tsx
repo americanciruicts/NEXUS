@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { API_BASE_URL } from '@/config/api';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -65,7 +66,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://acidashboard.aci.local:100/api/auth/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -105,6 +106,16 @@ export default function LoginPage() {
         <div className="gradient-orb orb-2"></div>
         <div className="gradient-orb orb-3"></div>
         <div className="gradient-orb orb-4"></div>
+      </div>
+
+      {/* Decorative white circle bubbles - matching navbar style */}
+      <div className="bg-bubbles">
+        <div className="bg-bubble bg-bubble-1"></div>
+        <div className="bg-bubble bg-bubble-2"></div>
+        <div className="bg-bubble bg-bubble-3"></div>
+        <div className="bg-bubble bg-bubble-4"></div>
+        <div className="bg-bubble bg-bubble-5"></div>
+        <div className="bg-bubble bg-bubble-6"></div>
       </div>
 
       {/* Circuit pattern overlay */}
@@ -204,6 +215,12 @@ export default function LoginPage() {
             disabled={isLoading}
             className={`submit-button ${isLoading ? 'loading' : ''}`}
           >
+            <span className="btn-bubbles">
+              <span className="btn-bubble btn-bubble-1"></span>
+              <span className="btn-bubble btn-bubble-2"></span>
+              <span className="btn-bubble btn-bubble-3"></span>
+            </span>
+            <span className="btn-content">
             {isLoading ? (
               <>
                 <svg className="spinner" width="20" height="20" viewBox="0 0 20 20">
@@ -219,6 +236,7 @@ export default function LoginPage() {
                 </svg>
               </>
             )}
+            </span>
           </button>
         </form>
         ) : (
@@ -267,6 +285,12 @@ export default function LoginPage() {
               disabled={isLoading}
               className={`submit-button ${isLoading ? 'loading' : ''}`}
             >
+              <span className="btn-bubbles">
+                <span className="btn-bubble btn-bubble-1"></span>
+                <span className="btn-bubble btn-bubble-2"></span>
+                <span className="btn-bubble btn-bubble-3"></span>
+              </span>
+              <span className="btn-content">
               {isLoading ? (
                 <>
                   <svg className="spinner" width="20" height="20" viewBox="0 0 20 20">
@@ -277,6 +301,7 @@ export default function LoginPage() {
               ) : (
                 'Reset Password'
               )}
+              </span>
             </button>
 
             <button
@@ -316,7 +341,7 @@ export default function LoginPage() {
           padding: 20px;
           position: relative;
           overflow: hidden;
-          background: linear-gradient(135deg, #2563eb 0%, #4f46e5 30%, #6366f1 60%, #7c3aed 100%);
+          background: linear-gradient(135deg, #2563eb 0%, #4338ca 50%, #6b21a8 100%);
         }
 
         /* Animated gradient orbs */
@@ -384,6 +409,64 @@ export default function LoginPage() {
           75% {
             transform: translate(-40px, -30px) scale(1.02);
           }
+        }
+
+        /* Decorative white circle bubbles - matching navbar */
+        .bg-bubbles {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          z-index: 1;
+          pointer-events: none;
+        }
+
+        .bg-bubble {
+          position: absolute;
+          background: white;
+          border-radius: 50%;
+          opacity: 0.08;
+        }
+
+        .bg-bubble-1 {
+          width: 300px;
+          height: 300px;
+          top: -100px;
+          right: -50px;
+        }
+
+        .bg-bubble-2 {
+          width: 200px;
+          height: 200px;
+          bottom: -60px;
+          left: 20%;
+        }
+
+        .bg-bubble-3 {
+          width: 150px;
+          height: 150px;
+          top: 15%;
+          left: -40px;
+        }
+
+        .bg-bubble-4 {
+          width: 180px;
+          height: 180px;
+          bottom: 20%;
+          right: 10%;
+        }
+
+        .bg-bubble-5 {
+          width: 100px;
+          height: 100px;
+          top: 50%;
+          left: 60%;
+        }
+
+        .bg-bubble-6 {
+          width: 120px;
+          height: 120px;
+          top: 30%;
+          right: 30%;
         }
 
         /* Circuit pattern */
@@ -522,7 +605,7 @@ export default function LoginPage() {
         .logo-text {
           font-size: 32px;
           font-weight: 700;
-          color: #0891b2;
+          color: #4f46e5;
           margin: 0;
           letter-spacing: 4px;
         }
@@ -617,13 +700,13 @@ export default function LoginPage() {
 
         .input-wrapper input:focus {
           background: #ffffff;
-          border-color: #0891b2;
-          box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.12);
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
         }
 
         .input-wrapper input:focus + .input-icon,
         .input-wrapper:focus-within .input-icon {
-          color: #0891b2;
+          color: #4f46e5;
         }
 
         .input-wrapper input::placeholder {
@@ -645,8 +728,8 @@ export default function LoginPage() {
 
         .simple-input:focus {
           background: #ffffff;
-          border-color: #0891b2;
-          box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.12);
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
         }
 
         .simple-input::placeholder {
@@ -679,10 +762,10 @@ export default function LoginPage() {
         }
 
         .password-toggle:hover {
-          color: #0891b2;
+          color: #4f46e5;
         }
 
-        /* Submit button */
+        /* Submit button - matches navbar style */
         .submit-button {
           display: flex;
           align-items: center;
@@ -690,18 +773,66 @@ export default function LoginPage() {
           gap: 10px;
           width: 100%;
           padding: 18px 24px;
-          background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+          background: linear-gradient(135deg, #2563eb 0%, #4338ca 50%, #6b21a8 100%);
           color: white;
-          border: none;
+          border: 1px solid rgba(255, 255, 255, 0.15);
           border-radius: 14px;
           font-size: 16px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.3s;
-          box-shadow: 0 4px 16px rgba(8, 145, 178, 0.4);
+          box-shadow:
+            0 4px 16px rgba(37, 99, 235, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
           margin-top: 8px;
           position: relative;
           overflow: hidden;
+        }
+
+        /* Decorative bubble circles - like navbar */
+        .btn-bubbles {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          pointer-events: none;
+          border-radius: 14px;
+        }
+
+        .btn-bubble {
+          position: absolute;
+          background: white;
+          border-radius: 50%;
+          opacity: 0.1;
+        }
+
+        .btn-bubble-1 {
+          width: 60px;
+          height: 60px;
+          top: -20px;
+          right: -10px;
+        }
+
+        .btn-bubble-2 {
+          width: 40px;
+          height: 40px;
+          bottom: -15px;
+          left: 15%;
+        }
+
+        .btn-bubble-3 {
+          width: 28px;
+          height: 28px;
+          top: -10px;
+          left: 60%;
+        }
+
+        .btn-content {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          position: relative;
+          z-index: 1;
         }
 
         .submit-button::before {
@@ -721,8 +852,10 @@ export default function LoginPage() {
 
         .submit-button:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0, 102, 179, 0.5);
-          background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+          box-shadow:
+            0 8px 24px rgba(67, 56, 202, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15);
+          background: linear-gradient(135deg, #3b82f6 0%, #4f46e5 50%, #7c3aed 100%);
         }
 
         .submit-button:active:not(:disabled) {
@@ -736,7 +869,8 @@ export default function LoginPage() {
         }
 
         .submit-button.loading {
-          background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+          background: linear-gradient(135deg, #4338ca 0%, #6b21a8 100%);
+          opacity: 0.7;
         }
 
         .spinner {
@@ -759,7 +893,7 @@ export default function LoginPage() {
         .forgot-password {
           background: none;
           border: none;
-          color: #0891b2;
+          color: #4f46e5;
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
@@ -769,8 +903,8 @@ export default function LoginPage() {
         }
 
         .forgot-password:hover {
-          color: #0e7490;
-          background: rgba(0, 102, 179, 0.08);
+          color: #4338ca;
+          background: rgba(67, 56, 202, 0.08);
         }
 
         .back-to-login {
@@ -788,9 +922,9 @@ export default function LoginPage() {
         }
 
         .back-to-login:hover {
-          border-color: #0891b2;
-          color: #0891b2;
-          background: rgba(8, 145, 178, 0.05);
+          border-color: #4f46e5;
+          color: #4f46e5;
+          background: rgba(79, 70, 229, 0.05);
         }
 
         /* Responsive */

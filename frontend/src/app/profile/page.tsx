@@ -22,8 +22,13 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="w-full space-y-4 p-4 lg:p-6">
           {/* Header - Icon and Username Together */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-lg p-6 text-white">
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-lg p-6 text-white relative overflow-hidden">
+          {/* Decorative circles */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+          </div>
+          <div className="relative z-10 bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
             <div className="flex items-center space-x-6">
               <div className="flex-shrink-0">
                 <div className="h-24 w-24 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-4 ring-white/30">

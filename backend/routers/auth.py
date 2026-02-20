@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
@@ -7,8 +7,9 @@ from jose import JWTError, jwt
 import os
 
 from database import get_db
-from models import User
+from models import User, NotificationType
 from schemas.user_schemas import UserLogin, Token, UserCreate, User as UserSchema, PasswordReset
+from services.notification_service import create_notification_for_admins
 
 router = APIRouter()
 
@@ -63,7 +64,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return user
 
 @router.post("/login")
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+async def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == user_data.username).first()
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
@@ -81,6 +82,22 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
         data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
 
+    # Create login notification for all admins
+    try:
+        create_notification_for_admins(
+            db=db,
+            notification_type=NotificationType.USER_LOGIN,
+            title=f"User Login: {user.username}",
+            message=f"{user.username} ({user.role.value}) logged in",
+            reference_id=user.id,
+            reference_type="user_login",
+            created_by_username=user.username
+        )
+    except Exception as e:
+        # Don't fail login if notification creation fails
+        db.rollback()
+        print(f"Failed to create login notification: {str(e)}")
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -93,6 +110,7 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             "last_name": user.last_name,
             "role": user.role.value,
             "is_approver": user.is_approver,
+            "is_itar": getattr(user, 'is_itar', False),
             "is_active": user.is_active,
             "created_at": user.created_at,
             "updated_at": user.updated_at
@@ -132,6 +150,65 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserSchema)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.post("/sso/callback")
+async def sso_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle SSO callback from ACI FORGE. Validates SSO token and returns NEXUS JWT."""
+    sso_secret = os.getenv("SSO_SECRET_KEY", "")
+    if not sso_secret:
+        raise HTTPException(status_code=500, detail="SSO not configured")
+
+    body = await request.json()
+    sso_token = body.get("token", "")
+    if not sso_token:
+        raise HTTPException(status_code=400, detail="Missing SSO token")
+
+    try:
+        payload = jwt.decode(sso_token, sso_secret, algorithms=["HS256"])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired SSO token")
+
+    if payload.get("type") != "sso":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    if payload.get("target_app") != "nexus":
+        raise HTTPException(status_code=401, detail="Token not intended for this app")
+
+    username = payload.get("sub", "")
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"User '{username}' not found in NEXUS. Please ask an admin to create your NEXUS account."
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="User account is inactive in NEXUS")
+
+    # Create NEXUS JWT token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(user.id)}, expires_delta=access_token_expires
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role.value,
+            "is_approver": user.is_approver,
+            "is_itar": getattr(user, 'is_itar', False),
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at
+        },
+        "sso": True
+    }
+
 
 @router.post("/reset-password")
 async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)):

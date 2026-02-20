@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { QrCodeIcon, DocumentTextIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface ScanResult {
@@ -21,7 +22,7 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
 
   const handleManualScan = async () => {
     if (!manualInput.trim()) {
-      alert('Please enter a barcode or QR code');
+      toast.warning('Please enter a barcode or QR code');
       return;
     }
 
@@ -43,7 +44,7 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
 
     } catch (err) {
       console.error('Scan error:', err);
-      alert('Failed to scan barcode');
+      toast.error('Failed to scan barcode');
       setIsScanning(false);
     }
   };
@@ -52,7 +53,7 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
     setScanMode('camera');
     // In a real implementation, you would integrate with a camera scanning library
     // like @zxing/library or quagga2
-    alert('Camera scanning would be implemented with a barcode scanning library');
+    toast.info('Camera scanning would be implemented with a barcode scanning library');
   };
 
   return (

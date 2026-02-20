@@ -62,7 +62,7 @@ class WorkCenter(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    code = Column(String(20), unique=True, nullable=False)
+    code = Column(String(100), unique=True, nullable=False)
     description = Column(Text)
     traveler_type = Column(String(20), nullable=True)  # PCB_ASSEMBLY, PCB, CABLE, PURCHASING
     is_active = Column(Boolean, default=True)
@@ -78,7 +78,7 @@ class Part(Base):
     part_number = Column(String(50), nullable=False, index=True)
     description = Column(String(200), nullable=False)
     revision = Column(String(20), nullable=False)
-    work_center_code = Column(String(20), nullable=False)
+    work_center_code = Column(String(100), nullable=False)
     customer_code = Column(String(20))
     customer_name = Column(String(100))
     is_active = Column(Boolean, default=True)
@@ -142,7 +142,7 @@ class ProcessStep(Base):
     traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
     step_number = Column(Integer, nullable=False)
     operation = Column(String(100), nullable=False)
-    work_center_code = Column(String(20), ForeignKey("work_centers.code"), nullable=False)
+    work_center_code = Column(String(100), ForeignKey("work_centers.code"), nullable=False)
     instructions = Column(Text, nullable=False)
     quantity = Column(Integer)  # Quantity for this step
     accepted = Column(Integer)  # Accepted quantity

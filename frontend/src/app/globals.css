@@ -108,6 +108,26 @@ option {
   -webkit-text-fill-color: #000000 !important;
 }
 
+/* Pagination select - compact override */
+select.pagination-select {
+  padding: 2px 4px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  height: 28px !important;
+  width: auto !important;
+  min-width: 40px !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  border-radius: 4px !important;
+  color: #1e1b4b !important;
+  background-color: rgba(255,255,255,0.9) !important;
+  -webkit-text-fill-color: #1e1b4b !important;
+  -webkit-appearance: menulist !important;
+  -moz-appearance: menulist !important;
+  appearance: menulist !important;
+  cursor: pointer !important;
+}
+
 /* Force light color scheme */
 * {
   color-scheme: light !important;

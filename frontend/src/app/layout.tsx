@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import ToastProvider from "@/components/providers/ToastProvider";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -10,6 +11,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "NEXUS - American Circuits Traveler Management",
   description: "Manufacturing Traveler Management System for American Circuits",
+  icons: {
+    icon: "/nexus-icon.svg",
+    shortcut: "/nexus-icon.svg",
+    apple: "/nexus-icon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -34,6 +40,7 @@ export default function RootLayout({
             </AuthProvider>
           </ThemeProvider>
         </ErrorBoundary>
+        <ToastProvider />
       </body>
     </html>
   );

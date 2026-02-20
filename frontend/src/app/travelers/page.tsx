@@ -9,16 +9,80 @@ import {
   PencilIcon,
   PrinterIcon,
   TrashIcon,
-  DocumentDuplicateIcon,
   ArchiveBoxIcon,
   ArchiveBoxXMarkIcon,
   DocumentArrowDownIcon,
   CheckIcon,
   FunnelIcon,
   CheckCircleIcon,
-  XCircleIcon
+  XCircleIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
+import { API_BASE_URL } from '@/config/api';
+
+// Toast notification component
+interface ToastProps {
+  message: string;
+  type: 'success' | 'error' | 'info';
+  onClose: () => void;
+}
+
+function Toast({ message, type, onClose }: ToastProps) {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const fadeTimer = setTimeout(() => setIsVisible(false), 4000);
+    const removeTimer = setTimeout(() => onClose(), 4500);
+    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer); };
+  }, [onClose]);
+
+  const bgColor = type === 'success' ? 'bg-green-500/95' : type === 'error' ? 'bg-red-500/95' : 'bg-blue-500/95';
+  const borderColor = type === 'success' ? 'border-green-400' : type === 'error' ? 'border-red-400' : 'border-blue-400';
+
+  return (
+    <div
+      className="fixed top-4 right-4 z-50 transition-all duration-500"
+      style={{ opacity: isVisible ? 1 : 0, transform: isVisible ? 'translateX(0)' : 'translateX(100px)' }}
+    >
+      <div className={`flex items-center space-x-3 px-6 py-4 rounded-lg shadow-2xl backdrop-blur-md border ${bgColor} ${borderColor} text-white`}>
+        {type === 'success' ? <CheckCircleIcon className="h-6 w-6" /> : type === 'error' ? <XCircleIcon className="h-6 w-6" /> : <ExclamationTriangleIcon className="h-6 w-6" />}
+        <span className="font-medium">{message}</span>
+      </div>
+    </div>
+  );
+}
+
+// Custom Confirm Modal
+interface ConfirmModalProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmModal({ isOpen, title, message, confirmText = 'Confirm', onConfirm, onCancel }: ConfirmModalProps) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+            <ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+        </div>
+        <p className="text-gray-600 mb-6 whitespace-pre-line">{message}</p>
+        <div className="flex justify-end space-x-3">
+          <button onClick={onCancel} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all">Cancel</button>
+          <button onClick={onConfirm} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all shadow-md">{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const formatDateDisplay = (dateStr: string): string => {
   if (!dateStr) return '';
@@ -39,10 +103,12 @@ type TravelerItem = {
   poNumber: string;
   partNumber: string;
   description: string;
-  revision: string;
+  revision: string;  // Traveler Revision
+  customerRevision: string;  // Customer Revision
   quantity: number;
   customerCode: string;
   customerName: string;
+  travelerType: string;  // PCB_ASSEMBLY, PCB, CABLES, PURCHASING
   status: string;
   currentStep: string;
   progress: number;
@@ -58,16 +124,48 @@ type TravelerItem = {
   includeLaborHours: boolean;
 };
 
+// Traveler type color configuration (no red or pink)
+const getTravelerTypeBadge = (type: string) => {
+  const typeConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
+    'PCB_ASSEMBLY': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', label: 'PCB Assembly' },
+    'ASSY': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', label: 'PCB Assembly' },
+    'PCB': { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', label: 'PCB' },
+    'CABLE': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', label: 'Cables' },
+    'CABLES': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', label: 'Cables' },
+    'PURCHASING': { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', label: 'Purchasing' }
+  };
+
+  const config = typeConfig[type] || { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300', label: type };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${config.bg} ${config.text} ${config.border}`}>
+      {config.label}
+    </span>
+  );
+};
+
 export default function TravelersPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [viewFilter, setViewFilter] = useState<'active' | 'archived' | 'drafts' | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [travelers, setTravelers] = useState<TravelerItem[]>([]);
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Toast and Confirm Modal state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; confirmText: string; onConfirm: () => void }>({
+    isOpen: false, title: '', message: '', confirmText: 'Confirm', onConfirm: () => {}
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => setToast({ message, type });
+  const showConfirm = (title: string, message: string, onConfirm: () => void, confirmText = 'Confirm') => {
+    setConfirmModal({ isOpen: true, title, message, confirmText, onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal({ ...confirmModal, isOpen: false });
 
   useEffect(() => {
     fetchTravelers();
@@ -75,7 +173,7 @@ export default function TravelersPage() {
 
   const fetchTravelers = async () => {
     try {
-      const response = await fetch('http://acidashboard.aci.local:100/api/travelers/', {
+      const response = await fetch(`${API_BASE_URL}/travelers/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
         }
@@ -91,10 +189,12 @@ export default function TravelersPage() {
           poNumber: String(t.po_number || ''),
           partNumber: String(t.part_number),
           description: String(t.part_description),
-          revision: String(t.revision),
+          revision: String(t.revision || ''),
+          customerRevision: String(t.customer_revision || ''),
           quantity: Number(t.quantity),
           customerCode: String(t.customer_code || ''),
           customerName: String(t.customer_name || ''),
+          travelerType: String(t.traveler_type || 'PCB_ASSEMBLY'),
           status: String(t.status),
           currentStep: 'PENDING',
           progress: 0,
@@ -143,19 +243,23 @@ export default function TravelersPage() {
 
     const matchesStatus = statusFilter === 'All Statuses' || t.status === statusFilter;
 
+    const matchesType = typeFilter === 'all' || t.travelerType === typeFilter ||
+      (typeFilter === 'PCB_ASSEMBLY' && (t.travelerType === 'PCB_ASSEMBLY' || t.travelerType === 'ASSY')) ||
+      (typeFilter === 'CABLE' && (t.travelerType === 'CABLE' || t.travelerType === 'CABLES'));
+
     const matchesView =
       (viewFilter === 'active' && t.isActive && t.status !== 'ARCHIVED' && t.status !== 'DRAFT') ||
       (viewFilter === 'archived' && t.status === 'ARCHIVED') ||
       (viewFilter === 'drafts' && t.status === 'DRAFT') ||
-      (viewFilter === 'all');
+      (viewFilter === 'all' && t.status !== 'ARCHIVED');
 
-    return matchesSearch && matchesStatus && matchesView;
+    return matchesSearch && matchesStatus && matchesType && matchesView;
   });
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, viewFilter]);
+  }, [searchTerm, statusFilter, typeFilter, viewFilter]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredTravelers.length / itemsPerPage);
@@ -231,107 +335,103 @@ export default function TravelersPage() {
     }
   };
 
-  const archiveSelected = async () => {
-    if (selectedTravelers.length === 0) {
-      alert('❌ Please select travelers to archive');
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to archive ${selectedTravelers.length} traveler(s)?`)) return;
-
+  const doArchiveSelected = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
       await Promise.all(
         selectedTravelers.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/travelers/${id}`, {
+          fetch(`${API_BASE_URL}/travelers/${id}`, {
             method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'ARCHIVED' })
           })
         )
       );
-
-      alert(`✅ Archived ${selectedTravelers.length} traveler(s)!`);
+      showToast(`Archived ${selectedTravelers.length} traveler(s)!`, 'success');
       setSelectedTravelers([]);
       fetchTravelers();
     } catch (error) {
       console.error('Error archiving travelers:', error);
-      alert('❌ Failed to archive travelers');
+      showToast('Failed to archive travelers', 'error');
     }
+    closeConfirm();
   };
 
-  const restoreSelected = async () => {
+  const archiveSelected = () => {
     if (selectedTravelers.length === 0) {
-      alert('❌ Please select travelers to restore');
+      showToast('Please select travelers to archive', 'error');
       return;
     }
+    showConfirm('Archive Travelers', `Are you sure you want to archive ${selectedTravelers.length} traveler(s)?`, doArchiveSelected, 'Archive');
+  };
 
-    if (!confirm(`Are you sure you want to restore ${selectedTravelers.length} traveler(s)?`)) return;
-
+  const doRestoreSelected = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
       await Promise.all(
         selectedTravelers.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/travelers/${id}`, {
+          fetch(`${API_BASE_URL}/travelers/${id}`, {
             method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ status: 'CREATED', is_active: true })
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CREATED' })
           })
         )
       );
-
-      alert(`✅ Restored ${selectedTravelers.length} traveler(s)!`);
+      showToast(`Restored ${selectedTravelers.length} traveler(s)!`, 'success');
       setSelectedTravelers([]);
       fetchTravelers();
     } catch (error) {
       console.error('Error restoring travelers:', error);
-      alert('❌ Failed to restore travelers');
+      showToast('Failed to restore travelers', 'error');
     }
+    closeConfirm();
   };
 
-  const deleteSelected = async () => {
+  const restoreSelected = () => {
     if (selectedTravelers.length === 0) {
-      alert('❌ Please select travelers to delete');
+      showToast('Please select travelers to restore', 'error');
       return;
     }
+    showConfirm('Restore Travelers', `Are you sure you want to restore ${selectedTravelers.length} traveler(s)?`, doRestoreSelected, 'Restore');
+  };
 
-    if (!confirm(`⚠️ WARNING: This will permanently delete ${selectedTravelers.length} traveler(s)!\n\nThis action cannot be undone. Are you sure?`)) return;
-
+  const doDeleteSelected = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
       await Promise.all(
         selectedTravelers.map(id =>
-          fetch(`http://acidashboard.aci.local:100/api/travelers/${id}`, {
+          fetch(`${API_BASE_URL}/travelers/${id}`, {
             method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
           })
         )
       );
 
-      alert(`✅ Deleted ${selectedTravelers.length} traveler(s)!`);
+      showToast(`Deleted ${selectedTravelers.length} traveler(s)!`, 'success');
       setSelectedTravelers([]);
       fetchTravelers();
     } catch (error) {
       console.error('Error deleting travelers:', error);
-      alert('❌ Failed to delete travelers');
+      showToast('Failed to delete travelers', 'error');
     }
+    closeConfirm();
+  };
+
+  const deleteSelected = () => {
+    if (selectedTravelers.length === 0) {
+      showToast('Please select travelers to delete', 'error');
+      return;
+    }
+    showConfirm('Delete Travelers', `WARNING: This will permanently delete ${selectedTravelers.length} traveler(s)!\n\nThis action cannot be undone.`, doDeleteSelected, 'Delete');
   };
 
   const exportSelectedPDFs = async () => {
     if (selectedTravelers.length === 0) {
-      alert('❌ Please select travelers to export');
+      showToast('Please select travelers to export', 'error');
       return;
     }
 
-    alert(`📄 Exporting ${selectedTravelers.length} traveler(s) as PDFs...\n\nEach traveler will open in a new window for printing.\nPlease use your browser's print dialog to save as PDF.`);
+    showToast(`Exporting ${selectedTravelers.length} traveler(s) as PDFs...`, 'info');
 
     // Open each traveler in a new window for printing
     selectedTravelers.forEach((dbId, index) => {
@@ -350,33 +450,55 @@ export default function TravelersPage() {
 
   return (
     <Layout fullWidth>
+      {/* Toast Notification */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
+
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
         {/* Header with Stats */}
-        <div className="sticky top-0 z-50 mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-lg p-4 md:p-6 shadow-lg">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold mb-1">📋 Travelers Management</h1>
-              <p className="text-sm md:text-base text-blue-100">Manage production travelers and track progress</p>
+        <div className="mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+          </div>
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
+                <svg className="w-7 h-7 text-blue-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Travelers Management</h1>
+                <p className="text-sm text-blue-200/80 mt-0.5">Manage production travelers and track progress</p>
+              </div>
             </div>
             <div className="flex items-center gap-2 md:gap-3">
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 md:px-4 py-2 md:py-3 border border-white/30 flex-1 md:flex-initial">
-                <div className="text-xl md:text-2xl font-bold">{stats.active}</div>
-                <div className="text-xs text-blue-100">Active</div>
+              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 md:px-4 py-2 md:py-3 border border-white/20 flex-1 md:flex-initial text-center">
+                <div className="text-xl md:text-2xl font-extrabold">{stats.active}</div>
+                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Active</div>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 md:px-4 py-2 md:py-3 border border-white/30 flex-1 md:flex-initial">
-                <div className="text-xl md:text-2xl font-bold">{stats.drafts}</div>
-                <div className="text-xs text-blue-100">Drafts</div>
+              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 md:px-4 py-2 md:py-3 border border-white/20 flex-1 md:flex-initial text-center">
+                <div className="text-xl md:text-2xl font-extrabold">{stats.drafts}</div>
+                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Drafts</div>
               </div>
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 md:px-4 py-2 md:py-3 border border-white/30 flex-1 md:flex-initial">
-                <div className="text-xl md:text-2xl font-bold">{stats.archived}</div>
-                <div className="text-xs text-blue-100">Archived</div>
+              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 md:px-4 py-2 md:py-3 border border-white/20 flex-1 md:flex-initial text-center">
+                <div className="text-xl md:text-2xl font-extrabold">{stats.archived}</div>
+                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Archived</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters and Actions */}
-        <div className="sticky top-24 md:top-28 z-40 mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
+        <div className="mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
           <div className="flex flex-col gap-4">
             {/* Search */}
             <div className="w-full">
@@ -402,6 +524,29 @@ export default function TravelersPage() {
                   }`}
                 >
                   {view.charAt(0).toUpperCase() + view.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Type Filter Tabs */}
+            <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg p-1 overflow-x-auto">
+              {([
+                { value: 'all', label: 'All Types', color: 'from-gray-600 to-gray-700' },
+                { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', color: 'from-blue-600 to-blue-700' },
+                { value: 'PCB', label: 'PCB', color: 'from-green-600 to-green-700' },
+                { value: 'CABLE', label: 'Cables', color: 'from-purple-600 to-purple-700' },
+                { value: 'PURCHASING', label: 'Purchasing', color: 'from-orange-600 to-orange-700' }
+              ]).map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setTypeFilter(type.value)}
+                  className={`px-3 md:px-4 py-2 rounded-md font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
+                    typeFilter === type.value
+                      ? `bg-gradient-to-r ${type.color} text-white shadow-md`
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {type.label}
                 </button>
               ))}
             </div>
@@ -469,7 +614,22 @@ export default function TravelersPage() {
         </div>
 
         {/* Travelers Table */}
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          {/* Table Header + Pagination */}
+          <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10 pointer-events-none">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+            </div>
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xs sm:text-sm font-bold text-white">Travelers List</h2>
+                <span className="text-xs font-semibold text-white bg-white/20 px-2 py-0.5 rounded-full">
+                  {filteredTravelers.length}
+                </span>
+              </div>
+            </div>
+          </div>
           {filteredTravelers.length === 0 ? (
             <div className="p-12 text-center">
               <div className="text-6xl mb-4">📋</div>
@@ -478,35 +638,41 @@ export default function TravelersPage() {
             </div>
           ) : (
             <>
+
             {/* Desktop Table View */}
-            <div className="hidden lg:block w-full overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200">
-                <thead className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 sticky top-0 z-10" style={{ backgroundColor: '#4f46e5' }}>
-                  <tr>
-                    <th className="px-3 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+            <div className="hidden lg:block w-full overflow-x-auto relative">
+              <div className="absolute top-0 left-0 right-0 h-12 lg:h-14 overflow-hidden pointer-events-none z-20">
+                <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
+                <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
+                <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
+              </div>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
+                    <th className="px-2 lg:px-3 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       <input
                         type="checkbox"
                         checked={paginatedTravelers.length > 0 && paginatedTravelers.every(t => selectedTravelers.includes(t.dbId))}
                         onChange={selectAll}
-                        className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                        className="h-4 lg:h-5 w-4 lg:w-5 text-blue-600 rounded cursor-pointer"
                       />
                     </th>
-                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Job, WO & PO
                     </th>
-                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Part Details
                     </th>
-                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Customer Info
                     </th>
-                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Dates
                     </th>
-                    <th className="px-4 py-4 text-left text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Shipping
                     </th>
-                    <th className="px-4 py-4 text-center text-sm md:text-base font-extrabold uppercase tracking-wider" style={{ color: 'white' }}>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-center text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Actions
                     </th>
                   </tr>
@@ -521,102 +687,110 @@ export default function TravelersPage() {
                           : 'hover:bg-gray-50'
                       }`}
                     >
-                      <td className="px-3 py-4 whitespace-nowrap">
+                      <td className="px-2 lg:px-3 py-3 lg:py-4 whitespace-nowrap">
                         <input
                           type="checkbox"
                           checked={selectedTravelers.includes(traveler.dbId)}
                           onChange={() => toggleSelectTraveler(traveler.dbId)}
-                          className="h-5 w-5 text-blue-600 rounded cursor-pointer"
+                          className="h-4 lg:h-5 w-4 lg:w-5 text-blue-600 rounded cursor-pointer"
                         />
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <div className="text-base font-bold text-gray-900">Job# <span className="underline">{traveler.jobNumber}</span></div>
-                          <div className="text-base font-extrabold text-indigo-700">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
-                          <div className="text-base font-semibold text-purple-700">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="space-y-0.5 lg:space-y-1">
+                          <div className="mb-1 flex items-center gap-1 flex-wrap">
+                            {getTravelerTypeBadge(traveler.travelerType)}
+                            {traveler.status === 'DRAFT' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border border-amber-400 bg-amber-100 text-amber-800 animate-pulse">
+                                DRAFT
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm lg:text-base font-bold text-gray-900">Job# <span className="underline">{traveler.jobNumber}</span></div>
+                          <div className="text-sm lg:text-base font-extrabold text-indigo-700">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
+                          <div className="text-sm lg:text-base font-semibold text-purple-700">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <div className="text-base font-semibold text-gray-900">Part# <span className="underline">{traveler.partNumber}</span></div>
-                          <div className="text-base text-gray-600 max-w-xs truncate" title={traveler.description}>{traveler.description || 'N/A'}</div>
-                          <div className="flex gap-3 text-base">
-                            <span className="text-gray-500">Traveler Rev: <span className="font-semibold text-gray-900 underline">{traveler.revision || 'N/A'}</span></span>
-                            <span className="text-gray-500">Qty: <span className="font-bold text-gray-900 underline">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></span>
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="space-y-0.5 lg:space-y-1">
+                          <div className="text-sm lg:text-base font-semibold text-gray-900">Part# <span className="underline">{traveler.partNumber}</span></div>
+                          <div className="text-sm lg:text-base text-gray-600 max-w-xs truncate" title={traveler.description}>Desc: {traveler.description || 'N/A'}</div>
+                          <div className="flex flex-wrap gap-2 lg:gap-3 text-sm lg:text-base">
+                            <span className="text-gray-500">Trav Rev: <span className="font-semibold text-gray-900 underline">{traveler.revision || 'N/A'}</span></span>
+                            <span className="text-gray-500">Cust Rev: <span className="font-semibold text-blue-700 underline">{traveler.customerRevision || 'N/A'}</span></span>
+                            <span className="text-gray-500">Qty: <span className="font-bold text-gray-900 underline">{traveler.quantity}</span></span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <div className="text-base text-gray-600">Cust. Code: <span className="font-semibold text-gray-900 underline">{traveler.customerCode || 'N/A'}</span></div>
-                          <div className="text-base text-gray-600 max-w-xs truncate" title={traveler.customerName}>Cust. Name: <span className="font-semibold text-gray-900">{traveler.customerName || 'N/A'}</span></div>
-                          <div className="text-base text-gray-600">Cust. Rev: <span className="font-semibold text-gray-900">N/A</span></div>
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="space-y-0.5 lg:space-y-1">
+                          <div className="text-sm lg:text-base text-gray-600">Code: <span className="font-semibold text-gray-900 underline">{traveler.customerCode || 'N/A'}</span></div>
+                          <div className="text-sm lg:text-base text-gray-600 max-w-xs truncate" title={traveler.customerName}>Name: <span className="font-semibold text-gray-900">{traveler.customerName || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <div className="text-sm text-gray-600">Start Date: <span className="font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
-                          <div className="text-sm text-gray-600">Due: <span className="font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
-                          <div className="text-sm text-gray-600">Ship: <span className="font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="space-y-0.5 lg:space-y-1">
+                          <div className="text-xs lg:text-sm text-gray-600">Start: <span className="font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
+                          <div className="text-xs lg:text-sm text-gray-600">Due: <span className="font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
+                          <div className="text-xs lg:text-sm text-gray-600">Ship: <span className="font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <div className="text-base text-gray-600">Ship Via: <span className="font-semibold text-gray-900">{traveler.shipVia || 'N/A'}</span></div>
-                          <div className="text-base text-gray-600">From Stock: <span className="font-semibold text-gray-900">{traveler.fromStock || 'N/A'}</span></div>
-                          <div className="text-base text-gray-600">To Stock: <span className="font-semibold text-gray-900">{traveler.toStock || 'N/A'}</span></div>
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="space-y-0.5 lg:space-y-1">
+                          <div className="text-sm lg:text-base text-gray-600">Via: <span className="font-semibold text-gray-900">{traveler.shipVia || 'N/A'}</span></div>
+                          <div className="text-sm lg:text-base text-gray-600">From: <span className="font-semibold text-gray-900">{traveler.fromStock || 'N/A'}</span></div>
+                          <div className="text-sm lg:text-base text-gray-600">To: <span className="font-semibold text-gray-900">{traveler.toStock || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-1 lg:gap-2">
                           <Link
                             href={`/travelers/${traveler.dbId}`}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                            className="p-1.5 lg:p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
                             title="View"
                           >
-                            <EyeIcon className="h-5 w-5" />
+                            <EyeIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                           </Link>
                           <Link
-                            href={`/travelers/${traveler.dbId}`}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
+                            href={`/travelers/${traveler.dbId}/edit`}
+                            className="p-1.5 lg:p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
                             title="Edit"
                           >
-                            <PencilIcon className="h-5 w-5" />
-                          </Link>
-                          <Link
-                            href={`/travelers/clone/${traveler.dbId}`}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex items-center justify-center"
-                            title="Clone"
-                          >
-                            <DocumentDuplicateIcon className="h-5 w-5" />
+                            <PencilIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                           </Link>
                           <button
-                            onClick={async () => {
+                            onClick={() => {
                               const newActiveStatus = !traveler.isActive;
                               const action = newActiveStatus ? 'activate' : 'deactivate';
-                              if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`)) return;
-                              try {
-                                const token = localStorage.getItem('nexus_token');
-                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                  method: 'PATCH',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                  },
-                                  body: JSON.stringify({ is_active: newActiveStatus })
-                                });
-                                if (response.ok) {
-                                  alert(`✅ Traveler ${traveler.jobNumber} ${action}d!`);
-                                  fetchTravelers();
-                                } else {
-                                  alert(`❌ Failed to ${action} traveler`);
-                                }
-                              } catch (error) {
-                                console.error('Error:', error);
-                                alert(`❌ Failed to ${action} traveler`);
-                              }
+                              showConfirm(
+                                `${action.charAt(0).toUpperCase() + action.slice(1)} Traveler`,
+                                `${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`,
+                                async () => {
+                                  try {
+                                    const token = localStorage.getItem('nexus_token');
+                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                      method: 'PATCH',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                      },
+                                      body: JSON.stringify({ is_active: newActiveStatus })
+                                    });
+                                    if (response.ok) {
+                                      showToast(`Traveler ${traveler.jobNumber} ${action}d!`, 'success');
+                                      fetchTravelers();
+                                    } else {
+                                      showToast(`Failed to ${action} traveler`, 'error');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error:', error);
+                                    showToast(`Failed to ${action} traveler`, 'error');
+                                  }
+                                  closeConfirm();
+                                },
+                                action.charAt(0).toUpperCase() + action.slice(1)
+                              );
                             }}
-                            className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                            className={`p-1.5 lg:p-2 rounded-lg transition-colors flex items-center justify-center ${
                               traveler.isActive
                                 ? 'text-green-600 hover:bg-green-50'
                                 : 'text-red-600 hover:bg-red-50'
@@ -624,75 +798,89 @@ export default function TravelersPage() {
                             title={traveler.isActive ? 'Mark as Inactive' : 'Mark as Active'}
                           >
                             {traveler.isActive ? (
-                              <CheckCircleIcon className="h-5 w-5" />
+                              <CheckCircleIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                             ) : (
-                              <XCircleIcon className="h-5 w-5" />
+                              <XCircleIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                             )}
                           </button>
                           {traveler.status !== 'ARCHIVED' && (
                             <button
-                              onClick={async () => {
-                                if (!confirm(`Archive traveler ${traveler.jobNumber}?`)) return;
-                                try {
-                                  const token = localStorage.getItem('nexus_token');
-                                  const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                    method: 'PATCH',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`,
-                                      'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({ status: 'ARCHIVED' })
-                                  });
-                                  if (response.ok) {
-                                    alert(`✅ Traveler ${traveler.jobNumber} archived!`);
-                                    fetchTravelers();
-                                  } else {
-                                    alert('❌ Failed to archive traveler');
-                                  }
-                                } catch (error) {
-                                  console.error('Error:', error);
-                                  alert('❌ Failed to archive traveler');
-                                }
+                              onClick={() => {
+                                showConfirm(
+                                  'Archive Traveler',
+                                  `Archive traveler ${traveler.jobNumber}?`,
+                                  async () => {
+                                    try {
+                                      const token = localStorage.getItem('nexus_token');
+                                      const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                        method: 'PATCH',
+                                        headers: {
+                                          'Authorization': `Bearer ${token}`,
+                                          'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ status: 'ARCHIVED' })
+                                      });
+                                      if (response.ok) {
+                                        showToast(`Traveler ${traveler.jobNumber} archived!`, 'success');
+                                        fetchTravelers();
+                                      } else {
+                                        showToast('Failed to archive traveler', 'error');
+                                      }
+                                    } catch (error) {
+                                      console.error('Error:', error);
+                                      showToast('Failed to archive traveler', 'error');
+                                    }
+                                    closeConfirm();
+                                  },
+                                  'Archive'
+                                );
                               }}
-                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex items-center justify-center"
+                              className="p-1.5 lg:p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex items-center justify-center"
                               title="Archive"
                             >
-                              <ArchiveBoxIcon className="h-5 w-5" />
+                              <ArchiveBoxIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                             </button>
                           )}
                           <button
-                            onClick={async () => {
-                              if (!confirm(`Are you sure you want to DELETE traveler ${traveler.jobNumber}? This cannot be undone!`)) return;
-                              try {
-                                const token = localStorage.getItem('nexus_token');
-                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                  method: 'DELETE',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`
+                            onClick={() => {
+                              showConfirm(
+                                'Delete Traveler',
+                                `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
+                                async () => {
+                                  try {
+                                    const token = localStorage.getItem('nexus_token');
+                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                      method: 'DELETE',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`
+                                      }
+                                    });
+                                    if (response.ok) {
+                                      showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
+                                      fetchTravelers();
+                                    } else {
+                                      showToast('Failed to delete traveler', 'error');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error:', error);
+                                    showToast('Failed to delete traveler', 'error');
                                   }
-                                });
-                                if (response.ok) {
-                                  alert(`✅ Traveler ${traveler.jobNumber} deleted!`);
-                                  fetchTravelers();
-                                } else {
-                                  alert('❌ Failed to delete traveler');
-                                }
-                              } catch (error) {
-                                console.error('Error:', error);
-                                alert('❌ Failed to delete traveler');
-                              }
+                                  closeConfirm();
+                                },
+                                'Delete'
+                              );
                             }}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                            className="p-1.5 lg:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
                             title="Delete"
                           >
-                            <TrashIcon className="h-5 w-5" />
+                            <TrashIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                           </button>
                           <button
                             onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
-                            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center"
+                            className="p-1.5 lg:p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center"
                             title="Print"
                           >
-                            <PrinterIcon className="h-5 w-5" />
+                            <PrinterIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                           </button>
                         </div>
                       </td>
@@ -703,8 +891,8 @@ export default function TravelersPage() {
             </div>
 
             {/* Mobile Card View */}
-            <div className="block lg:hidden">
-              <div className="p-3 space-y-3">
+            <div className="block lg:hidden w-full">
+              <div className="p-3 space-y-4">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
                     selectedTravelers.includes(traveler.dbId)
@@ -726,6 +914,14 @@ export default function TravelersPage() {
                           <div className="text-xs text-blue-100">PO# {traveler.poNumber || 'N/A'}</div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-1">
+                        {getTravelerTypeBadge(traveler.travelerType)}
+                        {traveler.status === 'DRAFT' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border border-amber-400 bg-amber-100 text-amber-800 animate-pulse">
+                            DRAFT
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Card Content */}
@@ -739,10 +935,14 @@ export default function TravelersPage() {
                         <div className="text-xs text-gray-500 font-semibold">Description</div>
                         <div className="text-sm text-gray-700">{traveler.description || 'N/A'}</div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Revision</div>
+                          <div className="text-xs text-gray-500 font-semibold">Traveler Rev</div>
                           <div className="text-sm text-gray-900">{traveler.revision || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500 font-semibold">Customer Rev</div>
+                          <div className="text-sm text-blue-700">{traveler.customerRevision || 'N/A'}</div>
                         </div>
                         <div>
                           <div className="text-xs text-gray-500 font-semibold">Quantity</div>
@@ -796,20 +996,12 @@ export default function TravelersPage() {
                             <span className="text-xs mt-1">View</span>
                           </Link>
                           <Link
-                            href={`/travelers/${traveler.dbId}`}
+                            href={`/travelers/${traveler.dbId}/edit`}
                             className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex flex-col items-center justify-center"
                             title="Edit"
                           >
                             <PencilIcon className="h-5 w-5" />
                             <span className="text-xs mt-1">Edit</span>
-                          </Link>
-                          <Link
-                            href={`/travelers/clone/${traveler.dbId}`}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex flex-col items-center justify-center"
-                            title="Clone"
-                          >
-                            <DocumentDuplicateIcon className="h-5 w-5" />
-                            <span className="text-xs mt-1">Clone</span>
                           </Link>
                           <button
                             onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
@@ -820,30 +1012,37 @@ export default function TravelersPage() {
                             <span className="text-xs mt-1">Print</span>
                           </button>
                           <button
-                            onClick={async () => {
+                            onClick={() => {
                               const newActiveStatus = !traveler.isActive;
                               const action = newActiveStatus ? 'activate' : 'deactivate';
-                              if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`)) return;
-                              try {
-                                const token = localStorage.getItem('nexus_token');
-                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                  method: 'PATCH',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                  },
-                                  body: JSON.stringify({ is_active: newActiveStatus })
-                                });
-                                if (response.ok) {
-                                  alert(`✅ Traveler ${traveler.jobNumber} ${action}d!`);
-                                  fetchTravelers();
-                                } else {
-                                  alert(`❌ Failed to ${action} traveler`);
-                                }
-                              } catch (error) {
-                                console.error('Error:', error);
-                                alert(`❌ Failed to ${action} traveler`);
-                              }
+                              showConfirm(
+                                `${action.charAt(0).toUpperCase() + action.slice(1)} Traveler`,
+                                `${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`,
+                                async () => {
+                                  try {
+                                    const token = localStorage.getItem('nexus_token');
+                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                      method: 'PATCH',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                      },
+                                      body: JSON.stringify({ is_active: newActiveStatus })
+                                    });
+                                    if (response.ok) {
+                                      showToast(`Traveler ${traveler.jobNumber} ${action}d!`, 'success');
+                                      fetchTravelers();
+                                    } else {
+                                      showToast(`Failed to ${action} traveler`, 'error');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error:', error);
+                                    showToast(`Failed to ${action} traveler`, 'error');
+                                  }
+                                  closeConfirm();
+                                },
+                                action.charAt(0).toUpperCase() + action.slice(1)
+                              );
                             }}
                             className={`p-2 rounded-lg transition-colors flex flex-col items-center justify-center ${
                               traveler.isActive
@@ -861,28 +1060,35 @@ export default function TravelersPage() {
                           </button>
                           {traveler.status !== 'ARCHIVED' && (
                             <button
-                              onClick={async () => {
-                                if (!confirm(`Archive traveler ${traveler.jobNumber}?`)) return;
-                                try {
-                                  const token = localStorage.getItem('nexus_token');
-                                  const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                    method: 'PATCH',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`,
-                                      'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({ status: 'ARCHIVED' })
-                                  });
-                                  if (response.ok) {
-                                    alert(`✅ Traveler ${traveler.jobNumber} archived!`);
-                                    fetchTravelers();
-                                  } else {
-                                    alert('❌ Failed to archive traveler');
-                                  }
-                                } catch (error) {
-                                  console.error('Error:', error);
-                                  alert('❌ Failed to archive traveler');
-                                }
+                              onClick={() => {
+                                showConfirm(
+                                  'Archive Traveler',
+                                  `Archive traveler ${traveler.jobNumber}?`,
+                                  async () => {
+                                    try {
+                                      const token = localStorage.getItem('nexus_token');
+                                      const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                        method: 'PATCH',
+                                        headers: {
+                                          'Authorization': `Bearer ${token}`,
+                                          'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ status: 'ARCHIVED' })
+                                      });
+                                      if (response.ok) {
+                                        showToast(`Traveler ${traveler.jobNumber} archived!`, 'success');
+                                        fetchTravelers();
+                                      } else {
+                                        showToast('Failed to archive traveler', 'error');
+                                      }
+                                    } catch (error) {
+                                      console.error('Error:', error);
+                                      showToast('Failed to archive traveler', 'error');
+                                    }
+                                    closeConfirm();
+                                  },
+                                  'Archive'
+                                );
                               }}
                               className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex flex-col items-center justify-center"
                               title="Archive"
@@ -892,26 +1098,33 @@ export default function TravelersPage() {
                             </button>
                           )}
                           <button
-                            onClick={async () => {
-                              if (!confirm(`Are you sure you want to DELETE traveler ${traveler.jobNumber}? This cannot be undone!`)) return;
-                              try {
-                                const token = localStorage.getItem('nexus_token');
-                                const response = await fetch(`http://acidashboard.aci.local:100/api/travelers/${traveler.dbId}`, {
-                                  method: 'DELETE',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`
+                            onClick={() => {
+                              showConfirm(
+                                'Delete Traveler',
+                                `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
+                                async () => {
+                                  try {
+                                    const token = localStorage.getItem('nexus_token');
+                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                      method: 'DELETE',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`
+                                      }
+                                    });
+                                    if (response.ok) {
+                                      showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
+                                      fetchTravelers();
+                                    } else {
+                                      showToast('Failed to delete traveler', 'error');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error:', error);
+                                    showToast('Failed to delete traveler', 'error');
                                   }
-                                });
-                                if (response.ok) {
-                                  alert(`✅ Traveler ${traveler.jobNumber} deleted!`);
-                                  fetchTravelers();
-                                } else {
-                                  alert('❌ Failed to delete traveler');
-                                }
-                              } catch (error) {
-                                console.error('Error:', error);
-                                alert('❌ Failed to delete traveler');
-                              }
+                                  closeConfirm();
+                                },
+                                'Delete'
+                              );
                             }}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex flex-col items-center justify-center"
                             title="Delete"
@@ -927,80 +1140,38 @@ export default function TravelersPage() {
               </div>
             </div>
 
-              {/* Pagination Controls */}
+              {/* Bottom Pagination Controls */}
               {filteredTravelers.length > 0 && (
-                <div className="px-4 py-4 border-t-2 border-gray-200 bg-gray-50">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    {/* Items per page selector */}
+                <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+                  <div className="absolute inset-0 opacity-10 pointer-events-none">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
+                    <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
+                  </div>
+                  <div className="relative z-10 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-700 font-medium">Show:</span>
-                      <select
-                        value={itemsPerPage}
-                        onChange={(e) => {
-                          setItemsPerPage(Number(e.target.value));
-                          setCurrentPage(1);
-                        }}
-                        className="px-3 py-1 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm font-semibold"
-                      >
+                      <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="pagination-select">
                         <option value={10}>10</option>
                         <option value={20}>20</option>
                         <option value={50}>50</option>
                         <option value={100}>100</option>
                       </select>
-                      <span className="text-sm text-gray-700">
-                        Showing {startIndex + 1}-{Math.min(endIndex, filteredTravelers.length)} of {filteredTravelers.length} travelers
-                      </span>
+                      <span className="text-xs text-white/80">{startIndex + 1}-{Math.min(endIndex, filteredTravelers.length)} of {filteredTravelers.length}</span>
                     </div>
-
-                    {/* Page navigation */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => goToPage(1)}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        First
-                      </button>
-                      <button
-                        onClick={() => goToPage(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Prev
-                      </button>
-
-                      {getPageNumbers().map((page, index) => (
-                        page === '...' ? (
-                          <span key={`ellipsis-${index}`} className="px-3 py-1 text-gray-500">...</span>
-                        ) : (
-                          <button
-                            key={page}
-                            onClick={() => goToPage(Number(page))}
-                            className={`px-3 py-1 rounded-lg font-semibold text-sm transition-colors ${
-                              currentPage === page
-                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                                : 'bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        )
-                      ))}
-
-                      <button
-                        onClick={() => goToPage(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Next
-                      </button>
-                      <button
-                        onClick={() => goToPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 rounded-lg font-semibold text-sm bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Last
-                      </button>
+                    <div className="flex items-center gap-0.5">
+                      <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">«</button>
+                      <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">‹</button>
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let page: number;
+                        if (totalPages <= 5) page = i + 1;
+                        else if (currentPage <= 3) page = i + 1;
+                        else if (currentPage >= totalPages - 2) page = totalPages - 4 + i;
+                        else page = currentPage - 2 + i;
+                        return (
+                          <button key={page} onClick={() => setCurrentPage(page)} className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${currentPage === page ? 'bg-white text-indigo-700 shadow-sm' : 'bg-white/20 border border-white/30 text-white hover:bg-white/30'}`}>{page}</button>
+                        );
+                      })}
+                      <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">›</button>
+                      <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">»</button>
                     </div>
                   </div>
                 </div>

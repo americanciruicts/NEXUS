@@ -244,7 +244,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         if (response.ok) {
           const data = await response.json();
           if (data.length > 0) {
-            setDynamicWorkCenters(data.map((wc: any) => ({ name: wc.name, description: wc.description || '' })));
+            setDynamicWorkCenters(data.map((wc: any) => ({ name: wc.name, description: wc.description || '', code: wc.code || '' })));
             return;
           }
         }
@@ -399,7 +399,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           process_steps: formSteps.map(step => ({
             step_number: step.sequence,
             operation: step.workCenter,
-            work_center_code: step.workCenter.replace(/\s+/g, '_').toUpperCase(),
+            work_center_code: dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.code || step.workCenter.replace(/\s+/g, '_').toUpperCase(),
             instructions: step.instruction || '',
             estimated_time: 30,
             is_required: true,
@@ -923,7 +923,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       process_steps: formSteps.map(step => ({
         step_number: step.sequence,
         operation: step.workCenter,
-        work_center_code: step.workCenter.replace(/\s+/g, '_').toUpperCase(),
+        work_center_code: dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.code || step.workCenter.replace(/\s+/g, '_').toUpperCase(),
         instructions: step.instruction || '',
         estimated_time: 30,
         is_required: true,
@@ -1058,7 +1058,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       process_steps: formSteps.map(step => ({
         step_number: step.sequence,
         operation: step.workCenter,
-        work_center_code: step.workCenter.replace(/\s+/g, '_').toUpperCase(),
+        work_center_code: dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.code || step.workCenter.replace(/\s+/g, '_').toUpperCase(),
         instructions: step.instruction || '',
         estimated_time: 30,
         is_required: true,
