@@ -13,8 +13,8 @@ import {
   PencilIcon,
   TrashIcon,
   XMarkIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import {
   PCB_ASSEMBLY_WORK_CENTERS,
@@ -454,11 +454,11 @@ export default function WorkCenterManagementPage() {
                                 <div className="flex gap-0.5">
                                   <button onClick={() => handleMove(wc.id, 'up')} disabled={isFirst}
                                     className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
-                                    <ChevronUpIcon className="h-3.5 w-3.5" />
+                                    <ArrowUpIcon className="h-3.5 w-3.5" />
                                   </button>
                                   <button onClick={() => handleMove(wc.id, 'down')} disabled={isLast}
                                     className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
-                                    <ChevronDownIcon className="h-3.5 w-3.5" />
+                                    <ArrowDownIcon className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
                               </div>
@@ -510,18 +510,18 @@ export default function WorkCenterManagementPage() {
                                   <button
                                     onClick={() => handleMove(wc.id, 'up')}
                                     disabled={isFirst}
-                                    className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                                    className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 rounded-md disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                                     title="Move Up"
                                   >
-                                    <ChevronUpIcon className="h-5 w-5" />
+                                    <ArrowUpIcon className="h-4 w-4 stroke-2" />
                                   </button>
                                   <button
                                     onClick={() => handleMove(wc.id, 'down')}
                                     disabled={isLast}
-                                    className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                                    className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 rounded-md disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                                     title="Move Down"
                                   >
-                                    <ChevronDownIcon className="h-5 w-5" />
+                                    <ArrowDownIcon className="h-4 w-4 stroke-2" />
                                   </button>
                                 </div>
                               </td>
