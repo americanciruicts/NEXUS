@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import { API_BASE_URL } from '@/config/api';
 import {
   UserIcon,
@@ -178,7 +178,6 @@ export default function GlobalSearch() {
       if (query.length >= 2) {
         return (
           <div className="px-4 py-8 text-center text-gray-500">
-            <MagnifyingGlassIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
             <p className="text-sm">No results found for &quot;{query}&quot;</p>
           </div>
         );
@@ -326,7 +325,6 @@ export default function GlobalSearch() {
         onClick={() => setIsOpen(true)}
         className="flex items-center space-x-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/90 hover:text-white border border-white/20"
       >
-        <MagnifyingGlassIcon className="h-5 w-5" />
         <span className="text-sm hidden md:inline">Search...</span>
         <kbd className="hidden md:inline-flex items-center px-2 py-0.5 text-xs font-semibold text-white/70 bg-white/10 border border-white/20 rounded">
           ⌘K
@@ -345,7 +343,6 @@ export default function GlobalSearch() {
               {/* Search Input */}
               <div className="px-4 py-3 border-b border-gray-200">
                 <div className="flex items-center space-x-2">
-                  <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
                   <input
                     ref={inputRef}
                     type="text"

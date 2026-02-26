@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Layout from '@/components/layout/Layout';
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, UserCircleIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, UserCircleIcon, EyeIcon, EyeSlashIcon, ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { API_BASE_URL } from '@/config/api';
 
@@ -385,13 +385,12 @@ export default function UsersPage() {
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative">
-                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search users..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2.5 rounded-xl border-0 w-full sm:w-64 focus:ring-2 focus:ring-white/50 shadow-md text-sm"
+                    className="px-4 py-2.5 rounded-xl border-0 w-full sm:w-64 focus:ring-2 focus:ring-white/50 shadow-md text-sm"
                   />
                 </div>
                 <button
