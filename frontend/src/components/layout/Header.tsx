@@ -353,7 +353,7 @@ export default function Header() {
                 title="User Menu"
               >
                 <div className="text-right">
-                  <p className="text-sm font-medium text-white">{user?.username || 'Guest'}</p>
+                  <p className="text-sm font-medium text-white">{user?.first_name || user?.username || 'Guest'}</p>
                   <p className="text-xs text-blue-200">{user?.role || 'No Role'}</p>
                 </div>
                 <UserCircleIcon className="h-9 w-9 text-pink-300 flex-shrink-0" />
@@ -364,7 +364,7 @@ export default function Header() {
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 border border-gray-200">
                   <div className="py-1">
                     <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                      <p className="text-sm font-semibold text-gray-900">{user?.username}</p>
+                      <p className="text-sm font-semibold text-gray-900">{user?.first_name || user?.username}</p>
                       <p className="text-xs text-gray-600 mt-0.5">{user?.role}</p>
                       {user?.isApprover && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1.5">

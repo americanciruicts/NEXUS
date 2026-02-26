@@ -5,13 +5,46 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import os
+import httpx
+import logging
 
 from database import get_db
 from models import User, NotificationType
 from schemas.user_schemas import UserLogin, Token, UserCreate, User as UserSchema, PasswordReset
 from services.notification_service import create_notification_for_admins
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# FORGE webhook URLs (try local first, then public)
+FORGE_WEBHOOK_URLS = [
+    "http://aci-forge-backend-1:8000/api/notifications/webhook/login",
+    "https://api-forge.americancircuits.net/api/notifications/webhook/login",
+]
+
+
+def notify_forge_login(username: str, full_name: str):
+    """Send login notification to FORGE (non-blocking best-effort)."""
+    sso_secret = os.getenv("SSO_SECRET_KEY", "")
+    if not sso_secret:
+        return
+    login_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    payload = {
+        "app": "nexus",
+        "username": username,
+        "full_name": full_name,
+        "login_time": login_time,
+        "secret": sso_secret,
+    }
+    for url in FORGE_WEBHOOK_URLS:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.post(url, json=payload)
+                if resp.status_code == 200:
+                    return
+        except Exception as e:
+            logger.debug(f"FORGE webhook failed for {url}: {e}")
+            continue
 
 # Security
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -87,8 +120,8 @@ async def login(user_data: UserLogin, request: Request, db: Session = Depends(ge
         create_notification_for_admins(
             db=db,
             notification_type=NotificationType.USER_LOGIN,
-            title=f"User Login: {user.username}",
-            message=f"{user.username} ({user.role.value}) logged in",
+            title=f"User Login: {user.first_name}",
+            message=f"{user.first_name} ({user.role.value}) logged in",
             reference_id=user.id,
             reference_type="user_login",
             created_by_username=user.username
@@ -97,6 +130,12 @@ async def login(user_data: UserLogin, request: Request, db: Session = Depends(ge
         # Don't fail login if notification creation fails
         db.rollback()
         print(f"Failed to create login notification: {str(e)}")
+
+    # Notify FORGE about this Nexus login (non-blocking)
+    try:
+        notify_forge_login(username=user.username, full_name=user.first_name)
+    except Exception:
+        pass
 
     return {
         "access_token": access_token,
@@ -188,6 +227,21 @@ async def sso_callback(request: Request, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
+
+    # Create SSO login notification for admins
+    try:
+        create_notification_for_admins(
+            db=db,
+            notification_type=NotificationType.USER_LOGIN,
+            title=f"SSO Login via ACI FORGE: {user.first_name}",
+            message=f"{user.first_name} ({user.role.value}) logged in via ACI FORGE SSO",
+            reference_id=user.id,
+            reference_type="sso_login",
+            created_by_username=user.username
+        )
+    except Exception as e:
+        db.rollback()
+        print(f"Failed to create SSO login notification: {str(e)}")
 
     return {
         "access_token": access_token,
