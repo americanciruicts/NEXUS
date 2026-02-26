@@ -63,9 +63,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
               localStorage.removeItem('nexus_token');
               setUser(null);
             } else {
+              const derivedFirstName = parsed.first_name || (parsed.username?.includes('@') ? parsed.username.split('@')[0].charAt(0).toUpperCase() + parsed.username.split('@')[0].slice(1) : parsed.username);
               setUser({
                 username: parsed.username,
-                first_name: parsed.first_name,
+                first_name: derivedFirstName,
                 role: parsed.role,
                 isApprover: parsed.isApprover || false
               });
