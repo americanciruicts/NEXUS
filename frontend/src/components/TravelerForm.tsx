@@ -1380,17 +1380,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         {/* Main Form - Page 1 */}
         <div className="bg-white shadow-lg rounded-lg border-2 border-indigo-100 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6 overflow-hidden">
           {/* Top Row - Responsive */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Page</label>
-              <input
-                type="text"
-                value={formData.pageNumber}
-                onChange={(e) => setFormData({...formData, pageNumber: e.target.value})}
-                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-              />
-            </div>
-            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-gray-700 mb-1">
                 Job No * {isLeadFree && <span className="text-green-600">(L)</span>}{isITAR && <span className="text-red-600">(M)</span>}
               </label>
@@ -1485,7 +1476,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 {isITAR && <span className="flex-shrink-0 px-2 py-1.5 bg-purple-100 text-purple-800 font-bold rounded text-xs border border-purple-300">M</span>}
               </div>
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">Work Order *</label>
               <div className="flex items-center gap-1 min-w-0">
                 <input
@@ -1537,9 +1528,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Customer and Part Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6 lg:gap-8 mb-3 sm:mb-4 md:mb-6">
-            {/* Left Column */}
-            <div className="space-y-3 md:space-y-4">
+          <div className="space-y-3 sm:space-y-4 mb-3 sm:mb-4 md:mb-6">
+            {/* Row 1: Customer Code + Quantity */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Customer Code</label>
                 <input
@@ -1551,6 +1542,20 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 />
               </div>
               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Quantity *</label>
+                <input
+                  type="number"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
+                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  placeholder="250"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Customer Name + PO Number (side by side) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Customer Name</label>
                 <input
                   type="text"
@@ -1558,16 +1563,6 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   onChange={(e) => setFormData({...formData, customerName: e.target.value})}
                   className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   placeholder="ACME Corporation"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Part No *</label>
-                <input
-                  type="text"
-                  value={formData.partNumber}
-                  onChange={(e) => setFormData({...formData, partNumber: e.target.value})}
-                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-                  placeholder="METSHIFT"
                 />
               </div>
               <div>
@@ -1582,8 +1577,18 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </div>
             </div>
 
-            {/* Right Column */}
-            <div className="space-y-3 md:space-y-4">
+            {/* Row 3: Part No + Part Description (side by side) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Part No *</label>
+                <input
+                  type="text"
+                  value={formData.partNumber}
+                  onChange={(e) => setFormData({...formData, partNumber: e.target.value})}
+                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  placeholder="METSHIFT"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Part Description *</label>
                 <input
@@ -1594,42 +1599,24 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   placeholder="METSHIFT Assembly"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Quantity *</label>
-                  <input
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
-                    className="w-full border-2 border-blue-300 rounded-lg px-3 py-2 text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                    placeholder="250"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Lot</label>
-                  <input
-                    type="text"
-                    value={formData.lot}
-                    onChange={(e) => setFormData({...formData, lot: e.target.value})}
-                    className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Traveler Revision</label>
-                  <input
-                    type="text"
-                    value={formData.revision}
-                    onChange={(e) => {
-                      setFormData({...formData, revision: e.target.value});
-                      // Clear auto-populate flag when user manually changes revision
-                      if (wasAutoPopulated && e.target.value !== autoPopulatedRevision) {
-                        setWasAutoPopulated(false);
-                      }
-                    }}
-                    className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
-                    placeholder="A"
-                  />
-                </div>
+            </div>
+
+            {/* Row 4: Traveler Revision + Customer Revision (side by side) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Traveler Revision</label>
+                <input
+                  type="text"
+                  value={formData.revision}
+                  onChange={(e) => {
+                    setFormData({...formData, revision: e.target.value});
+                    if (wasAutoPopulated && e.target.value !== autoPopulatedRevision) {
+                      setWasAutoPopulated(false);
+                    }
+                  }}
+                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  placeholder="A"
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Customer Revision</label>
