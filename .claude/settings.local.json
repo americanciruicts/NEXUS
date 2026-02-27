@@ -47,7 +47,15 @@
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4IiwiZXhwIjoxNzcwMDg0MDkyfQ.qEcQDm0PvlpMHjTwVbVvo_LNXjtA4jhy9QZEpNeiLP0\")",
       "Bash(git -C /home/tony/NEXUS diff --stat)",
       "Bash(git -C /home/tony/NEXUS status)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(tee:*)",
+      "Bash(du:*)",
+      "Bash(xargs:*)",
+      "Bash(git checkout:*)",
+      "Bash(npx next build:*)",
+      "Bash(git fetch:*)",
+      "Bash(git reset HEAD backend/.env user_cred.md)",
+      "Bash(sudo chmod -R a+r backend/middleware/__pycache__/)"
     ],
     "deny": [],
     "ask": []

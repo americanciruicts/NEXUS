@@ -1,48 +1,49 @@
--- Performance Optimization Indexes
--- Adds indexes to frequently queried fields for better query performance
+-- Performance indexes for dashboard queries
+-- Run this script to improve dashboard query performance
 
--- Travelers table indexes
-CREATE INDEX IF NOT EXISTS idx_travelers_job_number ON travelers(job_number);
-CREATE INDEX IF NOT EXISTS idx_travelers_work_order ON travelers(work_order_number);
+-- Index on labor_entries.created_at for date range queries
+CREATE INDEX IF NOT EXISTS idx_labor_entries_created_at ON labor_entries(created_at);
+
+-- Index on travelers.created_at for date range queries
+CREATE INDEX IF NOT EXISTS idx_travelers_created_at ON travelers(created_at);
+
+-- Index on travelers.status for status filtering
 CREATE INDEX IF NOT EXISTS idx_travelers_status ON travelers(status);
-CREATE INDEX IF NOT EXISTS idx_travelers_created_by ON travelers(created_by);
-CREATE INDEX IF NOT EXISTS idx_travelers_created_at ON travelers(created_at DESC);
 
--- Labor entries indexes
-CREATE INDEX IF NOT EXISTS idx_labor_entries_employee ON labor_entries(employee_id);
-CREATE INDEX IF NOT EXISTS idx_labor_entries_traveler ON labor_entries(traveler_id);
-CREATE INDEX IF NOT EXISTS idx_labor_entries_start_time ON labor_entries(start_time DESC);
-CREATE INDEX IF NOT EXISTS idx_labor_entries_completed ON labor_entries(is_completed);
+-- Index on travelers.completed_at for completion time calculations
+CREATE INDEX IF NOT EXISTS idx_travelers_completed_at ON travelers(completed_at);
 
--- Process steps indexes
-CREATE INDEX IF NOT EXISTS idx_process_steps_traveler ON process_steps(traveler_id);
-CREATE INDEX IF NOT EXISTS idx_process_steps_work_center ON process_steps(work_center_code);
+-- Index on notifications.created_at for notification queries
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 
--- Notifications indexes
-CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+-- Index on notifications.is_read for unread notification filtering
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
 
--- Users indexes
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+-- Index on labor_entries.work_center for work center aggregation
+CREATE INDEX IF NOT EXISTS idx_labor_entries_work_center ON labor_entries(work_center);
 
--- Audit logs indexes
-CREATE INDEX IF NOT EXISTS idx_audit_logs_traveler ON audit_logs(traveler_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+-- Index on labor_entries.employee_id for employee performance queries
+CREATE INDEX IF NOT EXISTS idx_labor_entries_employee_id ON labor_entries(employee_id);
 
--- Tracking logs indexes
-CREATE INDEX IF NOT EXISTS idx_tracking_logs_traveler ON traveler_tracking_logs(traveler_id);
-CREATE INDEX IF NOT EXISTS idx_tracking_logs_job ON traveler_tracking_logs(job_number);
-CREATE INDEX IF NOT EXISTS idx_tracking_logs_scanned ON traveler_tracking_logs(scanned_at DESC);
+-- Index on traveler_time_entries.end_time for active tracking queries
+CREATE INDEX IF NOT EXISTS idx_traveler_time_entries_end_time ON traveler_time_entries(end_time);
 
--- Composite indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_travelers_status_active ON travelers(status, is_active);
-CREATE INDEX IF NOT EXISTS idx_labor_employee_completed ON labor_entries(employee_id, is_completed);
+-- Index on labor_entries.is_completed for active labor filtering
+CREATE INDEX IF NOT EXISTS idx_labor_entries_is_completed ON labor_entries(is_completed);
 
--- Comments explaining index choices
-COMMENT ON INDEX idx_travelers_job_number IS 'Speeds up traveler searches by job number';
-COMMENT ON INDEX idx_labor_entries_employee IS 'Optimizes labor entry queries by employee';
-COMMENT ON INDEX idx_notifications_user IS 'Improves notification retrieval performance';
+-- Composite index for common dashboard queries
+CREATE INDEX IF NOT EXISTS idx_travelers_status_created_at ON travelers(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_labor_entries_created_work ON labor_entries(created_at, work_center);
+
+-- Index on approvals.status for pending approval counting
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+
+-- Index on travelers.is_active for filtering active travelers
+CREATE INDEX IF NOT EXISTS idx_travelers_is_active ON travelers(is_active);
+
+-- Update statistics for query planner
+ANALYZE travelers;
+ANALYZE labor_entries;
+ANALYZE traveler_time_entries;
+ANALYZE notifications;
+ANALYZE approvals;

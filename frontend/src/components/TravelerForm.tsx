@@ -195,7 +195,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     toStock: String(initialData?.to_stock || ''),
     shipVia: String(initialData?.ship_via || ''),
     lot: '',
-    startDate: extractDateOnly(initialData?.start_date || initialData?.created_at),
+    startDate: extractDateOnly(initialData?.start_date || initialData?.created_at) || new Date().toISOString().split('T')[0],
     dueDate: extractDateOnly(initialData?.due_date),
     shipDate: extractDateOnly(initialData?.ship_date),
     comments: String(initialData?.comments || '')
@@ -1807,7 +1807,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     {/* Row 1: Work Center - Full Width on Mobile */}
                     <div className="w-full overflow-x-hidden" style={{ maxWidth: '100%' }}>
                       <label className="block text-xs font-bold text-gray-700 mb-2">Work Center</label>
-                      <div className="w-full overflow-hidden" style={{ maxWidth: '100%' }}>
+                      <div className="relative group w-full" style={{ maxWidth: '100%' }}>
                         <select
                           value={step.workCenter}
                           onChange={(e) => updateStep(step.id, 'workCenter', e.target.value)}
@@ -1833,9 +1833,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           ))}
                         </select>
                         {step.workCenter && (
-                          <div className="hidden md:group-hover:block absolute left-0 top-full mt-1 z-50 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-xl max-w-xs">
-                            <div className="font-bold text-yellow-300 mb-1">{step.workCenter}</div>
-                            <div>{dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.description || ''}</div>
+                          <div className="hidden md:group-hover:block absolute left-0 top-full mt-1 z-50 p-4 bg-gray-900 text-white rounded-lg shadow-xl max-w-sm"
+                            style={{ pointerEvents: 'none' }}
+                          >
+                            <div className="font-bold text-yellow-300 mb-1 text-base">{step.workCenter}</div>
+                            <div className="text-sm leading-relaxed">{dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.description || ''}</div>
                           </div>
                         )}
                       </div>

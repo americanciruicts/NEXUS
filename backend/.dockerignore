@@ -1,5 +1,7 @@
 __pycache__
 *.pyc
+*.pyo
+*.pyd
 .git
 .dockerignore
 Dockerfile
@@ -7,3 +9,16 @@ README.md
 .env*
 .pytest_cache
 .coverage
+.mypy_cache
+.ruff_cache
+htmlcov
+*.log
+backups
+*.db
+*.sqlite
+*.sqlite3
+.vscode
+.idea
+*.swp
+*.swo
+*~
