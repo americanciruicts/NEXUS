@@ -1188,6 +1188,33 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           /* Hide elements with no-print class */
           .no-print { display: none !important; }
 
+          /* Edit/Create mode print: hide inputs, show values as text, remove colored borders */
+          table input, table select, table textarea {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 11px !important;
+            color: black !important;
+            -webkit-appearance: none !important;
+            box-shadow: none !important;
+          }
+          table select { -moz-appearance: none !important; appearance: none !important; }
+          table textarea { min-height: 0 !important; height: auto !important; resize: none !important; overflow: hidden !important; }
+
+          /* Hide edit-only UI elements in print */
+          table button { display: none !important; }
+
+          /* Edit mode header inputs - show as plain text */
+          .bg-green-50 input, .bg-green-50 select,
+          .bg-blue-50 input, .bg-blue-50 select {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            font-size: 11px !important;
+            color: black !important;
+          }
+
           /* Keep section background colors for print */
           .bg-yellow-200, .bg-yellow-50, .bg-blue-200, .bg-purple-200, .bg-purple-100, .bg-gray-100 {
             -webkit-print-color-adjust: exact !important;
@@ -1241,6 +1268,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-purple-50 { padding: 0.1rem !important; min-height: 30px !important; }
           .bg-purple-50 .whitespace-pre-wrap { font-size: 9px !important; }
 
+          /* Edit mode: make table look like view mode in print */
+          table td, table th {
+            border: 2px solid #9ca3af !important; /* gray-400 borders like view mode */
+          }
+
           /* Table headers - bigger font */
           thead th { padding: 0.2rem !important; font-size: 12px !important; font-weight: bold !important; }
 
@@ -1250,21 +1282,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           tbody td.text-base { font-size: 12px !important; }
           tbody td.font-semibold { font-size: 11px !important; font-weight: 700 !important; } /* Work center - reduced to prevent overflow */
 
-          /* Column width adjustments for print */
+          /* Column width adjustments for print - view mode (9 cols) */
           table thead th:nth-child(1),
-          table tbody td:nth-child(1) { width: 30px !important; max-width: 30px !important; } /* SQ - smaller */
+          table tbody td:nth-child(1) { width: 30px !important; max-width: 30px !important; } /* SQ */
 
           table thead th:nth-child(2),
-          table tbody td:nth-child(2) { width: 145px !important; max-width: 145px !important; } /* WORK CENTER - bigger for 40px QR + text */
+          table tbody td:nth-child(2) { width: 145px !important; max-width: 145px !important; } /* WORK CENTER */
 
           table thead th:nth-child(3),
-          table tbody td:nth-child(3) { width: auto !important; min-width: 200px !important; } /* INSTRUCTIONS - adjusted */
+          table tbody td:nth-child(3) { width: auto !important; min-width: 200px !important; } /* INSTRUCTIONS */
 
           table thead th:nth-child(4),
           table tbody td:nth-child(4) { width: 50px !important; max-width: 50px !important; } /* TIME */
 
           table thead th:nth-child(5),
-          table tbody td:nth-child(5) { width: 50px !important; max-width: 50px !important; } /* QTY - same as TIME */
+          table tbody td:nth-child(5) { width: 50px !important; max-width: 50px !important; } /* QTY */
 
           table thead th:nth-child(6),
           table tbody td:nth-child(6) { width: 50px !important; max-width: 50px !important; } /* REJ */
@@ -1273,19 +1305,32 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table tbody td:nth-child(7) { width: 50px !important; max-width: 50px !important; } /* ACC */
 
           table thead th:nth-child(8),
-          table tbody td:nth-child(8) { width: 60px !important; max-width: 60px !important; } /* SIGN - smaller */
+          table tbody td:nth-child(8) { width: 60px !important; max-width: 60px !important; } /* SIGN */
 
           table thead th:nth-child(9),
-          table tbody td:nth-child(9) { width: 60px !important; max-width: 60px !important; } /* DATE - smaller */
+          table tbody td:nth-child(9) { width: 60px !important; max-width: 60px !important; } /* DATE */
+
+          /* Column width adjustments for print - edit mode (10 cols, drag handle hidden at pos 1) */
+          table thead th:nth-child(2):first-of-type ~ th:nth-child(2),
+          table tbody td:nth-child(2) { } /* SQ - already matched above */
+
+          /* Edit mode: +1 offset for all columns after hidden drag handle */
+          table thead th:nth-child(3),
+          table tbody td:nth-child(3) { width: 145px !important; max-width: 145px !important; } /* WORK CENTER in edit */
+
+          table thead th:nth-child(4),
+          table tbody td:nth-child(4) { width: auto !important; min-width: 200px !important; } /* INSTRUCTIONS in edit */
 
           /* QR code alignment in work center column */
-          table tbody td:nth-child(2) .flex {
+          table tbody td:nth-child(2) .flex,
+          table tbody td:nth-child(3) .flex {
             display: flex !important;
             flex-direction: row !important;
             justify-content: space-between !important;
             align-items: center !important;
           }
-          table tbody td:nth-child(2) img {
+          table tbody td:nth-child(2) img,
+          table tbody td:nth-child(3) img {
             margin-left: auto !important;
           }
 
