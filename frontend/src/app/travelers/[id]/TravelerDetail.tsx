@@ -3,7 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Layout from '@/components/layout/Layout';
-import { ArrowLeftIcon, PrinterIcon, CheckIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon, Bars3Icon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PrinterIcon, CheckIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon, Bars3Icon, DocumentTextIcon, CpuChipIcon, WrenchScrewdriverIcon, BoltIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 import { getWorkCentersByType, WorkCenterItem } from '@/data/workCenters';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -704,10 +704,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   }, [createMode]);
 
   const travelerTypes = [
-    { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', description: 'Full board assembly with components', gradient: 'from-blue-500 to-blue-700', borderColor: 'border-blue-400', iconBg: 'bg-blue-400/30' },
-    { value: 'PCB', label: 'PCB', description: 'Bare circuit board fabrication', gradient: 'from-green-500 to-green-700', borderColor: 'border-green-400', iconBg: 'bg-green-400/30' },
-    { value: 'CABLE', label: 'Cables', description: 'Cable and wire harness assembly', gradient: 'from-purple-500 to-purple-700', borderColor: 'border-purple-400', iconBg: 'bg-purple-400/30' },
-    { value: 'PURCHASING', label: 'Purchasing', description: 'Parts and components procurement', gradient: 'from-orange-500 to-orange-700', borderColor: 'border-orange-400', iconBg: 'bg-orange-400/30' },
+    { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', description: 'Full board assembly with components', subtitle: 'SMT, Through-Hole, Inspection, Testing', gradient: 'from-blue-600 to-indigo-700', borderColor: 'border-blue-400', iconBg: 'bg-white/20', bubbleColor: 'bg-blue-400/20', icon: CpuChipIcon },
+    { value: 'PCB', label: 'PCB Fabrication', description: 'Bare circuit board fabrication', subtitle: 'Etching, Drilling, Plating, Solder Mask', gradient: 'from-emerald-600 to-green-700', borderColor: 'border-green-400', iconBg: 'bg-white/20', bubbleColor: 'bg-green-400/20', icon: WrenchScrewdriverIcon },
+    { value: 'CABLE', label: 'Cable Assembly', description: 'Cable and wire harness assembly', subtitle: 'Cutting, Stripping, Crimping, Testing', gradient: 'from-purple-600 to-violet-700', borderColor: 'border-purple-400', iconBg: 'bg-white/20', bubbleColor: 'bg-purple-400/20', icon: BoltIcon },
+    { value: 'PURCHASING', label: 'Purchasing', description: 'Parts and components procurement', subtitle: 'Sourcing, Receiving, QC Inspection', gradient: 'from-orange-500 to-amber-700', borderColor: 'border-orange-400', iconBg: 'bg-white/20', bubbleColor: 'bg-orange-400/20', icon: ShoppingCartIcon },
   ];
 
   const handleTypeSelect = (type: TravelerType) => {
@@ -962,35 +962,72 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   if (createMode && !showForm) {
     return (
       <Layout fullWidth>
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Create New Traveler</h1>
-              <p className="text-gray-600 mt-1">Select the type of traveler to create</p>
+        <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 md:p-8" style={{background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 50%, #fff3e0 100%)'}}>
+          {/* Header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center rounded-full bg-blue-100 p-3 mb-4">
+              <DocumentTextIcon className="h-8 w-8 text-blue-600" />
             </div>
-            <button
-              onClick={() => router.back()}
-              className="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-              <span>Back</span>
-            </button>
+            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">Create New Traveler</h1>
+            <p className="text-gray-500 mt-2 text-lg">Choose the traveler type to get started</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {travelerTypes.map((type) => (
-              <button
-                key={type.value}
-                onClick={() => handleTypeSelect(type.value as TravelerType)}
-                className={`relative overflow-hidden rounded-xl border-2 ${type.borderColor} bg-gradient-to-br ${type.gradient} p-6 text-left text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-[1.02]`}
-              >
-                <div className={`absolute top-3 right-3 ${type.iconBg} rounded-full p-2`}>
-                  <DocumentTextIcon className="h-6 w-6 text-white/80" />
-                </div>
-                <h3 className="text-xl font-bold mb-1">{type.label}</h3>
-                <p className="text-sm text-white/80">{type.description}</p>
-              </button>
-            ))}
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl w-full">
+            {travelerTypes.map((type) => {
+              const IconComponent = type.icon;
+              return (
+                <button
+                  key={type.value}
+                  onClick={() => handleTypeSelect(type.value as TravelerType)}
+                  className={`group relative overflow-hidden rounded-2xl border-2 ${type.borderColor} bg-gradient-to-br ${type.gradient} p-0 text-left text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-blue-300`}
+                >
+                  {/* Decorative bubbles */}
+                  <div className={`absolute -top-6 -right-6 w-24 h-24 ${type.bubbleColor} rounded-full opacity-60 group-hover:scale-125 transition-transform duration-500`}></div>
+                  <div className={`absolute -bottom-4 -left-4 w-16 h-16 ${type.bubbleColor} rounded-full opacity-40 group-hover:scale-150 transition-transform duration-700`}></div>
+                  <div className={`absolute top-1/2 right-1/4 w-10 h-10 ${type.bubbleColor} rounded-full opacity-30 group-hover:scale-125 transition-transform duration-600`}></div>
+
+                  <div className="relative z-10 p-6">
+                    {/* Icon */}
+                    <div className={`${type.iconBg} backdrop-blur-sm rounded-xl p-3 w-fit mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                      <IconComponent className="h-8 w-8 text-white" />
+                    </div>
+
+                    {/* Title & Description */}
+                    <h3 className="text-xl font-bold mb-1 tracking-tight">{type.label}</h3>
+                    <p className="text-sm text-white/85 mb-3">{type.description}</p>
+
+                    {/* Subtitle tags */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {type.subtitle.split(', ').map((tag) => (
+                        <span key={tag} className="inline-block bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-full border border-white/20">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Arrow indicator */}
+                    <div className="absolute bottom-5 right-5 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
+                      <div className="bg-white/25 rounded-full p-1.5">
+                        <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {/* Back button */}
+          <button
+            onClick={() => router.back()}
+            className="mt-8 flex items-center space-x-2 px-5 py-2.5 text-gray-600 hover:text-gray-900 bg-white/70 hover:bg-white border border-gray-200 rounded-full shadow-sm hover:shadow transition-all duration-200"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+            <span className="text-sm font-medium">Back to Travelers</span>
+          </button>
         </div>
       </Layout>
     );
