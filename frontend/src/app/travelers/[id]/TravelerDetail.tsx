@@ -2132,6 +2132,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </SortableContext>
               </DndContext>
             </table>
+            {isEditing && (
+              <div className="flex justify-center py-2 no-print">
+                <button
+                  onClick={addStep}
+                  className="flex items-center space-x-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
+                >
+                  <PlusIcon className="h-3 w-3" />
+                  <span>Add Step</span>
+                </button>
+              </div>
+            )}
             </div>
 
             {/* Mobile Card View */}
