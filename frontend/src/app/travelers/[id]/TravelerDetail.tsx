@@ -1517,7 +1517,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-1" style={{gridColumn: 'span 2'}}><span className="font-semibold" style={{flexShrink: 0}}>WO:</span> <span style={{color: 'black'}}>{isEditing ? (
                       <span className="flex items-center gap-1">
-                        <input type="text" value={workOrderPrefix} readOnly className="border border-gray-300 rounded bg-gray-100 text-center text-sm" style={{color: 'black', width: '75px', padding: '2px 4px', fontFamily: 'monospace'}} />
+                        <input type="text" value={workOrderPrefix} readOnly className="border border-gray-300 rounded bg-gray-100 text-center" style={{color: 'black', width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} />
                         <span className="text-gray-400 font-bold">-</span>
                         <input type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 rounded text-sm" style={{color: 'black', width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
                       </span>
@@ -1590,8 +1590,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           type="text"
                           value={workOrderPrefix}
                           readOnly
-                          className="border border-gray-300 rounded text-sm bg-gray-100 text-center"
-                          style={{color: 'black', width: '75px', padding: '2px 4px', fontFamily: 'monospace', flexShrink: 0}}
+                          className="border border-gray-300 rounded bg-gray-100 text-center"
+                          style={{color: 'black', width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px', flexShrink: 0}}
                           title="Auto-generated prefix"
                         />
                         <span className="text-gray-400 text-xs">-</span>
@@ -1873,12 +1873,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
                   <th className="border-r-2 border-gray-400 px-1 py-1 w-72 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]">WORK CENTER</th>
                   <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{minWidth: '180px'}}>INSTRUCTIONS</th>
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-16 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">TIME</th>
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-14 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">QTY</th>
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-14 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">REJ</th>
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-14 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">ACC</th>
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-16 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SIGN</th>
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-8 text-center font-bold text-xs print:px-1 print:py-1 print:text-[10px]">DATE</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '70px'}}>TIME</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>QTY</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>REJ</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>ACC</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '70px'}}>SIGN</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-xs print:px-1 print:py-1 print:text-[10px]" style={{width: '28px'}}>DATE</th>
                 </tr>
               </thead>
               <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
