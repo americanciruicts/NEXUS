@@ -1,12 +1,12 @@
 'use client';
 
-import Layout from '@/components/layout/Layout';
-import TravelerForm from '@/components/TravelerForm';
+import { Suspense } from 'react';
+import { TravelerDetailPage } from '../[id]/TravelerDetail';
 
 export default function NewTraveler() {
   return (
-    <Layout fullWidth>
-      <TravelerForm mode="create" />
-    </Layout>
+    <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="text-lg text-gray-500">Loading...</div></div>}>
+      <TravelerDetailPage createMode={true} />
+    </Suspense>
   );
 }
