@@ -1954,13 +1954,13 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 w-8 text-center font-bold text-xs no-print"></th>}
                   <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
                   <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '250px'}}>WORK CENTER</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{minWidth: '120px'}}>INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '120px'}}>INSTRUCTIONS</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>TIME</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>QTY</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>REJ</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>ACC</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '65px'}}>SIGN</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '40px'}}>DATE</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '65px'}}>DATE</th>
                 </tr>
               </thead>
               <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -2140,7 +2140,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             ) : null}
                           </div>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '180px'}}>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '100px'}}>
                           {step.instruction ? step.instruction : <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
