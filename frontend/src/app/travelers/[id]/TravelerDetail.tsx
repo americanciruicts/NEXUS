@@ -1939,19 +1939,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
             {/* Desktop Table View */}
             <div className="overflow-x-auto">
-            <table className="routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 min-w-0 lg:min-w-[640px]">
+            <table className="routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 min-w-0 lg:min-w-[640px]" style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
               <thead>
                 <tr className="bg-gray-200 border-b-2 border-gray-400">
-                  {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 w-8 text-center font-bold text-xs no-print"></th>}
+                  {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 text-center font-bold text-xs no-print" style={{width: '30px'}}></th>}
                   <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
                   <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '220px' : '160px'}}>WORK CENTER</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '150px' : '240px'}}>INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '170px' : '240px'}}>INSTRUCTIONS</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '65px' : '60px'}}>TIME</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>QTY</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>REJ</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>ACC</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '70px' : '65px'}}>SIGN</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '20px' : '65px'}}>DATE</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '45px' : '65px'}}>DATE</th>
                 </tr>
               </thead>
               <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -1971,14 +1971,23 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     className="border-b border-gray-300 transition-colors duration-300"
                   >
                         <td className="border-r border-gray-300 px-0.5 py-0 text-center bg-gray-50 no-print">
-                          <button
-                            type="button"
-                            {...dragHandleProps}
-                            className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
-                            title="Drag to reorder"
-                          >
-                            <Bars3Icon className="h-4 w-4" />
-                          </button>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button
+                              type="button"
+                              {...dragHandleProps}
+                              className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
+                              title="Drag to reorder"
+                            >
+                              <Bars3Icon className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => removeStep(index)}
+                              className="p-0.5 bg-red-600 hover:bg-red-700 text-white rounded"
+                              title="Remove step"
+                            >
+                              <TrashIcon className="h-3 w-3" />
+                            </button>
+                          </div>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0 text-center bg-yellow-50">
                           <input
@@ -2087,22 +2096,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           />
                         </td>
                         <td className="px-0.5 py-0">
-                          <div className="flex items-center space-x-0.5">
-                            <input
-                              type="text"
-                              value={step.completedDate}
-                              onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
-                              className="flex-1 border border-gray-300 rounded text-xs text-center"
-                              style={{padding: '1px 1px'}}
-                              placeholder="Date"
-                            />
-                            <button
-                              onClick={() => removeStep(index)}
-                              className="p-0.5 bg-red-600 hover:bg-red-700 text-white rounded no-print flex-shrink-0"
-                            >
-                              <TrashIcon className="h-3 w-3" />
-                            </button>
-                          </div>
+                          <input
+                            type="text"
+                            value={step.completedDate}
+                            onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
+                            className="w-full border border-gray-300 rounded text-xs text-center"
+                            style={{padding: '1px 1px'}}
+                            placeholder="Date"
+                          />
                         </td>
                   </tr>
                     )}
