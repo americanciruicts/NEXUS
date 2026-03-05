@@ -39,9 +39,20 @@ interface WorkCenterDB {
   code: string;
   description: string;
   traveler_type: string | null;
+  category: string | null;
   sort_order: number;
   is_active: boolean;
 }
+
+const CATEGORY_OPTIONS = [
+  '',
+  'SMT hrs. Actual',
+  'HAND hrs. Actual',
+  'TH hrs. Actual',
+  'AOI & Final Inspection, QC hrs. Actual',
+  'E-TEST hrs. Actual',
+  'Labelling, Packaging, Shipping hrs. Actual',
+];
 
 const TABS = [
   { key: 'PCB_ASSEMBLY', label: 'PCB Assembly' },
@@ -72,7 +83,7 @@ export default function WorkCenterManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedWC, setSelectedWC] = useState<WorkCenterDB | null>(null);
-  const [formData, setFormData] = useState({ name: '', code: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', code: '', description: '', category: '' });
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,6 +128,7 @@ export default function WorkCenterManagementPage() {
           code: `${type}_${item.name.replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`,
           description: item.description,
           traveler_type: type,
+          category: null,
           sort_order: idx + 1,
           is_active: true,
         });
@@ -207,6 +219,7 @@ export default function WorkCenterManagementPage() {
           code: code,
           description: formData.description,
           traveler_type: activeTab,
+          category: formData.category || null,
           is_active: true
         })
       });
@@ -215,7 +228,7 @@ export default function WorkCenterManagementPage() {
         const newWC = await response.json();
         setAllWorkCenters(prev => [...prev, newWC]);
         setIsAddModalOpen(false);
-        setFormData({ name: '', code: '', description: '' });
+        setFormData({ name: '', code: '', description: '', category: '' });
         toast.success(`Work center "${formData.name}" added successfully`);
       } else {
         const err = await response.json();
@@ -238,7 +251,8 @@ export default function WorkCenterManagementPage() {
         },
         body: JSON.stringify({
           name: formData.name,
-          description: formData.description
+          description: formData.description,
+          category: formData.category || null
         })
       });
 
@@ -282,7 +296,7 @@ export default function WorkCenterManagementPage() {
 
   const openEditModal = (wc: WorkCenterDB) => {
     setSelectedWC(wc);
-    setFormData({ name: wc.name, code: wc.code, description: wc.description || '' });
+    setFormData({ name: wc.name, code: wc.code, description: wc.description || '', category: wc.category || '' });
     setIsEditModalOpen(true);
   };
 
@@ -398,7 +412,7 @@ export default function WorkCenterManagementPage() {
                   className="px-4 py-2.5 rounded-xl border-0 w-full sm:w-64 focus:ring-2 focus:ring-white/50 shadow-md text-sm"
                 />
                 <button
-                  onClick={() => { setFormData({ name: '', code: '', description: '' }); setIsAddModalOpen(true); }}
+                  onClick={() => { setFormData({ name: '', code: '', description: '', category: '' }); setIsAddModalOpen(true); }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-100 text-indigo-700 rounded-xl font-bold shadow-lg transition-all text-sm"
                 >
                   <PlusIcon className="h-5 w-5" />
@@ -484,6 +498,19 @@ export default function WorkCenterManagementPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-semibold text-gray-900">{wc.name}</div>
                                 <div className="text-sm text-gray-500 mt-0.5">{wc.description}</div>
+                                {wc.category && (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border mt-1 ${
+                                    wc.category.includes('SMT') ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    wc.category.includes('HAND') ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                    wc.category.includes('TH') ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                    wc.category.includes('AOI') ? 'bg-green-50 text-green-700 border-green-200' :
+                                    wc.category.includes('E-TEST') ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                    wc.category.includes('Labelling') ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                  }`}>
+                                    {wc.category}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1">
                                 <button onClick={() => openEditModal(wc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
@@ -509,6 +536,7 @@ export default function WorkCenterManagementPage() {
                           <th className="px-4 py-4 text-center text-xs font-extrabold text-white uppercase tracking-wider w-20">Order</th>
                           <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
                           <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Description</th>
+                          <th className="px-4 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Category</th>
                           <th className="px-6 py-4 text-right text-xs font-extrabold text-white uppercase tracking-wider w-32">Actions</th>
                         </tr>
                       </thead>
@@ -549,6 +577,23 @@ export default function WorkCenterManagementPage() {
                               </td>
                               <td className="px-6 py-3">
                                 <span className="text-sm text-gray-600">{wc.description}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {wc.category ? (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                    wc.category.includes('SMT') ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    wc.category.includes('HAND') ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                    wc.category.includes('TH') ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                    wc.category.includes('AOI') ? 'bg-green-50 text-green-700 border-green-200' :
+                                    wc.category.includes('E-TEST') ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                    wc.category.includes('Labelling') ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                  }`}>
+                                    {wc.category}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )}
                               </td>
                               <td className="px-6 py-3 text-right">
                                 <div className="flex items-center justify-end gap-2">
@@ -674,6 +719,19 @@ export default function WorkCenterManagementPage() {
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Category</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                >
+                  <option value="">No Category</option>
+                  {CATEGORY_OPTIONS.filter(c => c).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
               <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg px-4 py-3">
                 <label className="block text-sm font-bold text-gray-700 mb-1">Traveler Type</label>
                 <span className="text-lg font-extrabold text-indigo-700">{TABS.find(t => t.key === activeTab)?.label}</span>
@@ -719,6 +777,19 @@ export default function WorkCenterManagementPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Category</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                >
+                  <option value="">No Category</option>
+                  {CATEGORY_OPTIONS.filter(c => c).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

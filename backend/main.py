@@ -154,6 +154,63 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not seed work centers: {e}")
 
+    # Auto-migrate: add category column to work_centers if missing
+    try:
+        from sqlalchemy import text, inspect
+        with engine.connect() as conn:
+            inspector = inspect(engine)
+            columns = [c['name'] for c in inspector.get_columns('work_centers')]
+            if 'category' not in columns:
+                conn.execute(text("ALTER TABLE work_centers ADD COLUMN category VARCHAR(100)"))
+                conn.commit()
+                print("Added 'category' column to work_centers table")
+
+                # Set default categories based on spreadsheet mapping
+                CATEGORY_MAP = {
+                    'PROGRAM PART': 'SMT hrs. Actual',
+                    'SMT PROGRAMING': 'SMT hrs. Actual',
+                    'SMT PROGRAMMING': 'SMT hrs. Actual',
+                    'GLUE': 'SMT hrs. Actual',
+                    'SMT TOP': 'SMT hrs. Actual',
+                    'SMT BOTTOM': 'SMT hrs. Actual',
+                    'HAND SOLDER': 'HAND hrs. Actual',
+                    'WASH': 'HAND hrs. Actual',
+                    'TRIM': 'HAND hrs. Actual',
+                    'HAND ASSEMBLY': 'HAND hrs. Actual',
+                    'EPOXY': 'HAND hrs. Actual',
+                    'DEPANEL': 'HAND hrs. Actual',
+                    'INTERNAL COATING': 'HAND hrs. Actual',
+                    'BOX ASSEMBLY': 'HAND hrs. Actual',
+                    'MANUAL INSERTION': 'TH hrs. Actual',
+                    'WAVE': 'TH hrs. Actual',
+                    'MANUAL ASSEMBLY': 'TH hrs. Actual',
+                    'AOI PROGRAMMING': 'AOI & Final Inspection, QC hrs. Actual',
+                    'AOI': 'AOI & Final Inspection, QC hrs. Actual',
+                    'VISUAL INSPECTION': 'AOI & Final Inspection, QC hrs. Actual',
+                    'FINAL INSPECTION': 'AOI & Final Inspection, QC hrs. Actual',
+                    'INTERNAL TESTING': 'E-TEST hrs. Actual',
+                    'LABELING': 'Labelling, Packaging, Shipping hrs. Actual',
+                    'HARDWARE': 'Labelling, Packaging, Shipping hrs. Actual',
+                    'SHIPPING': 'Labelling, Packaging, Shipping hrs. Actual',
+                    'WIRE CUT': 'HAND hrs. Actual',
+                    'WIRE CUTT': 'HAND hrs. Actual',
+                    'STRIP WIRE': 'HAND hrs. Actual',
+                    'HEAT SHRINK': 'HAND hrs. Actual',
+                    'TINNING': 'HAND hrs. Actual',
+                    'CRIMPING': 'HAND hrs. Actual',
+                    'INSERT': 'HAND hrs. Actual',
+                    'PULL TEST': 'HAND hrs. Actual',
+                }
+                for name, cat in CATEGORY_MAP.items():
+                    conn.execute(
+                        text("UPDATE work_centers SET category = :cat WHERE UPPER(TRIM(name)) = :name"),
+                        {"cat": cat, "name": name.upper().strip()}
+                    )
+                conn.commit()
+                print("Applied default category values to work centers")
+    except Exception as e:
+        print(f"Warning: Could not auto-migrate category column: {e}")
+
     yield
     # Shutdown
     print("NEXUS Backend shutting down...")

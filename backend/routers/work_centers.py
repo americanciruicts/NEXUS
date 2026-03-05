@@ -17,6 +17,7 @@ class WorkCenterCreate(BaseModel):
     code: str
     description: str = ""
     traveler_type: Optional[str] = None
+    category: Optional[str] = None
     is_active: bool = True
 
 
@@ -25,6 +26,7 @@ class WorkCenterUpdate(BaseModel):
     code: Optional[str] = None
     description: Optional[str] = None
     traveler_type: Optional[str] = None
+    category: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -34,6 +36,7 @@ class WorkCenterResponse(BaseModel):
     code: str
     description: Optional[str] = None
     traveler_type: Optional[str] = None
+    category: Optional[str] = None
     sort_order: int = 0
     is_active: bool
     created_at: Optional[datetime] = None
@@ -97,6 +100,7 @@ async def create_work_center(
         code=wc_data.code,
         description=wc_data.description,
         traveler_type=wc_data.traveler_type,
+        category=wc_data.category,
         sort_order=max_order + 1,
         is_active=wc_data.is_active
     )
