@@ -160,6 +160,9 @@ class TravelerList(BaseModel):
     ship_date: Optional[str] = None
     created_at: datetime
     created_by: int
+    total_steps: int = 0
+    completed_steps: int = 0
+    percent_complete: float = 0.0
 
     class Config:
         from_attributes = True

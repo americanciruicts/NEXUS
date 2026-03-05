@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 from database import get_db
-from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus
+from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus, LaborEntry
 from schemas.traveler_schemas import (
     TravelerCreate, Traveler as TravelerSchema, TravelerUpdate,
     TravelerList, ProcessStepCreate, ManualStepCreate
@@ -361,7 +361,9 @@ async def get_travelers(
     db: Session = Depends(get_db)
 ):
     """Get list of travelers. ITAR travelers (job_number contains 'M') are only visible to ADMIN users or users with is_itar=True."""
-    query = db.query(Traveler)
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(Traveler).options(joinedload(Traveler.process_steps))
 
     # Filter ITAR travelers (job_number contains 'M') for non-privileged users
     # ADMIN users and users with is_itar=True can see all travelers
@@ -373,7 +375,20 @@ async def get_travelers(
         query = query.filter(~Traveler.job_number.ilike('%M%'))
 
     travelers = query.offset(skip).limit(limit).all()
-    return travelers
+
+    # Calculate progress for each traveler
+    results = []
+    for t in travelers:
+        data = {c.name: getattr(t, c.name) for c in t.__table__.columns}
+        steps = t.process_steps if t.process_steps else []
+        total = len(steps)
+        completed = sum(1 for s in steps if s.is_completed)
+        data['total_steps'] = total
+        data['completed_steps'] = completed
+        data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0.0
+        results.append(data)
+
+    return results
 
 @router.get("/latest-revision")
 async def get_latest_revision_traveler(
@@ -452,6 +467,90 @@ async def get_latest_revision_traveler(
 
     print(f"Returning traveler with {len(result['process_steps'])} process steps")
     return result
+
+@router.get("/dashboard-summary")
+async def get_dashboard_summary(
+    current_user: User = Depends(get_user_or_system),
+    db: Session = Depends(get_db)
+):
+    """Get all active travelers with progress/step data for the dashboard."""
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import func
+
+    query = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(
+        ~Traveler.status.in_([TravelerStatus.ARCHIVED, TravelerStatus.CANCELLED])
+    )
+
+    # ITAR filtering for non-privileged users
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+    if not is_admin and not has_itar_access:
+        query = query.filter(~Traveler.job_number.ilike('%M%'))
+
+    travelers = query.order_by(Traveler.created_at.desc()).all()
+
+    # Get latest tracking locations in bulk
+    latest_scans = {}
+    if travelers:
+        traveler_ids = [t.id for t in travelers]
+        # Subquery to get max scanned_at per traveler
+        subq = db.query(
+            TravelerTrackingLog.traveler_id,
+            func.max(TravelerTrackingLog.scanned_at).label('max_scan')
+        ).filter(
+            TravelerTrackingLog.traveler_id.in_(traveler_ids),
+            TravelerTrackingLog.scan_type == "WORK_CENTER"
+        ).group_by(TravelerTrackingLog.traveler_id).subquery()
+
+        scans = db.query(TravelerTrackingLog).join(
+            subq,
+            (TravelerTrackingLog.traveler_id == subq.c.traveler_id) &
+            (TravelerTrackingLog.scanned_at == subq.c.max_scan)
+        ).all()
+
+        for scan in scans:
+            latest_scans[scan.traveler_id] = scan.work_center
+
+    results = []
+    for t in travelers:
+        steps = sorted(t.process_steps, key=lambda s: s.step_number)
+        total_steps = len(steps)
+        completed_steps = sum(1 for s in steps if s.is_completed)
+        percent_complete = round((completed_steps / total_steps) * 100, 1) if total_steps > 0 else 0
+
+        # Current step = first incomplete step
+        current_step_obj = next((s for s in steps if not s.is_completed), None)
+        current_step = current_step_obj.operation if current_step_obj else ("Complete" if total_steps > 0 else "No steps")
+        current_work_center = current_step_obj.work_center_code if current_step_obj else None
+
+        # Sum accepted/rejected across all steps
+        qty_accepted = sum(s.accepted or 0 for s in steps)
+        qty_rejected = sum(s.rejected or 0 for s in steps)
+
+        results.append({
+            "id": t.id,
+            "job_number": t.job_number,
+            "part_number": t.part_number,
+            "part_description": t.part_description,
+            "traveler_type": t.traveler_type.value if hasattr(t.traveler_type, 'value') else str(t.traveler_type),
+            "quantity": t.quantity,
+            "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+            "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
+            "work_center": t.work_center,
+            "due_date": t.due_date,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "total_steps": total_steps,
+            "completed_steps": completed_steps,
+            "percent_complete": percent_complete,
+            "current_step": current_step,
+            "current_work_center": current_work_center or latest_scans.get(t.id),
+            "qty_accepted": qty_accepted,
+            "qty_rejected": qty_rejected,
+        })
+
+    return results
 
 @router.get("/by-job/{job_number}", response_model=TravelerSchema)
 async def get_traveler_by_job(
@@ -570,6 +669,17 @@ async def update_traveler(
     traveler.due_date = traveler_data.due_date
     traveler.ship_date = traveler_data.ship_date
     traveler.include_labor_hours = include_labor_hours
+    # Update status and is_active if provided
+    if traveler_data.status:
+        traveler.status = traveler_data.status
+    if traveler_data.is_active is not None:
+        traveler.is_active = traveler_data.is_active
+
+    # Delete child records that reference process steps (FK constraints)
+    step_ids = [s.id for s in db.query(ProcessStep.id).filter(ProcessStep.traveler_id == traveler.id).all()]
+    if step_ids:
+        db.query(LaborEntry).filter(LaborEntry.step_id.in_(step_ids)).delete(synchronize_session=False)
+        db.query(SubStep).filter(SubStep.process_step_id.in_(step_ids)).delete(synchronize_session=False)
 
     # Delete existing process steps
     db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()

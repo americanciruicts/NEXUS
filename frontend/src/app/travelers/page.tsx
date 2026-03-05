@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import {
@@ -9,8 +10,6 @@ import {
   PencilIcon,
   PrinterIcon,
   TrashIcon,
-  ArchiveBoxIcon,
-  ArchiveBoxXMarkIcon,
   DocumentArrowDownIcon,
   CheckIcon,
   FunnelIcon,
@@ -112,6 +111,8 @@ type TravelerItem = {
   status: string;
   currentStep: string;
   progress: number;
+  totalSteps: number;
+  completedSteps: number;
   createdAt: string;
   dueDate: string;
   shipDate: string;
@@ -143,11 +144,20 @@ const getTravelerTypeBadge = (type: string) => {
   );
 };
 
-export default function TravelersPage() {
+export default function TravelersPageWrapper() {
+  return (
+    <Suspense fallback={<Layout fullWidth><div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">Loading...</p></div></Layout>}>
+      <TravelersPage />
+    </Suspense>
+  );
+}
+
+function TravelersPage() {
   const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All Statuses');
-  const [viewFilter, setViewFilter] = useState<'active' | 'archived' | 'drafts' | 'all'>('all');
+  const searchParams = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All Statuses');
+  const [viewFilter, setViewFilter] = useState<'active' | 'drafts' | 'all'>((searchParams.get('view') as 'active' | 'drafts' | 'all') || 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [travelers, setTravelers] = useState<TravelerItem[]>([]);
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
@@ -197,7 +207,9 @@ export default function TravelersPage() {
           travelerType: String(t.traveler_type || 'PCB_ASSEMBLY'),
           status: String(t.status),
           currentStep: 'PENDING',
-          progress: 0,
+          progress: Number(t.percent_complete || 0),
+          totalSteps: Number(t.total_steps || 0),
+          completedSteps: Number(t.completed_steps || 0),
           createdAt: String(t.created_at || ''),
           dueDate: String(t.due_date || ''),
           shipDate: String(t.ship_date || ''),
@@ -248,10 +260,9 @@ export default function TravelersPage() {
       (typeFilter === 'CABLE' && (t.travelerType === 'CABLE' || t.travelerType === 'CABLES'));
 
     const matchesView =
-      (viewFilter === 'active' && t.isActive && t.status !== 'ARCHIVED' && t.status !== 'DRAFT') ||
-      (viewFilter === 'archived' && t.status === 'ARCHIVED') ||
+      (viewFilter === 'active' && t.status !== 'DRAFT') ||
       (viewFilter === 'drafts' && t.status === 'DRAFT') ||
-      (viewFilter === 'all' && t.status !== 'ARCHIVED');
+      (viewFilter === 'all');
 
     return matchesSearch && matchesStatus && matchesType && matchesView;
   });
@@ -335,66 +346,6 @@ export default function TravelersPage() {
     }
   };
 
-  const doArchiveSelected = async () => {
-    try {
-      const token = localStorage.getItem('nexus_token');
-      await Promise.all(
-        selectedTravelers.map(id =>
-          fetch(`${API_BASE_URL}/travelers/${id}`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'ARCHIVED' })
-          })
-        )
-      );
-      showToast(`Archived ${selectedTravelers.length} traveler(s)!`, 'success');
-      setSelectedTravelers([]);
-      fetchTravelers();
-    } catch (error) {
-      console.error('Error archiving travelers:', error);
-      showToast('Failed to archive travelers', 'error');
-    }
-    closeConfirm();
-  };
-
-  const archiveSelected = () => {
-    if (selectedTravelers.length === 0) {
-      showToast('Please select travelers to archive', 'error');
-      return;
-    }
-    showConfirm('Archive Travelers', `Are you sure you want to archive ${selectedTravelers.length} traveler(s)?`, doArchiveSelected, 'Archive');
-  };
-
-  const doRestoreSelected = async () => {
-    try {
-      const token = localStorage.getItem('nexus_token');
-      await Promise.all(
-        selectedTravelers.map(id =>
-          fetch(`${API_BASE_URL}/travelers/${id}`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'CREATED' })
-          })
-        )
-      );
-      showToast(`Restored ${selectedTravelers.length} traveler(s)!`, 'success');
-      setSelectedTravelers([]);
-      fetchTravelers();
-    } catch (error) {
-      console.error('Error restoring travelers:', error);
-      showToast('Failed to restore travelers', 'error');
-    }
-    closeConfirm();
-  };
-
-  const restoreSelected = () => {
-    if (selectedTravelers.length === 0) {
-      showToast('Please select travelers to restore', 'error');
-      return;
-    }
-    showConfirm('Restore Travelers', `Are you sure you want to restore ${selectedTravelers.length} traveler(s)?`, doRestoreSelected, 'Restore');
-  };
-
   const doDeleteSelected = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
@@ -443,9 +394,8 @@ export default function TravelersPage() {
 
   const stats = {
     total: travelers.length,
-    active: travelers.filter(t => t.isActive && t.status !== 'ARCHIVED' && t.status !== 'DRAFT').length,
-    drafts: travelers.filter(t => t.status === 'DRAFT').length,
-    archived: travelers.filter(t => t.status === 'ARCHIVED').length
+    active: travelers.filter(t => t.status !== 'DRAFT').length,
+    drafts: travelers.filter(t => t.status === 'DRAFT').length
   };
 
   return (
@@ -489,10 +439,6 @@ export default function TravelersPage() {
                 <div className="text-xl md:text-2xl font-extrabold">{stats.drafts}</div>
                 <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Drafts</div>
               </div>
-              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 md:px-4 py-2 md:py-3 border border-white/20 flex-1 md:flex-initial text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{stats.archived}</div>
-                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Archived</div>
-              </div>
             </div>
           </div>
         </div>
@@ -513,7 +459,7 @@ export default function TravelersPage() {
 
             {/* View Filter Tabs */}
             <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg p-1 overflow-x-auto">
-              {(['active', 'drafts', 'archived', 'all'] as const).map((view) => (
+              {(['active', 'drafts', 'all'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setViewFilter(view)}
@@ -579,28 +525,6 @@ export default function TravelersPage() {
               <DocumentArrowDownIcon className="h-4 md:h-5 w-4 md:w-5" />
               <span className="whitespace-nowrap">Export PDFs ({selectedTravelers.length})</span>
             </button>
-
-            {viewFilter !== 'archived' && (
-              <button
-                onClick={archiveSelected}
-                disabled={selectedTravelers.length === 0}
-                className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
-              >
-                <ArchiveBoxIcon className="h-4 md:h-5 w-4 md:w-5" />
-                <span>Archive ({selectedTravelers.length})</span>
-              </button>
-            )}
-
-            {viewFilter === 'archived' && (
-              <button
-                onClick={restoreSelected}
-                disabled={selectedTravelers.length === 0}
-                className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
-              >
-                <ArchiveBoxXMarkIcon className="h-4 md:h-5 w-4 md:w-5" />
-                <span>Restore ({selectedTravelers.length})</span>
-              </button>
-            )}
 
             <button
               onClick={deleteSelected}
@@ -673,6 +597,9 @@ export default function TravelersPage() {
                       Shipping
                     </th>
                     <th className="px-2 lg:px-4 py-3 lg:py-4 text-center text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                      Progress
+                    </th>
+                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-center text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
                       Actions
                     </th>
                   </tr>
@@ -742,6 +669,30 @@ export default function TravelersPage() {
                         </div>
                       </td>
                       <td className="px-2 lg:px-4 py-3 lg:py-4">
+                        <div className="min-w-[100px]">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold" style={{color: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 50 ? '#2563eb' : '#6b7280'}}>
+                              {traveler.progress}%
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {traveler.completedSteps}/{traveler.totalSteps}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className="h-2.5 rounded-full transition-all duration-500"
+                              style={{
+                                width: `${traveler.progress}%`,
+                                backgroundColor: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444',
+                              }}
+                            />
+                          </div>
+                          {traveler.progress >= 100 && (
+                            <div className="text-xs text-green-600 font-semibold mt-0.5 text-center">Complete</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2 lg:px-4 py-3 lg:py-4">
                         <div className="grid grid-cols-2 xl:grid-cols-3 gap-1 lg:gap-2">
                           <Link
                             href={`/travelers/${traveler.dbId}`}
@@ -751,96 +702,12 @@ export default function TravelersPage() {
                             <EyeIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                           </Link>
                           <Link
-                            href={`/travelers/${traveler.dbId}/edit`}
+                            href={`/travelers/${traveler.dbId}?edit=true`}
                             className="p-1.5 lg:p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
                             title="Edit"
                           >
                             <PencilIcon className="h-4 lg:h-5 w-4 lg:w-5" />
                           </Link>
-                          <button
-                            onClick={() => {
-                              const newActiveStatus = !traveler.isActive;
-                              const action = newActiveStatus ? 'activate' : 'deactivate';
-                              showConfirm(
-                                `${action.charAt(0).toUpperCase() + action.slice(1)} Traveler`,
-                                `${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`,
-                                async () => {
-                                  try {
-                                    const token = localStorage.getItem('nexus_token');
-                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                      method: 'PATCH',
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                        'Content-Type': 'application/json'
-                                      },
-                                      body: JSON.stringify({ is_active: newActiveStatus })
-                                    });
-                                    if (response.ok) {
-                                      showToast(`Traveler ${traveler.jobNumber} ${action}d!`, 'success');
-                                      fetchTravelers();
-                                    } else {
-                                      showToast(`Failed to ${action} traveler`, 'error');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error:', error);
-                                    showToast(`Failed to ${action} traveler`, 'error');
-                                  }
-                                  closeConfirm();
-                                },
-                                action.charAt(0).toUpperCase() + action.slice(1)
-                              );
-                            }}
-                            className={`p-1.5 lg:p-2 rounded-lg transition-colors flex items-center justify-center ${
-                              traveler.isActive
-                                ? 'text-green-600 hover:bg-green-50'
-                                : 'text-red-600 hover:bg-red-50'
-                            }`}
-                            title={traveler.isActive ? 'Mark as Inactive' : 'Mark as Active'}
-                          >
-                            {traveler.isActive ? (
-                              <CheckCircleIcon className="h-4 lg:h-5 w-4 lg:w-5" />
-                            ) : (
-                              <XCircleIcon className="h-4 lg:h-5 w-4 lg:w-5" />
-                            )}
-                          </button>
-                          {traveler.status !== 'ARCHIVED' && (
-                            <button
-                              onClick={() => {
-                                showConfirm(
-                                  'Archive Traveler',
-                                  `Archive traveler ${traveler.jobNumber}?`,
-                                  async () => {
-                                    try {
-                                      const token = localStorage.getItem('nexus_token');
-                                      const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                        method: 'PATCH',
-                                        headers: {
-                                          'Authorization': `Bearer ${token}`,
-                                          'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({ status: 'ARCHIVED' })
-                                      });
-                                      if (response.ok) {
-                                        showToast(`Traveler ${traveler.jobNumber} archived!`, 'success');
-                                        fetchTravelers();
-                                      } else {
-                                        showToast('Failed to archive traveler', 'error');
-                                      }
-                                    } catch (error) {
-                                      console.error('Error:', error);
-                                      showToast('Failed to archive traveler', 'error');
-                                    }
-                                    closeConfirm();
-                                  },
-                                  'Archive'
-                                );
-                              }}
-                              className="p-1.5 lg:p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex items-center justify-center"
-                              title="Archive"
-                            >
-                              <ArchiveBoxIcon className="h-4 lg:h-5 w-4 lg:w-5" />
-                            </button>
-                          )}
                           <button
                             onClick={() => {
                               showConfirm(
@@ -996,7 +863,7 @@ export default function TravelersPage() {
                             <span className="text-xs mt-1">View</span>
                           </Link>
                           <Link
-                            href={`/travelers/${traveler.dbId}/edit`}
+                            href={`/travelers/${traveler.dbId}?edit=true`}
                             className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex flex-col items-center justify-center"
                             title="Edit"
                           >
@@ -1011,92 +878,6 @@ export default function TravelersPage() {
                             <PrinterIcon className="h-5 w-5" />
                             <span className="text-xs mt-1">Print</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              const newActiveStatus = !traveler.isActive;
-                              const action = newActiveStatus ? 'activate' : 'deactivate';
-                              showConfirm(
-                                `${action.charAt(0).toUpperCase() + action.slice(1)} Traveler`,
-                                `${action.charAt(0).toUpperCase() + action.slice(1)} traveler ${traveler.jobNumber}?`,
-                                async () => {
-                                  try {
-                                    const token = localStorage.getItem('nexus_token');
-                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                      method: 'PATCH',
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                        'Content-Type': 'application/json'
-                                      },
-                                      body: JSON.stringify({ is_active: newActiveStatus })
-                                    });
-                                    if (response.ok) {
-                                      showToast(`Traveler ${traveler.jobNumber} ${action}d!`, 'success');
-                                      fetchTravelers();
-                                    } else {
-                                      showToast(`Failed to ${action} traveler`, 'error');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error:', error);
-                                    showToast(`Failed to ${action} traveler`, 'error');
-                                  }
-                                  closeConfirm();
-                                },
-                                action.charAt(0).toUpperCase() + action.slice(1)
-                              );
-                            }}
-                            className={`p-2 rounded-lg transition-colors flex flex-col items-center justify-center ${
-                              traveler.isActive
-                                ? 'text-green-600 hover:bg-green-50'
-                                : 'text-red-600 hover:bg-red-50'
-                            }`}
-                            title={traveler.isActive ? 'Mark as Inactive' : 'Mark as Active'}
-                          >
-                            {traveler.isActive ? (
-                              <CheckCircleIcon className="h-5 w-5" />
-                            ) : (
-                              <XCircleIcon className="h-5 w-5" />
-                            )}
-                            <span className="text-xs mt-1">{traveler.isActive ? 'Active' : 'Inactive'}</span>
-                          </button>
-                          {traveler.status !== 'ARCHIVED' && (
-                            <button
-                              onClick={() => {
-                                showConfirm(
-                                  'Archive Traveler',
-                                  `Archive traveler ${traveler.jobNumber}?`,
-                                  async () => {
-                                    try {
-                                      const token = localStorage.getItem('nexus_token');
-                                      const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                        method: 'PATCH',
-                                        headers: {
-                                          'Authorization': `Bearer ${token}`,
-                                          'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({ status: 'ARCHIVED' })
-                                      });
-                                      if (response.ok) {
-                                        showToast(`Traveler ${traveler.jobNumber} archived!`, 'success');
-                                        fetchTravelers();
-                                      } else {
-                                        showToast('Failed to archive traveler', 'error');
-                                      }
-                                    } catch (error) {
-                                      console.error('Error:', error);
-                                      showToast('Failed to archive traveler', 'error');
-                                    }
-                                    closeConfirm();
-                                  },
-                                  'Archive'
-                                );
-                              }}
-                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex flex-col items-center justify-center"
-                              title="Archive"
-                            >
-                              <ArchiveBoxIcon className="h-5 w-5" />
-                              <span className="text-xs mt-1">Archive</span>
-                            </button>
-                          )}
                           <button
                             onClick={() => {
                               showConfirm(
