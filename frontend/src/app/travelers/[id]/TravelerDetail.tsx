@@ -1944,14 +1944,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <tr className="bg-gray-200 border-b-2 border-gray-400">
                   {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 w-8 text-center font-bold text-xs no-print"></th>}
                   <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '160px'}}>WORK CENTER</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '240px'}}>INSTRUCTIONS</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>TIME</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>QTY</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>REJ</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>ACC</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '65px'}}>SIGN</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '65px'}}>DATE</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '220px' : '160px'}}>WORK CENTER</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '120px' : '240px'}}>INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '65px' : '60px'}}>TIME</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>QTY</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>REJ</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>ACC</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '70px' : '65px'}}>SIGN</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '35px' : '65px'}}>DATE</th>
                 </tr>
               </thead>
               <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
