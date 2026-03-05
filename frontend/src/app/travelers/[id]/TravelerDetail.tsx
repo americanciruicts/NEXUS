@@ -1412,7 +1412,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-purple-200.border-t-4 td { font-size: 12px !important; padding: 0.3rem !important; }
         }
       `}</style>
-      <div className="max-w-7xl mx-auto p-4 lg:p-6 space-y-6">
+      <div className="max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
         {/* Action Bar - Screen Only */}
         <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-2 md:gap-3 no-print bg-white shadow-md rounded-lg p-3 md:p-4">
           <button
@@ -1533,7 +1533,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
         {/* Main Traveler Form */}
         <div className="bg-white shadow-lg border-2 border-black overflow-x-auto" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
-          <div className="min-w-0 lg:min-w-[800px]">
+          <div className="min-w-0">
           {/* Header Section */}
           <div className="bg-gray-100 border-b-2 border-black p-2 sm:p-3 md:p-4 print:p-2">
             {/* Mobile Layout - Barcode First */}
@@ -1624,7 +1624,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
 
             {/* Desktop & Print Layout - Original 3 Columns */}
-            <div className="hidden md:grid md:grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-start lg:items-center overflow-hidden">
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-start lg:items-center overflow-hidden">
               {/* Left Column */}
               <div className="space-y-1 md:space-y-1.5 lg:space-y-0.5 print:space-y-0.5 flex flex-col items-start overflow-hidden">
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
