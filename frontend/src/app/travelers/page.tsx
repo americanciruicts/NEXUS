@@ -693,7 +693,7 @@ function TravelersPage() {
                         </div>
                       </td>
                       <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-1 lg:gap-2">
+                        <div className="grid grid-cols-2 gap-1">
                           <Link
                             href={`/travelers/${traveler.dbId}`}
                             className="p-1.5 lg:p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
@@ -853,7 +853,7 @@ function TravelersPage() {
 
                       {/* Actions */}
                       <div className="pt-2 border-t border-gray-200">
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <Link
                             href={`/travelers/${traveler.dbId}`}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex flex-col items-center justify-center"
