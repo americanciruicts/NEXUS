@@ -1329,25 +1329,25 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table tbody td:nth-child(2) { width: 130px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; } /* WORK CENTER */
 
           table thead th:nth-child(3),
-          table tbody td:nth-child(3) { width: auto !important; } /* INSTRUCTIONS - takes remaining space */
+          table tbody td:nth-child(3) { width: 150px !important; } /* INSTRUCTIONS */
 
           table thead th:nth-child(4),
-          table tbody td:nth-child(4) { width: 40px !important; } /* TIME */
+          table tbody td:nth-child(4) { width: 48px !important; } /* TIME */
 
           table thead th:nth-child(5),
-          table tbody td:nth-child(5) { width: 40px !important; } /* QTY */
+          table tbody td:nth-child(5) { width: 48px !important; } /* QTY */
 
           table thead th:nth-child(6),
-          table tbody td:nth-child(6) { width: 40px !important; } /* REJ */
+          table tbody td:nth-child(6) { width: 48px !important; } /* REJ */
 
           table thead th:nth-child(7),
-          table tbody td:nth-child(7) { width: 40px !important; } /* ACC */
+          table tbody td:nth-child(7) { width: 48px !important; } /* ACC */
 
           table thead th:nth-child(8),
-          table tbody td:nth-child(8) { width: 50px !important; } /* SIGN */
+          table tbody td:nth-child(8) { width: 55px !important; } /* SIGN */
 
           table thead th:nth-child(9),
-          table tbody td:nth-child(9) { width: 50px !important; } /* DATE */
+          table tbody td:nth-child(9) { width: 55px !important; } /* DATE */
 
           /* QR code alignment in work center column */
           table tbody td:nth-child(2) .flex,
