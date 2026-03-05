@@ -1953,14 +1953,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <tr className="bg-gray-200 border-b-2 border-gray-400">
                   {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 w-8 text-center font-bold text-xs no-print"></th>}
                   <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '240px'}}>WORK CENTER</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{minWidth: '150px'}}>INSTRUCTIONS</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>TIME</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '50px'}}>QTY</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '50px'}}>REJ</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '50px'}}>ACC</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>SIGN</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>DATE</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '250px'}}>WORK CENTER</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{minWidth: '120px'}}>INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>TIME</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>QTY</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>REJ</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>ACC</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '65px'}}>SIGN</th>
+                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '40px'}}>DATE</th>
                 </tr>
               </thead>
               <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -1979,26 +1979,27 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     style={style}
                     className="border-b border-gray-300 transition-colors duration-300"
                   >
-                        <td className="border-r border-gray-300 px-0.5 py-0.5 text-center bg-gray-50 no-print">
+                        <td className="border-r border-gray-300 px-0.5 py-0 text-center bg-gray-50 no-print">
                           <button
                             type="button"
                             {...dragHandleProps}
-                            className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
+                            className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
                             title="Drag to reorder"
                           >
                             <Bars3Icon className="h-4 w-4" />
                           </button>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5 text-center bg-yellow-50">
+                        <td className="border-r border-gray-300 px-0.5 py-0 text-center bg-yellow-50">
                           <input
                             type="number"
                             min="1"
                             value={step.seq}
                             onChange={(e) => updateStep(index, 'seq', parseInt(e.target.value) || 0)}
-                            className="w-12 border border-yellow-500 rounded px-1 py-0.5 text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-12 border border-yellow-500 rounded text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            style={{padding: '1px 2px'}}
                           />
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5">
+                        <td className="border-r border-gray-300 px-0.5 py-0">
                           <div className="flex flex-row items-center justify-between gap-1">
                             <div className="flex-1">
                               <select
@@ -2006,11 +2007,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
                                 className="block w-full border-2 border-blue-400 rounded-lg px-1 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
                                 style={{
-                                  minHeight: '24px',
+                                  minHeight: '20px',
                                   fontSize: '12px',
-                                  lineHeight: '1.2',
-                                  paddingTop: '2px',
-                                  paddingBottom: '2px',
+                                  lineHeight: '1',
+                                  paddingTop: '1px',
+                                  paddingBottom: '1px',
                                   width: '100%',
                                   maxWidth: '100%',
                                   textOverflow: 'ellipsis',
@@ -2037,63 +2038,71 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             )}
                           </div>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5" style={{minWidth: '180px'}}>
+                        <td className="border-r border-gray-300 px-0.5 py-0" style={{minWidth: '120px'}}>
                           <textarea
                             value={step.instruction}
                             onChange={(e) => updateStep(index, 'instruction', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-0.5 py-0.5 min-h-[28px] text-xs"
+                            className="w-full border border-gray-300 rounded text-xs"
+                            style={{padding: '1px 3px', minHeight: '18px', lineHeight: '1.2', resize: 'vertical'}}
                             placeholder="Enter instructions..."
+                            rows={1}
                           />
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5">
+                        <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedTime || ''}
                             onChange={(e) => updateStep(index, 'completedTime', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-0.5 py-0.5 text-xs text-center"
+                            className="w-full border border-gray-300 rounded text-xs text-center"
+                            style={{padding: '1px 2px'}}
                             placeholder="Hrs"
                           />
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5">
+                        <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.quantity}
                             onChange={(e) => updateStep(index, 'quantity', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-0.5 py-0.5 text-center text-sm font-bold bg-gray-50"
+                            className="w-full border border-gray-300 rounded text-center text-sm font-bold bg-gray-50"
+                            style={{padding: '1px 2px'}}
                           />
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5">
+                        <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.rejected}
                             onChange={(e) => updateStep(index, 'rejected', e.target.value)}
-                            className="w-full border border-red-400 rounded px-0.5 py-0.5 text-center text-sm font-bold text-red-700 bg-red-50"
+                            className="w-full border border-red-400 rounded text-center text-sm font-bold text-red-700 bg-red-50"
+                            style={{padding: '1px 2px'}}
                           />
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5">
+                        <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.accepted}
                             onChange={(e) => updateStep(index, 'accepted', e.target.value)}
-                            className="w-full border border-green-400 rounded px-0.5 py-0.5 text-center text-sm font-bold text-green-700 bg-green-50"
+                            className="w-full border border-green-400 rounded text-center text-sm font-bold text-green-700 bg-green-50"
+                            style={{padding: '1px 2px'}}
                           />
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0.5">
+                        <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.sign}
                             onChange={(e) => updateStep(index, 'sign', e.target.value)}
-                            className="w-full border border-purple-400 rounded px-0.5 py-0.5 text-center text-sm font-bold bg-purple-50"
+                            className="w-full border border-purple-400 rounded text-center text-sm font-bold bg-purple-50"
+                            style={{padding: '1px 2px'}}
                             placeholder="Sign"
                           />
                         </td>
-                        <td className="px-0.5 py-0.5">
-                          <div className="flex items-center space-x-1">
+                        <td className="px-0.5 py-0">
+                          <div className="flex items-center space-x-0.5">
                             <input
                               type="text"
                               value={step.completedDate}
                               onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
-                              className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-center"
+                              className="flex-1 border border-gray-300 rounded text-xs text-center"
+                              style={{padding: '1px 1px'}}
                               placeholder="Date"
                             />
                             <button
