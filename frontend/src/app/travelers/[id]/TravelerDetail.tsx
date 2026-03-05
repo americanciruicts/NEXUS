@@ -1319,44 +1319,35 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           tbody td.text-base { font-size: 12px !important; }
           tbody td.font-semibold { font-size: 11px !important; font-weight: 700 !important; } /* Work center - reduced to prevent overflow */
 
-          /* Column width adjustments for print - view mode (9 cols) */
+          /* Column width adjustments for print */
+          table { table-layout: fixed !important; width: 100% !important; }
+
           table thead th:nth-child(1),
-          table tbody td:nth-child(1) { width: 30px !important; max-width: 30px !important; } /* SQ */
+          table tbody td:nth-child(1) { width: 28px !important; } /* SQ */
 
           table thead th:nth-child(2),
-          table tbody td:nth-child(2) { width: 145px !important; max-width: 145px !important; } /* WORK CENTER */
+          table tbody td:nth-child(2) { width: 130px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; } /* WORK CENTER */
 
           table thead th:nth-child(3),
-          table tbody td:nth-child(3) { width: auto !important; min-width: 200px !important; } /* INSTRUCTIONS */
+          table tbody td:nth-child(3) { width: auto !important; } /* INSTRUCTIONS - takes remaining space */
 
           table thead th:nth-child(4),
-          table tbody td:nth-child(4) { width: 50px !important; max-width: 50px !important; } /* TIME */
+          table tbody td:nth-child(4) { width: 40px !important; } /* TIME */
 
           table thead th:nth-child(5),
-          table tbody td:nth-child(5) { width: 50px !important; max-width: 50px !important; } /* QTY */
+          table tbody td:nth-child(5) { width: 40px !important; } /* QTY */
 
           table thead th:nth-child(6),
-          table tbody td:nth-child(6) { width: 50px !important; max-width: 50px !important; } /* REJ */
+          table tbody td:nth-child(6) { width: 40px !important; } /* REJ */
 
           table thead th:nth-child(7),
-          table tbody td:nth-child(7) { width: 50px !important; max-width: 50px !important; } /* ACC */
+          table tbody td:nth-child(7) { width: 40px !important; } /* ACC */
 
           table thead th:nth-child(8),
-          table tbody td:nth-child(8) { width: 60px !important; max-width: 60px !important; } /* SIGN */
+          table tbody td:nth-child(8) { width: 50px !important; } /* SIGN */
 
           table thead th:nth-child(9),
-          table tbody td:nth-child(9) { width: 60px !important; max-width: 60px !important; } /* DATE */
-
-          /* Column width adjustments for print - edit mode (10 cols, drag handle hidden at pos 1) */
-          table thead th:nth-child(2):first-of-type ~ th:nth-child(2),
-          table tbody td:nth-child(2) { } /* SQ - already matched above */
-
-          /* Edit mode: +1 offset for all columns after hidden drag handle */
-          table thead th:nth-child(3),
-          table tbody td:nth-child(3) { width: 145px !important; max-width: 145px !important; } /* WORK CENTER in edit */
-
-          table thead th:nth-child(4),
-          table tbody td:nth-child(4) { width: auto !important; min-width: 200px !important; } /* INSTRUCTIONS in edit */
+          table tbody td:nth-child(9) { width: 50px !important; } /* DATE */
 
           /* QR code alignment in work center column */
           table tbody td:nth-child(2) .flex,
@@ -1953,8 +1944,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <tr className="bg-gray-200 border-b-2 border-gray-400">
                   {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 w-8 text-center font-bold text-xs no-print"></th>}
                   <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '200px'}}>WORK CENTER</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '200px'}}>INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '160px'}}>WORK CENTER</th>
+                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '240px'}}>INSTRUCTIONS</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '60px'}}>TIME</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>QTY</th>
                   <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: '55px'}}>REJ</th>
@@ -2140,7 +2131,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             ) : null}
                           </div>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '95px'}}>
+                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '120px'}}>
                           {step.instruction ? step.instruction : <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
