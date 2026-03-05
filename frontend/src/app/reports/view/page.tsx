@@ -12,7 +12,9 @@ const REPORT_THEMES = {
   single_operator: { primary: '#A855F7', secondary: '#F3E8FF', name: 'Single Operator Labor Report' },
   all_operators: { primary: '#F97316', secondary: '#FFEDD5', name: 'All Operators Labor Report' },
   single_work_center: { primary: '#06B6D4', secondary: '#CFFAFE', name: 'Single Work Center Report' },
-  all_work_centers: { primary: '#14B8A6', secondary: '#CCFBF1', name: 'All Work Centers Report' }
+  all_work_centers: { primary: '#14B8A6', secondary: '#CCFBF1', name: 'All Work Centers Report' },
+  single_category: { primary: '#E11D48', secondary: '#FFE4E6', name: 'Single Category Report' },
+  all_categories: { primary: '#EC4899', secondary: '#FCE7F3', name: 'All Categories Report' }
 };
 
 function ReportViewContent() {
@@ -23,11 +25,13 @@ function ReportViewContent() {
   const operatorName = searchParams.get('operatorName');
   const workCenter = searchParams.get('workCenter');
   const workOrder = searchParams.get('workOrder');
+  const categoryParam = searchParams.get('category');
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
 
   const [travelerData, setTravelerData] = useState<any[]>([]);
   const [laborData, setLaborData] = useState<any[]>([]);
+  const [categoryData, setCategoryData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalHours, setTotalHours] = useState(0);
 
@@ -127,6 +131,22 @@ function ReportViewContent() {
         const total = data.reduce((sum: number, entry: any) => sum + (entry.hours_worked || 0), 0);
         setTotalHours(total);
         setLaborData(data);
+      } else if (type === 'single_category' || type === 'all_categories') {
+        const params = new URLSearchParams();
+        if (type === 'single_category' && categoryParam) params.append('category', categoryParam);
+        if (jobNumber && jobNumber.trim()) params.append('job_number', jobNumber);
+        if (workOrder && workOrder.trim()) params.append('work_order', workOrder);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+
+        const response = await fetch(`${API_BASE_URL}/labor/category-report?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('API error');
+        const data = await response.json();
+        const total = data.reduce((sum: number, entry: any) => sum + (entry.hours_worked || 0), 0);
+        setTotalHours(total);
+        setCategoryData(data);
       }
       setLoading(false);
     } catch (error) {
@@ -491,15 +511,17 @@ function ReportViewContent() {
                type === 'single_operator' ? 'Operator Information' :
                type === 'all_operators' ? 'All Operators Summary' :
                type === 'single_work_center' ? 'Work Center Report' :
-               type === 'all_work_centers' ? 'All Work Centers Report' : 'Information'}
+               type === 'all_work_centers' ? 'All Work Centers Report' :
+               type === 'single_category' ? 'Category Report' :
+               type === 'all_categories' ? 'All Categories Report' : 'Information'}
             </div>
             <div className="info-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: '11px', alignItems: 'center' }}>
               {/* Universal fields for ALL report types */}
-              <div><strong>Job Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.job_number || laborData[0]?.job_number || jobNumber || 'N/A'}</span></div>
-              <div><strong>Work Order:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.work_order || laborData[0]?.work_order || workOrder || 'N/A'}</span></div>
-              <div><strong>PO Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.po_number || laborData[0]?.po_number || 'N/A'}</span></div>
-              <div><strong>Part Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.part_number || laborData[0]?.part_number || 'N/A'}</span></div>
-              <div><strong>Quantity:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.quantity || laborData[0]?.quantity || 'N/A'}</span></div>
+              <div><strong>Job Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.job_number || laborData[0]?.job_number || categoryData[0]?.job_number || jobNumber || 'N/A'}</span></div>
+              <div><strong>Work Order:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.work_order || laborData[0]?.work_order || categoryData[0]?.work_order || workOrder || 'N/A'}</span></div>
+              <div><strong>PO Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.po_number || laborData[0]?.po_number || categoryData[0]?.po_number || 'N/A'}</span></div>
+              <div><strong>Part Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.part_number || laborData[0]?.part_number || categoryData[0]?.part_number || 'N/A'}</span></div>
+              <div><strong>Quantity:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.quantity || laborData[0]?.quantity || categoryData[0]?.quantity || 'N/A'}</span></div>
               {/* Additional fields for work center reports */}
               {(type === 'single_work_center' || type === 'all_work_centers') && workCenter && (
                 <div><strong>Work Center Filter:</strong> <span style={{ color: '#495057' }}>{workCenter}</span></div>
@@ -507,6 +529,10 @@ function ReportViewContent() {
               {/* Additional fields for operator reports */}
               {(type === 'single_operator' || type === 'all_operators') && operatorName && (
                 <div><strong>Operator Filter:</strong> <span style={{ color: '#495057' }}>{operatorName}</span></div>
+              )}
+              {/* Additional fields for category reports */}
+              {(type === 'single_category') && categoryParam && (
+                <div><strong>Category:</strong> <span style={{ color: '#495057' }}>{categoryParam}</span></div>
               )}
               <div><strong>Total Hours:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>{totalHours.toFixed(2)}</span></div>
             </div>
@@ -1076,6 +1102,257 @@ function ReportViewContent() {
               </div>
             );
           })()}
+
+          {/* Category Reports - Grouped by Category then Traveler */}
+          {(type === 'single_category' || type === 'all_categories') && categoryData.length > 0 && (() => {
+            // Group data by category
+            const categoryGroups: Record<string, any[]> = {};
+            categoryData.forEach(entry => {
+              const cat = entry.category || 'Uncategorized';
+              if (!categoryGroups[cat]) {
+                categoryGroups[cat] = [];
+              }
+              categoryGroups[cat].push(entry);
+            });
+
+            const CATEGORY_COLORS: Record<string, { bg: string; text: string; light: string }> = {
+              'SMT hrs. Actual': { bg: '#2563eb', text: '#ffffff', light: '#dbeafe' },
+              'HAND hrs. Actual': { bg: '#ea580c', text: '#ffffff', light: '#ffedd5' },
+              'TH hrs. Actual': { bg: '#7c3aed', text: '#ffffff', light: '#ede9fe' },
+              'AOI & Final Inspection, QC hrs. Actual': { bg: '#16a34a', text: '#ffffff', light: '#dcfce7' },
+              'E-TEST hrs. Actual': { bg: '#ca8a04', text: '#ffffff', light: '#fef9c3' },
+              'Labelling, Packaging, Shipping hrs. Actual': { bg: '#0891b2', text: '#ffffff', light: '#cffafe' },
+              'Uncategorized': { bg: '#6b7280', text: '#ffffff', light: '#f3f4f6' },
+            };
+
+            return (
+              <div style={{ marginBottom: '0' }}>
+                {Object.entries(categoryGroups).map(([cat, catEntries]) => {
+                  const colors = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Uncategorized'];
+                  const catTotal = catEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+
+                  // Group by traveler within this category
+                  const travelerGroups: Record<string, any[]> = {};
+                  catEntries.forEach(entry => {
+                    const key = `${entry.job_number || 'N/A'}_${entry.work_order || 'N/A'}`;
+                    if (!travelerGroups[key]) {
+                      travelerGroups[key] = [];
+                    }
+                    travelerGroups[key].push(entry);
+                  });
+
+                  return (
+                    <div key={cat} style={{ marginBottom: '30px', pageBreakInside: 'avoid' }}>
+                      {/* Category Header */}
+                      <div style={{
+                        background: colors.bg,
+                        padding: '14px 20px',
+                        borderRadius: '8px 8px 0 0',
+                        color: colors.text,
+                        fontWeight: 'bold',
+                        fontSize: '15px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ position: 'absolute', inset: 0, opacity: 0.1, pointerEvents: 'none' }}>
+                          <div style={{ position: 'absolute', top: 0, right: 0, width: '5rem', height: '5rem', backgroundColor: 'white', borderRadius: '50%', transform: 'translate(50%, -50%)' }} />
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, width: '4rem', height: '4rem', backgroundColor: 'white', borderRadius: '50%', transform: 'translate(-50%, 50%)' }} />
+                        </div>
+                        <span style={{ position: 'relative', zIndex: 1 }}>{cat}</span>
+                        <span style={{ position: 'relative', zIndex: 1 }}>Category Total: {catTotal.toFixed(2)} hrs</span>
+                      </div>
+
+                      {/* Travelers within this Category */}
+                      <div style={{ border: `2px solid ${colors.bg}`, borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                        {Object.entries(travelerGroups).map(([tKey, tEntries], tIndex) => {
+                          const [tJobNumber, tWorkOrder] = tKey.split('_');
+                          const travelerTotal = tEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+
+                          // Group by work center within this traveler
+                          const wcGroups: Record<string, any[]> = {};
+                          tEntries.forEach(entry => {
+                            const wc = entry.work_center || 'Unknown';
+                            if (!wcGroups[wc]) {
+                              wcGroups[wc] = [];
+                            }
+                            wcGroups[wc].push(entry);
+                          });
+
+                          return (
+                            <div key={tKey} style={{
+                              borderBottom: tIndex < Object.keys(travelerGroups).length - 1 ? '2px solid #e0e0e0' : 'none',
+                              padding: '16px'
+                            }}>
+                              {/* Traveler Sub-header */}
+                              <div className="traveler-header" style={{
+                                background: 'linear-gradient(135deg, #2563eb 0%, #4338ca 50%, #6b21a8 100%)',
+                                padding: '10px 14px',
+                                borderRadius: '6px',
+                                color: 'white',
+                                fontWeight: 'bold',
+                                fontSize: '12px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '12px'
+                              }}>
+                                <span>Job# {tJobNumber} - Work Order# {tWorkOrder}</span>
+                                <span>Total: {travelerTotal.toFixed(2)} hrs</span>
+                              </div>
+
+                              {/* Work Centers within this Traveler */}
+                              {Object.entries(wcGroups).map(([wc, wcEntries], wcIdx) => {
+                                const wcTotal = wcEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+
+                                return (
+                                  <div key={wc} style={{ marginBottom: wcIdx < Object.keys(wcGroups).length - 1 ? '12px' : '0' }}>
+                                    {/* Work Center Header */}
+                                    <div className="wc-header" style={{
+                                      background: colors.light,
+                                      padding: '6px 12px',
+                                      borderRadius: '4px',
+                                      fontWeight: 'bold',
+                                      fontSize: '11px',
+                                      color: colors.bg,
+                                      marginBottom: '8px',
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center'
+                                    }}>
+                                      <span>{wc}</span>
+                                      <span>WC Total: {wcTotal.toFixed(2)} hrs</span>
+                                    </div>
+
+                                    {/* Desktop Table */}
+                                    <div className="desktop-table" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
+                                      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                          <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
+                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
+                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {wcEntries.map((entry, i) => (
+                                            <tr key={i} style={{ borderBottom: '2px solid #333333' }}>
+                                              <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                                {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
+                                              </td>
+                                              <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                                {entry.start_time ? new Date(entry.start_time).toLocaleString('en-US', {
+                                                  month: '2-digit', day: '2-digit', year: 'numeric',
+                                                  hour: '2-digit', minute: '2-digit', hour12: true
+                                                }) : '-'}
+                                              </td>
+                                              <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                                {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
+                                                  month: '2-digit', day: '2-digit', year: 'numeric',
+                                                  hour: '2-digit', minute: '2-digit', hour12: true
+                                                }) : '-'}
+                                              </td>
+                                              <td style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', color: '#28a745', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                                {entry.hours_worked.toFixed(2)}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+
+                                    {/* Mobile Card View */}
+                                    <div className="mobile-card-view space-y-3 p-2">
+                                      {wcEntries.map((entry, i) => (
+                                        <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border-b-2 border-gray-400 px-3 py-2">
+                                            <div className="font-bold text-white text-sm">
+                                              {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
+                                            </div>
+                                          </div>
+                                          <div className="p-3 space-y-3">
+                                            <div>
+                                              <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
+                                              <div className="text-sm bg-gray-50 p-2 rounded text-center">
+                                                {entry.start_time ? new Date(entry.start_time).toLocaleDateString('en-US', {
+                                                  month: '2-digit', day: '2-digit', year: 'numeric'
+                                                }) : '-'}
+                                              </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
+                                                <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                                  {entry.start_time ? new Date(entry.start_time).toLocaleTimeString('en-US', {
+                                                    hour: '2-digit', minute: '2-digit', hour12: true
+                                                  }) : '-'}
+                                                </div>
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
+                                                <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                                  {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
+                                                    hour: '2-digit', minute: '2-digit', hour12: true
+                                                  }) : '-'}
+                                                </div>
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs font-bold text-green-700 mb-1">Total Hours</label>
+                                                <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
+                                                  {entry.hours_worked.toFixed(2)}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Grand Total */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #e11d48 0%, #be185d 50%, #9d174d 100%)',
+                  padding: '16px',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '20px',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ position: 'absolute', inset: 0, opacity: 0.1, pointerEvents: 'none' }}>
+                    <div style={{ position: 'absolute', top: 0, right: 0, width: '5rem', height: '5rem', backgroundColor: 'white', borderRadius: '50%', transform: 'translate(50%, -50%)' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, width: '4rem', height: '4rem', backgroundColor: 'white', borderRadius: '50%', transform: 'translate(-50%, 50%)' }} />
+                  </div>
+                  <span style={{ position: 'relative', zIndex: 1 }}>GRAND TOTAL ({type === 'single_category' ? categoryParam : 'All Categories'})</span>
+                  <span style={{ position: 'relative', zIndex: 1 }}>{totalHours.toFixed(2)} hrs</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* No data message for category reports */}
+          {(type === 'single_category' || type === 'all_categories') && categoryData.length === 0 && !loading && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '14px' }}>
+              No labor entries found for the selected criteria.
+            </div>
+          )}
 
         </div>
       </div>

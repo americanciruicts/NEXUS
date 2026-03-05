@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 
 from database import get_db
-from models import User, LaborEntry, Traveler, ProcessStep, NotificationType
+from models import User, LaborEntry, Traveler, ProcessStep, NotificationType, WorkCenter
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
 
@@ -749,3 +749,90 @@ async def get_labor_hours_summary(
         "employees": summary,
         "total_employees": len(summary)
     }
+
+@router.get("/category-report")
+async def get_labor_by_category(
+    category: Optional[str] = None,
+    job_number: Optional[str] = None,
+    work_order: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get labor entries grouped by work center category (e.g. SMT hrs. Actual, HAND hrs. Actual)"""
+    from sqlalchemy import func as sql_func
+
+    # Build a lookup of work center name -> category
+    work_centers = db.query(WorkCenter).all()
+    wc_category_map = {}
+    for wc in work_centers:
+        if wc.name and wc.category:
+            wc_category_map[wc.name.upper().strip()] = wc.category
+
+    # Get all labor entries
+    query = db.query(LaborEntry)
+    labor_entries = query.order_by(LaborEntry.created_at.desc()).all()
+
+    # Batch-fetch related data
+    employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
+    traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
+    employees = {u.id: u for u in db.query(User).filter(User.id.in_(employee_ids)).all()} if employee_ids else {}
+    travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
+
+    results = []
+    for entry in labor_entries:
+        traveler = travelers.get(entry.traveler_id)
+        employee = employees.get(entry.employee_id)
+
+        # Determine category from work center name
+        wc_name = (entry.work_center or '').upper().strip()
+        entry_category = wc_category_map.get(wc_name, None)
+
+        # Filter by category if specified
+        if category and category.strip():
+            if not entry_category or entry_category.lower() != category.lower():
+                continue
+
+        # Filter by job number
+        if job_number and job_number.strip():
+            job = traveler.job_number if traveler else ''
+            if not job or job_number.lower() not in job.lower():
+                continue
+
+        # Filter by work order
+        if work_order and work_order.strip():
+            wo = traveler.work_order_number if traveler else ''
+            if not wo or work_order.lower() not in wo.lower():
+                continue
+
+        # Filter by date range
+        if start_date and entry.start_time:
+            entry_date = entry.start_time.strftime('%Y-%m-%d')
+            if entry_date < start_date:
+                continue
+        if end_date and entry.start_time:
+            entry_date = entry.start_time.strftime('%Y-%m-%d')
+            if entry_date > end_date:
+                continue
+
+        results.append({
+            "id": entry.id,
+            "traveler_id": entry.traveler_id,
+            "employee_id": entry.employee_id,
+            "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
+            "job_number": traveler.job_number if traveler else None,
+            "work_order": traveler.work_order_number if traveler else None,
+            "po_number": traveler.po_number if traveler else None,
+            "part_number": traveler.part_number if traveler else None,
+            "quantity": traveler.quantity if traveler else None,
+            "work_center": entry.work_center,
+            "category": entry_category or "Uncategorized",
+            "start_time": entry.start_time.isoformat() if entry.start_time else None,
+            "end_time": entry.end_time.isoformat() if entry.end_time else None,
+            "hours_worked": entry.hours_worked or 0,
+            "is_completed": entry.is_completed,
+            "description": entry.description,
+        })
+
+    return results

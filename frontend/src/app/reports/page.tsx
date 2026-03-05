@@ -33,7 +33,7 @@ interface LaborEntry {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const [reportType, setReportType] = useState<'single_traveler' | 'all_travelers' | 'single_operator' | 'all_operators' | 'single_work_center' | 'all_work_centers' | ''>('');
+  const [reportType, setReportType] = useState<'single_traveler' | 'all_travelers' | 'single_operator' | 'all_operators' | 'single_work_center' | 'all_work_centers' | 'single_category' | 'all_categories' | ''>('');
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<LaborEntry[] | null>(null);
   const [reportTitle, setReportTitle] = useState('');
@@ -43,8 +43,18 @@ export default function ReportsPage() {
   const [operatorName, setOperatorName] = useState('');
   const [workCenter, setWorkCenter] = useState('');
   const [workOrder, setWorkOrder] = useState('');
+  const [category, setCategory] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  const CATEGORY_OPTIONS = [
+    'SMT hrs. Actual',
+    'HAND hrs. Actual',
+    'TH hrs. Actual',
+    'AOI & Final Inspection, QC hrs. Actual',
+    'E-TEST hrs. Actual',
+    'Labelling, Packaging, Shipping hrs. Actual',
+  ];
 
   const generateReport = async () => {
     if (!reportType) {
@@ -103,6 +113,19 @@ export default function ReportsPage() {
         router.push(`/reports/view?type=all_work_centers&jobNumber=${encodeURIComponent(jobNumber)}&workOrder=${encodeURIComponent(workOrder)}&startDate=${startDate}&endDate=${endDate}`);
         setLoading(false);
         return;
+      } else if (reportType === 'single_category') {
+        if (!category.trim()) {
+          toast.error('Please select a category');
+          setLoading(false);
+          return;
+        }
+        router.push(`/reports/view?type=single_category&category=${encodeURIComponent(category)}&jobNumber=${encodeURIComponent(jobNumber)}&workOrder=${encodeURIComponent(workOrder)}&startDate=${startDate}&endDate=${endDate}`);
+        setLoading(false);
+        return;
+      } else if (reportType === 'all_categories') {
+        router.push(`/reports/view?type=all_categories&jobNumber=${encodeURIComponent(jobNumber)}&workOrder=${encodeURIComponent(workOrder)}&startDate=${startDate}&endDate=${endDate}`);
+        setLoading(false);
+        return;
       }
     } catch (error) {
       console.error('Error:', error);
@@ -123,6 +146,7 @@ export default function ReportsPage() {
     setOperatorName('');
     setWorkCenter('');
     setWorkOrder('');
+    setCategory('');
     setStartDate('');
     setEndDate('');
   };
@@ -205,8 +229,8 @@ export default function ReportsPage() {
         <div className="bg-white shadow-xl rounded-xl border-2 border-gray-200 p-8 mb-6 no-print">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Generate Report</h2>
 
-          {/* Report Type Selection - 2x3 Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+          {/* Report Type Selection - 2x4 Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {/* Single Traveler */}
             <button
               onClick={() => setReportType('single_traveler')}
@@ -362,6 +386,59 @@ export default function ReportsPage() {
                 </div>
               </div>
             </button>
+
+            {/* Single Category */}
+            <button
+              onClick={() => setReportType('single_category')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'single_category' ? 'ring-4 ring-rose-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-rose-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">Single Category</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">By category type</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+
+            {/* All Categories */}
+            <button
+              onClick={() => setReportType('all_categories')}
+              className={`group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 ${
+                reportType === 'all_categories' ? 'ring-4 ring-pink-300 scale-[1.03]' : ''
+              }`}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-pink-500 to-pink-700"></div>
+              <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10 p-4 sm:p-5 flex flex-col items-center text-center">
+                <div className="bg-white/15 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-white/20 mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 sm:w-9 sm:h-9 text-pink-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-0.5">All Categories</h3>
+                <p className="text-[11px] sm:text-xs text-white/70">Complete category report</p>
+                <div className="mt-2.5 flex items-center gap-1 text-white/50 group-hover:text-white transition-colors duration-300">
+                  <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider">Select</span>
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* Input Fields */}
@@ -405,8 +482,24 @@ export default function ReportsPage() {
               </div>
             )}
 
-            {/* Job Number and Work Order for Work Center Reports */}
-            {(reportType === 'single_work_center' || reportType === 'all_work_centers') && (
+            {reportType === 'single_category' && (
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Category</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-rose-500 focus:ring-2 focus:ring-rose-200 font-semibold"
+                >
+                  <option value="">Select a category...</option>
+                  {CATEGORY_OPTIONS.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Job Number and Work Order for Work Center / Category Reports */}
+            {(reportType === 'single_work_center' || reportType === 'all_work_centers' || reportType === 'single_category' || reportType === 'all_categories') && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Job Number (Optional)</label>
@@ -432,7 +525,7 @@ export default function ReportsPage() {
             )}
 
             {/* Date Range */}
-            {(reportType === 'all_travelers' || reportType === 'single_operator' || reportType === 'single_work_center' || reportType === 'all_work_centers') && (
+            {(reportType === 'all_travelers' || reportType === 'single_operator' || reportType === 'single_work_center' || reportType === 'all_work_centers' || reportType === 'single_category' || reportType === 'all_categories') && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Start Date (Optional)</label>
