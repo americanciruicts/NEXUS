@@ -258,9 +258,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             customerCode: String(data.customer_code || ''),
             customerName: String(data.customer_name || ''),
             status: String(data.status),
-            createdAt: String(data.created_at || ''),
-            dueDate: String(data.due_date || ''),
-            shipDate: String(data.ship_date || ''),
+            createdAt: String(data.created_at || '').split('T')[0],
+            dueDate: String(data.due_date || '').split('T')[0],
+            shipDate: String(data.ship_date || '').split('T')[0],
             specs: specsArray,
             fromStock: String(data.from_stock || ''),
             toStock: String(data.to_stock || ''),
@@ -1240,7 +1240,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             outline: none !important;
           }
           textarea { min-height: 0 !important; height: auto !important; resize: none !important; overflow: hidden !important; }
-          input[type="date"] { font-size: 11px !important; }
+          input[type="date"] { font-size: 11px !important; -webkit-appearance: none !important; }
+          input[type="date"]::-webkit-calendar-picker-indicator { display: none !important; }
+          input[type="date"]::-webkit-inner-spin-button { display: none !important; }
+          input[type="number"] { -moz-appearance: textfield !important; }
+          input[type="number"]::-webkit-outer-spin-button,
+          input[type="number"]::-webkit-inner-spin-button { display: none !important; }
 
           /* Hide ALL buttons in print (edit UI, drag handles, add step, etc.) */
           button { display: none !important; }
