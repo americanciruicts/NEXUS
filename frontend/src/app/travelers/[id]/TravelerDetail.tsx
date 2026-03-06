@@ -1218,12 +1218,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             break-inside: avoid !important;
           }
           .max-w-7xl { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-          .p-6 { padding: 0 !important; }
+          .p-6, .p-2, .py-4, .px-4 { padding: 0 !important; }
+          .sm\\:px-6, .lg\\:px-8, .sm\\:p-4, .lg\\:p-6 { padding: 0 !important; }
+          main { padding: 0 !important; margin: 0 !important; }
+          .min-h-screen { min-height: auto !important; background: white !important; }
+          .bg-gray-50 { background: white !important; }
+          .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
+          .rounded-lg { border-radius: 0 !important; }
 
           /* Reduce spacing between sections - keep routing directly below specifications */
           .border-b, .border-b-2 { margin-bottom: 0 !important; margin-top: 0 !important; }
-          .space-y-6 > * { margin-top: 0 !important; margin-bottom: 0 !important; }
-          .space-y-6 { gap: 0 !important; }
+          .space-y-4 > *, .space-y-6 > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+          .space-y-4, .space-y-6 { gap: 0 !important; }
+          .gap-2, .gap-3 { gap: 0 !important; }
 
           /* Hide elements with no-print class */
           .no-print { display: none !important; }
@@ -1402,20 +1409,44 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.routing-table thead th:nth-child(9),
           table.routing-table tbody td:nth-child(9) { width: 55px !important; } /* DATE */
 
-          /* Edit mode has extra hidden 1st col (drag/delete) - shift widths by 1 */
-          table.routing-table thead th.no-print,
-          table.routing-table tbody td.no-print { width: 0px !important; padding: 0 !important; border: none !important; overflow: hidden !important; }
+          /* Edit/Create mode: collapse hidden drag column and set correct column widths */
+          table.editing-mode thead th.no-print,
+          table.editing-mode tbody td.no-print { width: 0px !important; min-width: 0px !important; max-width: 0px !important; padding: 0 !important; border: none !important; overflow: hidden !important; font-size: 0 !important; }
 
-          /* QR code alignment in work center column */
+          /* Edit mode column widths (shifted +1 because hidden col 1 still counted by nth-child) */
+          table.editing-mode thead th:nth-child(2),
+          table.editing-mode tbody td:nth-child(2) { width: 28px !important; } /* SQ */
+          table.editing-mode thead th:nth-child(3),
+          table.editing-mode tbody td:nth-child(3) { width: 130px !important; word-wrap: break-word !important; } /* WORK CENTER */
+          table.editing-mode thead th:nth-child(4),
+          table.editing-mode tbody td:nth-child(4) { width: 150px !important; } /* INSTRUCTIONS */
+          table.editing-mode thead th:nth-child(5),
+          table.editing-mode tbody td:nth-child(5) { width: 48px !important; } /* TIME */
+          table.editing-mode thead th:nth-child(6),
+          table.editing-mode tbody td:nth-child(6) { width: 48px !important; } /* QTY */
+          table.editing-mode thead th:nth-child(7),
+          table.editing-mode tbody td:nth-child(7) { width: 48px !important; } /* REJ */
+          table.editing-mode thead th:nth-child(8),
+          table.editing-mode tbody td:nth-child(8) { width: 48px !important; } /* ACC */
+          table.editing-mode thead th:nth-child(9),
+          table.editing-mode tbody td:nth-child(9) { width: 55px !important; } /* SIGN */
+          table.editing-mode thead th:nth-child(10),
+          table.editing-mode tbody td:nth-child(10) { width: 55px !important; } /* DATE */
+
+          /* QR code alignment in work center column - view mode (col 2) and edit mode (col 3) */
           table.routing-table tbody td:nth-child(2) .flex,
-          table.routing-table tbody td:nth-child(3) .flex {
+          table.routing-table tbody td:nth-child(3) .flex,
+          table.editing-mode tbody td:nth-child(3) .flex,
+          table.editing-mode tbody td:nth-child(4) .flex {
             display: flex !important;
             flex-direction: row !important;
             justify-content: space-between !important;
             align-items: center !important;
           }
           table.routing-table tbody td:nth-child(2) img,
-          table.routing-table tbody td:nth-child(3) img {
+          table.routing-table tbody td:nth-child(3) img,
+          table.editing-mode tbody td:nth-child(3) img,
+          table.editing-mode tbody td:nth-child(4) img {
             margin-left: auto !important;
           }
 
@@ -2006,7 +2037,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
             {/* Desktop Table View */}
             <div className="overflow-x-auto">
-            <table className="routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 min-w-0 lg:min-w-[640px]" style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
+            <table className={`routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 min-w-0 lg:min-w-[640px] ${isEditing ? 'editing-mode' : ''}`} style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
               <thead>
                 <tr className="bg-gray-200 border-b-2 border-gray-400">
                   {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 text-center font-bold text-xs no-print" style={{width: '30px'}}></th>}
