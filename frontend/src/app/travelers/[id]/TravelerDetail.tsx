@@ -1295,16 +1295,46 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             font-weight: bold !important;
             text-align: center !important;
             color: black !important;
+            width: 100% !important;
           }
-          table tbody td:nth-child(2) select,
-          table tbody td:nth-child(2) input {
+
+          /* Edit mode: SQ column input */
+          table.editing-mode tbody td:nth-child(2) input {
+            text-align: center !important;
+            font-size: 10px !important;
+            font-weight: bold !important;
+          }
+          /* Edit mode: Work Center select - show as left-aligned text */
+          table.editing-mode tbody td:nth-child(3) select {
             text-align: left !important;
             font-size: 10px !important;
+            font-weight: 700 !important;
           }
-          table tbody td:nth-child(3) textarea {
+          /* Edit mode: Instructions textarea */
+          table.editing-mode tbody td:nth-child(4) textarea {
             text-align: left !important;
             font-size: 9px !important;
             font-weight: normal !important;
+          }
+          /* Edit mode: TIME/QTY/REJ/ACC/SIGN/DATE - show underline like view mode when empty */
+          table.editing-mode tbody td:nth-child(5) input,
+          table.editing-mode tbody td:nth-child(6) input,
+          table.editing-mode tbody td:nth-child(7) input,
+          table.editing-mode tbody td:nth-child(8) input,
+          table.editing-mode tbody td:nth-child(9) input,
+          table.editing-mode tbody td:nth-child(10) input {
+            font-size: 10px !important;
+            text-align: center !important;
+            border-bottom: 1px solid #9ca3af !important;
+            min-height: 16px !important;
+          }
+
+          /* View mode column selectors (no extra col) */
+          table.routing-table:not(.editing-mode) tbody td:nth-child(2) span {
+            font-size: 10px !important;
+          }
+          table.routing-table:not(.editing-mode) tbody td:nth-child(3) {
+            font-size: 9px !important;
           }
 
           /* Hide select dropdown arrows in print */
