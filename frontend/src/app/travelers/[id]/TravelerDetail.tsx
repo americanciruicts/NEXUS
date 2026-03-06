@@ -1226,31 +1226,77 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .no-print { display: none !important; }
 
           /* Edit/Create mode print: hide inputs, show values as text, remove colored borders */
-          table input, table select, table textarea {
+          input, select, textarea {
             border: none !important;
             background: transparent !important;
             padding: 0 !important;
             margin: 0 !important;
-            font-size: 11px !important;
+            font-size: inherit !important;
             color: black !important;
             -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            appearance: none !important;
             box-shadow: none !important;
+            outline: none !important;
           }
-          table select { -moz-appearance: none !important; appearance: none !important; }
-          table textarea { min-height: 0 !important; height: auto !important; resize: none !important; overflow: hidden !important; }
+          textarea { min-height: 0 !important; height: auto !important; resize: none !important; overflow: hidden !important; }
+          input[type="date"] { font-size: 11px !important; }
 
-          /* Hide edit-only UI elements in print */
-          table button { display: none !important; }
+          /* Hide ALL buttons in print (edit UI, drag handles, add step, etc.) */
+          button { display: none !important; }
+
+          /* Hide edit-only columns (drag handle / delete) */
+          .no-print { display: none !important; }
+
+          /* Make edit mode table cells match view mode: thick gray-400 borders */
+          table td, table th {
+            border: 2px solid #9ca3af !important;
+          }
+
+          /* Force table layout to auto in print (override isEditing fixed layout) */
+          table.routing-table { table-layout: fixed !important; width: 100% !important; }
 
           /* Edit mode header inputs - show as plain text */
           .bg-green-50 input, .bg-green-50 select,
-          .bg-blue-50 input, .bg-blue-50 select {
+          .bg-blue-50 input, .bg-blue-50 select,
+          .bg-gray-100 input, .bg-gray-100 select,
+          .bg-yellow-50 input, .bg-yellow-50 select {
             border: none !important;
             background: transparent !important;
             padding: 0 !important;
             font-size: 11px !important;
             color: black !important;
           }
+
+          /* Edit mode colored input backgrounds - make transparent */
+          input.bg-gray-50, input.bg-red-50, input.bg-green-50, input.bg-purple-50, input.bg-white,
+          select.bg-white {
+            background: transparent !important;
+          }
+
+          /* Edit mode cell font sizes to match view mode */
+          table tbody td input, table tbody td select, table tbody td textarea {
+            font-size: 11px !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            color: black !important;
+          }
+          table tbody td:nth-child(2) select,
+          table tbody td:nth-child(2) input {
+            text-align: left !important;
+            font-size: 10px !important;
+          }
+          table tbody td:nth-child(3) textarea {
+            text-align: left !important;
+            font-size: 9px !important;
+            font-weight: normal !important;
+          }
+
+          /* Hide select dropdown arrows in print */
+          select::-ms-expand { display: none !important; }
+
+          /* Hide mobile sections in print */
+          .block.md\\:hidden.print\\:hidden { display: none !important; }
 
           /* Keep section background colors for print */
           .bg-yellow-200, .bg-yellow-50, .bg-blue-200, .bg-purple-200, .bg-purple-100, .bg-gray-100 {
@@ -1305,11 +1351,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-purple-50 { padding: 0.1rem !important; min-height: 30px !important; }
           .bg-purple-50 .whitespace-pre-wrap { font-size: 9px !important; }
 
-          /* Edit mode: make table look like view mode in print */
-          table td, table th {
-            border: 2px solid #9ca3af !important; /* gray-400 borders like view mode */
-          }
-
           /* Table headers - bigger font */
           thead th { padding: 0.2rem !important; font-size: 12px !important; font-weight: bold !important; }
 
@@ -1319,46 +1360,50 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           tbody td.text-base { font-size: 12px !important; }
           tbody td.font-semibold { font-size: 11px !important; font-weight: 700 !important; } /* Work center - reduced to prevent overflow */
 
-          /* Column width adjustments for print */
-          table { table-layout: fixed !important; width: 100% !important; }
+          /* Column width adjustments for print - View mode (no extra column) */
+          table.routing-table { table-layout: fixed !important; width: 100% !important; }
 
-          table thead th:nth-child(1),
-          table tbody td:nth-child(1) { width: 28px !important; } /* SQ */
+          table.routing-table thead th:nth-child(1),
+          table.routing-table tbody td:nth-child(1) { width: 28px !important; } /* SQ */
 
-          table thead th:nth-child(2),
-          table tbody td:nth-child(2) { width: 130px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; } /* WORK CENTER */
+          table.routing-table thead th:nth-child(2),
+          table.routing-table tbody td:nth-child(2) { width: 130px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; } /* WORK CENTER */
 
-          table thead th:nth-child(3),
-          table tbody td:nth-child(3) { width: 150px !important; } /* INSTRUCTIONS */
+          table.routing-table thead th:nth-child(3),
+          table.routing-table tbody td:nth-child(3) { width: 150px !important; } /* INSTRUCTIONS */
 
-          table thead th:nth-child(4),
-          table tbody td:nth-child(4) { width: 48px !important; } /* TIME */
+          table.routing-table thead th:nth-child(4),
+          table.routing-table tbody td:nth-child(4) { width: 48px !important; } /* TIME */
 
-          table thead th:nth-child(5),
-          table tbody td:nth-child(5) { width: 48px !important; } /* QTY */
+          table.routing-table thead th:nth-child(5),
+          table.routing-table tbody td:nth-child(5) { width: 48px !important; } /* QTY */
 
-          table thead th:nth-child(6),
-          table tbody td:nth-child(6) { width: 48px !important; } /* REJ */
+          table.routing-table thead th:nth-child(6),
+          table.routing-table tbody td:nth-child(6) { width: 48px !important; } /* REJ */
 
-          table thead th:nth-child(7),
-          table tbody td:nth-child(7) { width: 48px !important; } /* ACC */
+          table.routing-table thead th:nth-child(7),
+          table.routing-table tbody td:nth-child(7) { width: 48px !important; } /* ACC */
 
-          table thead th:nth-child(8),
-          table tbody td:nth-child(8) { width: 55px !important; } /* SIGN */
+          table.routing-table thead th:nth-child(8),
+          table.routing-table tbody td:nth-child(8) { width: 55px !important; } /* SIGN */
 
-          table thead th:nth-child(9),
-          table tbody td:nth-child(9) { width: 55px !important; } /* DATE */
+          table.routing-table thead th:nth-child(9),
+          table.routing-table tbody td:nth-child(9) { width: 55px !important; } /* DATE */
+
+          /* Edit mode has extra hidden 1st col (drag/delete) - shift widths by 1 */
+          table.routing-table thead th.no-print,
+          table.routing-table tbody td.no-print { width: 0px !important; padding: 0 !important; border: none !important; overflow: hidden !important; }
 
           /* QR code alignment in work center column */
-          table tbody td:nth-child(2) .flex,
-          table tbody td:nth-child(3) .flex {
+          table.routing-table tbody td:nth-child(2) .flex,
+          table.routing-table tbody td:nth-child(3) .flex {
             display: flex !important;
             flex-direction: row !important;
             justify-content: space-between !important;
             align-items: center !important;
           }
-          table tbody td:nth-child(2) img,
-          table tbody td:nth-child(3) img {
+          table.routing-table tbody td:nth-child(2) img,
+          table.routing-table tbody td:nth-child(3) img {
             margin-left: auto !important;
           }
 
@@ -1995,8 +2040,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             min="1"
                             value={step.seq}
                             onChange={(e) => updateStep(index, 'seq', parseInt(e.target.value) || 0)}
-                            className="w-12 border border-yellow-500 rounded text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            style={{padding: '1px 2px'}}
+                            className="w-14 border border-yellow-500 rounded text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            style={{padding: '2px 2px'}}
                           />
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
@@ -2210,7 +2255,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             type="number"
                             value={step.seq}
                             onChange={(e) => updateStep(index, 'seq', parseInt(e.target.value) || 0)}
-                            className="w-14 ml-1 border border-white rounded px-1 text-center bg-blue-700 text-white font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-14 ml-1 border border-white rounded px-1 text-center bg-blue-700 text-white font-bold text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                         ) : step.seq}
                       </span>
