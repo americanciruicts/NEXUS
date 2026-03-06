@@ -1103,7 +1103,7 @@ function ReportViewContent() {
             );
           })()}
 
-          {/* Category Reports - Grouped by Category then Traveler */}
+          {/* Category Reports - Flat table per category */}
           {(type === 'single_category' || type === 'all_categories') && categoryData.length > 0 && (() => {
             // Group data by category
             const categoryGroups: Record<string, any[]> = {};
@@ -1131,16 +1131,6 @@ function ReportViewContent() {
                   const colors = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Uncategorized'];
                   const catTotal = catEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
 
-                  // Group by traveler within this category
-                  const travelerGroups: Record<string, any[]> = {};
-                  catEntries.forEach(entry => {
-                    const key = `${entry.job_number || 'N/A'}_${entry.work_order || 'N/A'}`;
-                    if (!travelerGroups[key]) {
-                      travelerGroups[key] = [];
-                    }
-                    travelerGroups[key].push(entry);
-                  });
-
                   return (
                     <div key={cat} style={{ marginBottom: '30px', pageBreakInside: 'avoid' }}>
                       {/* Category Header */}
@@ -1162,160 +1152,105 @@ function ReportViewContent() {
                           <div style={{ position: 'absolute', bottom: 0, left: 0, width: '4rem', height: '4rem', backgroundColor: 'white', borderRadius: '50%', transform: 'translate(-50%, 50%)' }} />
                         </div>
                         <span style={{ position: 'relative', zIndex: 1 }}>{cat}</span>
-                        <span style={{ position: 'relative', zIndex: 1 }}>Category Total: {catTotal.toFixed(2)} hrs</span>
+                        <span style={{ position: 'relative', zIndex: 1 }}>{catTotal.toFixed(2)} hrs</span>
                       </div>
 
-                      {/* Travelers within this Category */}
-                      <div style={{ border: `2px solid ${colors.bg}`, borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
-                        {Object.entries(travelerGroups).map(([tKey, tEntries], tIndex) => {
-                          const [tJobNumber, tWorkOrder] = tKey.split('_');
-                          const travelerTotal = tEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+                      {/* Flat table of all entries in this category */}
+                      <div style={{ border: `2px solid ${colors.bg}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                        {/* Desktop Table */}
+                        <div className="desktop-table" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
+                          <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: colors.light, borderBottom: `2px solid ${colors.bg}` }}>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '20%' }}>WORK CENTER</th>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '18%' }}>OPERATOR</th>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '24%' }}>START TIME</th>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '24%' }}>END TIME</th>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'right', color: colors.bg, width: '14%' }}>HOURS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {catEntries.map((entry, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #dee2e6', backgroundColor: i % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
+                                  <td style={{ padding: '6px', fontSize: '10px', color: '#333', fontWeight: '600' }}>
+                                    {entry.work_center || 'N/A'}
+                                  </td>
+                                  <td style={{ padding: '6px', fontSize: '10px', color: '#495057' }}>
+                                    {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
+                                  </td>
+                                  <td style={{ padding: '6px', fontSize: '10px', color: '#495057' }}>
+                                    {entry.start_time ? new Date(entry.start_time).toLocaleString('en-US', {
+                                      month: '2-digit', day: '2-digit', year: 'numeric',
+                                      hour: '2-digit', minute: '2-digit', hour12: true
+                                    }) : '-'}
+                                  </td>
+                                  <td style={{ padding: '6px', fontSize: '10px', color: '#495057' }}>
+                                    {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
+                                      month: '2-digit', day: '2-digit', year: 'numeric',
+                                      hour: '2-digit', minute: '2-digit', hour12: true
+                                    }) : '-'}
+                                  </td>
+                                  <td style={{ padding: '6px', fontSize: '10px', textAlign: 'right', fontWeight: 'bold', color: '#28a745' }}>
+                                    {entry.hours_worked.toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Category Total Footer */}
+                              <tr style={{ backgroundColor: colors.light, borderTop: `2px solid ${colors.bg}` }}>
+                                <td colSpan={4} style={{ padding: '8px 6px', fontSize: '11px', fontWeight: 'bold', color: colors.bg }}>
+                                  {cat} Total
+                                </td>
+                                <td style={{ padding: '8px 6px', fontSize: '11px', textAlign: 'right', fontWeight: 'bold', color: colors.bg }}>
+                                  {catTotal.toFixed(2)}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
 
-                          // Group by work center within this traveler
-                          const wcGroups: Record<string, any[]> = {};
-                          tEntries.forEach(entry => {
-                            const wc = entry.work_center || 'Unknown';
-                            if (!wcGroups[wc]) {
-                              wcGroups[wc] = [];
-                            }
-                            wcGroups[wc].push(entry);
-                          });
-
-                          return (
-                            <div key={tKey} style={{
-                              borderBottom: tIndex < Object.keys(travelerGroups).length - 1 ? '2px solid #e0e0e0' : 'none',
-                              padding: '16px'
-                            }}>
-                              {/* Traveler Sub-header */}
-                              <div className="traveler-header" style={{
-                                background: 'linear-gradient(135deg, #2563eb 0%, #4338ca 50%, #6b21a8 100%)',
-                                padding: '10px 14px',
-                                borderRadius: '6px',
-                                color: 'white',
-                                fontWeight: 'bold',
-                                fontSize: '12px',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: '12px'
-                              }}>
-                                <span>Job# {tJobNumber} - Work Order# {tWorkOrder}</span>
-                                <span>Total: {travelerTotal.toFixed(2)} hrs</span>
+                        {/* Mobile Card View */}
+                        <div className="mobile-card-view space-y-3 p-2">
+                          {catEntries.map((entry, i) => (
+                            <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                              <div style={{ background: colors.bg }} className="border-b-2 border-gray-400 px-3 py-2">
+                                <div className="font-bold text-white text-sm">
+                                  {entry.work_center || 'N/A'}
+                                </div>
+                                <div className="text-white text-xs opacity-80">
+                                  {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
+                                </div>
                               </div>
-
-                              {/* Work Centers within this Traveler */}
-                              {Object.entries(wcGroups).map(([wc, wcEntries], wcIdx) => {
-                                const wcTotal = wcEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
-
-                                return (
-                                  <div key={wc} style={{ marginBottom: wcIdx < Object.keys(wcGroups).length - 1 ? '12px' : '0' }}>
-                                    {/* Work Center Header */}
-                                    <div className="wc-header" style={{
-                                      background: colors.light,
-                                      padding: '6px 12px',
-                                      borderRadius: '4px',
-                                      fontWeight: 'bold',
-                                      fontSize: '11px',
-                                      color: colors.bg,
-                                      marginBottom: '8px',
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center'
-                                    }}>
-                                      <span>{wc}</span>
-                                      <span>WC Total: {wcTotal.toFixed(2)} hrs</span>
-                                    </div>
-
-                                    {/* Desktop Table */}
-                                    <div className="desktop-table" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
-                                      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                          <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
-                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
-                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
-                                            <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {wcEntries.map((entry, i) => (
-                                            <tr key={i} style={{ borderBottom: '2px solid #333333' }}>
-                                              <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                                                {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
-                                              </td>
-                                              <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                                                {entry.start_time ? new Date(entry.start_time).toLocaleString('en-US', {
-                                                  month: '2-digit', day: '2-digit', year: 'numeric',
-                                                  hour: '2-digit', minute: '2-digit', hour12: true
-                                                }) : '-'}
-                                              </td>
-                                              <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                                                {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
-                                                  month: '2-digit', day: '2-digit', year: 'numeric',
-                                                  hour: '2-digit', minute: '2-digit', hour12: true
-                                                }) : '-'}
-                                              </td>
-                                              <td style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', color: '#28a745', wordWrap: 'break-word', overflow: 'hidden' }}>
-                                                {entry.hours_worked.toFixed(2)}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-
-                                    {/* Mobile Card View */}
-                                    <div className="mobile-card-view space-y-3 p-2">
-                                      {wcEntries.map((entry, i) => (
-                                        <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
-                                          <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border-b-2 border-gray-400 px-3 py-2">
-                                            <div className="font-bold text-white text-sm">
-                                              {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
-                                            </div>
-                                          </div>
-                                          <div className="p-3 space-y-3">
-                                            <div>
-                                              <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
-                                              <div className="text-sm bg-gray-50 p-2 rounded text-center">
-                                                {entry.start_time ? new Date(entry.start_time).toLocaleDateString('en-US', {
-                                                  month: '2-digit', day: '2-digit', year: 'numeric'
-                                                }) : '-'}
-                                              </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                              <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
-                                                <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
-                                                  {entry.start_time ? new Date(entry.start_time).toLocaleTimeString('en-US', {
-                                                    hour: '2-digit', minute: '2-digit', hour12: true
-                                                  }) : '-'}
-                                                </div>
-                                              </div>
-                                              <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
-                                                <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
-                                                  {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
-                                                    hour: '2-digit', minute: '2-digit', hour12: true
-                                                  }) : '-'}
-                                                </div>
-                                              </div>
-                                              <div>
-                                                <label className="block text-xs font-bold text-green-700 mb-1">Total Hours</label>
-                                                <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
-                                                  {entry.hours_worked.toFixed(2)}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
+                              <div className="p-3 space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
+                                    <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                      {entry.start_time ? new Date(entry.start_time).toLocaleString('en-US', {
+                                        month: '2-digit', day: '2-digit', year: 'numeric',
+                                        hour: '2-digit', minute: '2-digit', hour12: true
+                                      }) : '-'}
                                     </div>
                                   </div>
-                                );
-                              })}
+                                  <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
+                                    <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                      {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
+                                        month: '2-digit', day: '2-digit', year: 'numeric',
+                                        hour: '2-digit', minute: '2-digit', hour12: true
+                                      }) : '-'}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold text-green-700 mb-1">Hours</label>
+                                  <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
+                                    {entry.hours_worked.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
                     </div>
                   );
