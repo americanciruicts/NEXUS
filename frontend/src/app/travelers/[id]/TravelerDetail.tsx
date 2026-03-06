@@ -2012,16 +2012,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       <textarea
                         value={spec.text}
                         onChange={(e) => updateSpecification(spec.id, 'text', e.target.value)}
-                        className="flex-1 p-1 border border-gray-300 rounded min-h-[40px] text-xs"
+                        className="flex-1 p-1 border border-gray-300 rounded min-h-[40px] text-xs screen-only"
                         placeholder="Enter specification..."
                       />
+                      <div className="print-only whitespace-pre-wrap flex-1 text-xs" style={{color: 'black'}}>{spec.text || '-'}</div>
                       <input
                         type="date"
                         value={spec.date}
                         onChange={(e) => updateSpecification(spec.id, 'date', e.target.value)}
                         className="w-32 border border-gray-300 rounded px-1 py-0.5 text-xs screen-only"
                       />
-                      <span className="print-only text-xs" style={{color: 'black'}}>{formatDateDisplay(spec.date) || '-'}</span>
+                      <span className="print-only font-bold text-xs" style={{color: 'black'}}>{formatDateDisplay(spec.date) || '-'}</span>
                       <button
                         onClick={() => removeSpecification(spec.id)}
                         className="p-0.5 bg-red-600 hover:bg-red-700 text-white rounded no-print"
@@ -2123,9 +2124,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             min="1"
                             value={step.seq}
                             onChange={(e) => updateStep(index, 'seq', parseInt(e.target.value) || 0)}
-                            className="w-14 border border-yellow-500 rounded text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-14 border border-yellow-500 rounded text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none screen-only"
                             style={{padding: '2px 2px'}}
                           />
+                          <span className="print-only font-bold" style={{fontSize: '10px'}}>{step.seq}</span>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
                           <div className="flex flex-row items-center justify-between gap-1">
@@ -2133,7 +2135,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                               <select
                                 value={step.workCenter}
                                 onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                                className="block w-full border-2 border-blue-400 rounded-lg px-1 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                                className="block w-full border-2 border-blue-400 rounded-lg px-1 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer screen-only"
                                 style={{
                                   minHeight: '20px',
                                   fontSize: '12px',
@@ -2152,6 +2154,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                   <option key={wc.name} value={wc.name} title={wc.description} style={{ fontSize: '13px' }}>{wc.name}</option>
                                 ))}
                               </select>
+                              <span className="print-only font-semibold break-words" style={{fontSize: '10px'}}>{step.workCenter.replace(/_/g, ' ')}</span>
                             </div>
                             {step.id && stepQRCodes[step.id] && (
                               <img
@@ -2170,68 +2173,75 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           <textarea
                             value={step.instruction}
                             onChange={(e) => updateStep(index, 'instruction', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-xs"
+                            className="w-full border border-gray-300 rounded text-xs screen-only"
                             style={{padding: '1px 3px', minHeight: '18px', lineHeight: '1.2', resize: 'vertical'}}
                             placeholder="Enter instructions..."
                             rows={1}
                           />
+                          <span className="print-only" style={{fontSize: '9px'}}>{step.instruction || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}</span>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedTime || ''}
                             onChange={(e) => updateStep(index, 'completedTime', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-xs text-center"
+                            className="w-full border border-gray-300 rounded text-xs text-center screen-only"
                             style={{padding: '1px 2px'}}
                             placeholder="Hrs"
                           />
+                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.quantity}
                             onChange={(e) => updateStep(index, 'quantity', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-center text-sm font-bold bg-gray-50"
+                            className="w-full border border-gray-300 rounded text-center text-sm font-bold bg-gray-50 screen-only"
                             style={{padding: '1px 2px'}}
                           />
+                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.rejected}
                             onChange={(e) => updateStep(index, 'rejected', e.target.value)}
-                            className="w-full border border-red-400 rounded text-center text-sm font-bold text-red-700 bg-red-50"
+                            className="w-full border border-red-400 rounded text-center text-sm font-bold text-red-700 bg-red-50 screen-only"
                             style={{padding: '1px 2px'}}
                           />
+                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.accepted}
                             onChange={(e) => updateStep(index, 'accepted', e.target.value)}
-                            className="w-full border border-green-400 rounded text-center text-sm font-bold text-green-700 bg-green-50"
+                            className="w-full border border-green-400 rounded text-center text-sm font-bold text-green-700 bg-green-50 screen-only"
                             style={{padding: '1px 2px'}}
                           />
+                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                         <td className="border-r border-gray-300 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.sign}
                             onChange={(e) => updateStep(index, 'sign', e.target.value)}
-                            className="w-full border border-purple-400 rounded text-center text-sm font-bold bg-purple-50"
+                            className="w-full border border-purple-400 rounded text-center text-sm font-bold bg-purple-50 screen-only"
                             style={{padding: '1px 2px'}}
                             placeholder="Sign"
                           />
+                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                         <td className="px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedDate}
                             onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-xs text-center"
+                            className="w-full border border-gray-300 rounded text-xs text-center screen-only"
                             style={{padding: '1px 1px'}}
                             placeholder="Date"
                           />
+                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                   </tr>
                     )}
@@ -2560,13 +2570,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 print:gap-0.5">
                 <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px]" style={{color: 'black'}}>From Stock:</span>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.fromStock}
-                    onChange={(e) => updateField('fromStock', e.target.value)}
-                    className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1"
-                    style={{color: 'black', outline: 'none'}}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      value={editData.fromStock}
+                      onChange={(e) => updateField('fromStock', e.target.value)}
+                      className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1 screen-only"
+                      style={{color: 'black', outline: 'none'}}
+                    />
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{editData.fromStock || '-'}</span>
+                  </>
                 ) : (
                   <span className="flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{displayTraveler.fromStock || '-'}</span>
                 )}
@@ -2574,13 +2587,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 print:gap-0.5">
                 <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px]" style={{color: 'black'}}>To Stock:</span>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.toStock}
-                    onChange={(e) => updateField('toStock', e.target.value)}
-                    className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1"
-                    style={{color: 'black', outline: 'none'}}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      value={editData.toStock}
+                      onChange={(e) => updateField('toStock', e.target.value)}
+                      className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1 screen-only"
+                      style={{color: 'black', outline: 'none'}}
+                    />
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{editData.toStock || '-'}</span>
+                  </>
                 ) : (
                   <span className="flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{displayTraveler.toStock || '-'}</span>
                 )}
@@ -2588,13 +2604,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
                 <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px]" style={{color: 'black'}}>Ship Via:</span>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.shipVia}
-                    onChange={(e) => updateField('shipVia', e.target.value)}
-                    className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1"
-                    style={{color: 'black', outline: 'none'}}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      value={editData.shipVia}
+                      onChange={(e) => updateField('shipVia', e.target.value)}
+                      className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1 screen-only"
+                      style={{color: 'black', outline: 'none'}}
+                    />
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{editData.shipVia || '-'}</span>
+                  </>
                 ) : (
                   <span className="flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{displayTraveler.shipVia || '-'}</span>
                 )}
@@ -2645,12 +2664,15 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
             <div className="bg-purple-50 p-3 min-h-[60px] text-sm print:p-1 print:min-h-[40px] print:text-[8px]">
               {isEditing ? (
-                <textarea
-                  value={editData.comments}
-                  onChange={(e) => updateField('comments', e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded min-h-[60px] text-sm"
-                  placeholder="Enter comments..."
-                />
+                <>
+                  <textarea
+                    value={editData.comments}
+                    onChange={(e) => updateField('comments', e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded min-h-[60px] text-sm screen-only"
+                    placeholder="Enter comments..."
+                  />
+                  <div className="print-only whitespace-pre-wrap text-sm print:text-[8px]">{editData.comments || <span className="text-gray-400 italic">No comments</span>}</div>
+                </>
               ) : (
                 <div className="whitespace-pre-wrap text-sm print:text-[8px]">{displayTraveler.comments || <span className="text-gray-400 italic">No comments</span>}</div>
               )}
