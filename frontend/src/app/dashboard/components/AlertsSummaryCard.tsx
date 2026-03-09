@@ -31,7 +31,8 @@ export default function AlertsSummaryCard({ data, overdueJobs = [] }: AlertsSumm
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
       borderColor: 'border-amber-200',
-      iconBg: 'bg-amber-100'
+      iconBg: 'bg-amber-100',
+      href: '/travelers?status=DRAFT'
     },
     {
       title: 'On Hold',
@@ -40,7 +41,8 @@ export default function AlertsSummaryCard({ data, overdueJobs = [] }: AlertsSumm
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       borderColor: 'border-orange-200',
-      iconBg: 'bg-orange-100'
+      iconBg: 'bg-orange-100',
+      href: '/travelers?status=ON_HOLD'
     },
     {
       title: 'Overdue',
@@ -49,7 +51,8 @@ export default function AlertsSummaryCard({ data, overdueJobs = [] }: AlertsSumm
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
-      iconBg: 'bg-red-100'
+      iconBg: 'bg-red-100',
+      href: '/travelers?view=active'
     },
     {
       title: 'Active Labor',
@@ -58,7 +61,8 @@ export default function AlertsSummaryCard({ data, overdueJobs = [] }: AlertsSumm
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
       borderColor: 'border-emerald-200',
-      iconBg: 'bg-emerald-100'
+      iconBg: 'bg-emerald-100',
+      href: '/travelers/tracking'
     }
   ];
 
@@ -80,9 +84,10 @@ export default function AlertsSummaryCard({ data, overdueJobs = [] }: AlertsSumm
         {/* 2x2 alert grid */}
         <div className="grid grid-cols-2 gap-3">
           {alerts.map((alert, index) => (
-            <div
+            <Link
               key={index}
-              className={`flex items-center gap-3 p-3 rounded-xl border ${alert.borderColor} ${alert.bgColor} transition-all hover:shadow-sm`}
+              href={alert.href}
+              className={`flex items-center gap-3 p-3 rounded-xl border ${alert.borderColor} ${alert.bgColor} transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer`}
             >
               <div className={`${alert.iconBg} p-2 rounded-lg shadow-sm flex-shrink-0`}>
                 <alert.icon className={`h-4 w-4 ${alert.color}`} />
@@ -91,7 +96,7 @@ export default function AlertsSummaryCard({ data, overdueJobs = [] }: AlertsSumm
                 <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider truncate">{alert.title}</p>
                 <p className={`text-xl font-extrabold ${alert.color} leading-none mt-0.5`}>{alert.count}</p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 

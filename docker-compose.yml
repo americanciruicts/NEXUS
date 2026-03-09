@@ -7,7 +7,8 @@ services:
     container_name: nexus_backend
     restart: always
     environment:
-      DATABASE_URL: postgresql://nexus_user:postgres@aci-database:5432/nexus
+      DATABASE_URL: postgresql://neondb_owner:npg_rDiAmTp5bv9J@ep-late-wildflower-ad4p3dpq-pooler.c-2.us-east-1.aws.neon.tech/nexus?sslmode=require
+      DATABASE_URL_LOCAL: postgresql://nexus_user:postgres@aci-database:5432/nexus
       SECRET_KEY: A8H8ARDZC8jnly5FjayIVEXhdLm4Dak2FlrAuFa2Vr2oh8TNYDESR2JIDT48hTpqiEk5jbaVsO-HlKb9YgZqUw
       SSO_SECRET_KEY: D4T_WY71xsF0_UB4QjIzlAjVlj-M5kEG0jsIws6isvPn5NNK4s5-_E_--WI6C6YT6jkerJ3EHncBEuG3tK5Rlg
       SMTP_SERVER: smtp.gmail.com

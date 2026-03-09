@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { PlayIcon, CheckIcon } from '@heroicons/react/24/solid';
 import { ClockIcon } from '@heroicons/react/24/solid';
 
@@ -85,7 +86,7 @@ export default function RecentActivityFeed({ entries }: RecentActivityFeedProps)
         ) : (
           <div className="space-y-2.5">
             {recentEvents.map((event, index) => (
-              <div key={index} className="flex items-start gap-3">
+              <Link key={index} href={`/travelers?search=${encodeURIComponent(event.job_number)}`} className="flex items-start gap-3 group hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors">
                 <div className="flex flex-col items-center">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${event.type === 'started' ? 'bg-emerald-100' : 'bg-blue-100'}`}>
                     {event.type === 'started' ? (
@@ -100,7 +101,7 @@ export default function RecentActivityFeed({ entries }: RecentActivityFeedProps)
                 </div>
                 <div className="flex-1 min-w-0 pt-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-gray-800 truncate">
+                    <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-blue-700">
                       <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1.5 uppercase tracking-wider ${event.type === 'started' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
                         {event.type === 'started' ? 'Start' : 'Done'}
                       </span>
@@ -112,7 +113,7 @@ export default function RecentActivityFeed({ entries }: RecentActivityFeedProps)
                     {event.operator_name} · {event.work_center}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

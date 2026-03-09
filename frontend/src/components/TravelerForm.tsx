@@ -8,8 +8,39 @@ import { API_BASE_URL } from '@/config/api';
 import {
   PrinterIcon,
   PlusIcon,
-  TrashIcon
+  TrashIcon,
+  Bars3Icon
 } from '@heroicons/react/24/outline';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Sortable wrapper for drag-and-drop step cards
+function SortableStepItem({ id, children }: { id: string; children: (props: { dragHandleProps: Record<string, unknown>; style: React.CSSProperties; ref: (node: HTMLElement | null) => void }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+    zIndex: isDragging ? 50 : 'auto',
+  };
+  return <>{children({ dragHandleProps: { ...attributes, ...listeners }, style, ref: setNodeRef })}</>;
+}
 
 interface TravelerFormProps {
   mode?: 'create' | 'edit' | 'view';
@@ -221,9 +252,29 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  // Debounce timer for step sequence reordering
+  const seqReorderTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Ref for abort controller to prevent race conditions in auto-populate
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Drag and drop sensors
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setFormSteps(prev => {
+      const oldIndex = prev.findIndex(s => s.id === active.id);
+      const newIndex = prev.findIndex(s => s.id === over.id);
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      return reordered.map((step, idx) => ({ ...step, sequence: idx + 1 }));
+    });
+  };
 
   // Keep page at top when component mounts
   useEffect(() => {
@@ -311,151 +362,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     prevStepsCountRef.current = newCount;
   }, [formSteps]);
 
-  // Auto-save draft functionality
-  useEffect(() => {
-    // Only auto-save in create mode, when form is shown, and job number exists
-    if (mode !== 'create' || !showForm || !formData.jobNumber.trim()) {
-      return;
-    }
-
-    // Create a snapshot of the current form data for comparison
-    const currentDataSnapshot = JSON.stringify({
-      formData,
-      formSteps,
-      selectedType,
-      isLeadFree,
-      isITAR,
-      includeLaborHours
-    });
-
-    // Don't save if data hasn't changed
-    if (currentDataSnapshot === lastSavedDataRef.current) {
-      return;
-    }
-
-    // Clear any pending auto-save
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-
-    // Debounce auto-save by 3 seconds
-    autoSaveTimeoutRef.current = setTimeout(async () => {
-      try {
-        setAutoSaveStatus('saving');
-
-        // Build full job number with compliance indicators
-        let fullJobNumber = formData.jobNumber;
-        if (isLeadFree) fullJobNumber += 'L';
-        if (isITAR) fullJobNumber += 'M';
-
-        // Map traveler type to backend enum
-        const travelerTypeMap: { [key: string]: string } = {
-          'PCB_ASSEMBLY': 'PCB_ASSEMBLY',
-          'PCB': 'PCB',
-          'CABLE': 'CABLE',
-          'PURCHASING': 'PURCHASING'
-        };
-
-        // Construct proper work order number from prefix and suffix
-        let fullWorkOrderNumber = '';
-        if (workOrderPrefix && workOrderSuffix) {
-          fullWorkOrderNumber = `${workOrderPrefix}-${workOrderSuffix}`;
-        } else if (workOrderPrefix) {
-          fullWorkOrderNumber = workOrderPrefix;
-        } else if (workOrderSuffix) {
-          fullWorkOrderNumber = workOrderSuffix;
-        } else {
-          fullWorkOrderNumber = formData.workOrderNumber || fullJobNumber;
-        }
-
-        const draftData = {
-          job_number: fullJobNumber,
-          work_order_number: fullWorkOrderNumber,
-          po_number: formData.poNumber || '',
-          traveler_type: travelerTypeMap[selectedType] || 'ASSY',
-          part_number: formData.partNumber || '',
-          part_description: formData.partDescription || '',
-          revision: formData.revision || 'A',
-          customer_revision: formData.customerRevision || '',
-          part_revision: formData.partRevision || '',
-          quantity: parseInt(formData.quantity.toString()) || 1,
-          customer_code: formData.customerCode || '',
-          customer_name: formData.customerName || '',
-          priority: formData.priority || 'NORMAL',
-          work_center: formSteps[0]?.workCenter || 'ASSEMBLY',
-          status: 'DRAFT',
-          is_active: false,
-          include_labor_hours: false,
-          notes: formData.notes || '',
-          specs: formData.specs || '',
-          specs_date: formData.specsDate || '',
-          from_stock: formData.fromStock || '',
-          to_stock: formData.toStock || '',
-          ship_via: formData.shipVia || '',
-          comments: formData.comments || '',
-          start_date: formData.startDate || '',
-          due_date: formData.dueDate || '',
-          ship_date: formData.shipDate || '',
-          process_steps: formSteps.map(step => ({
-            step_number: step.sequence,
-            operation: step.workCenter,
-            work_center_code: dynamicWorkCenters.find(wc => wc.name === step.workCenter)?.code || step.workCenter.replace(/\s+/g, '_').toUpperCase(),
-            instructions: step.instruction || '',
-            estimated_time: 30,
-            is_required: true,
-            quantity: step.quantity || null,
-            accepted: step.accepted || null,
-            rejected: step.rejected || null,
-            sign: step.assign || '',
-            completed_date: step.date || ''
-          }))
-        };
-
-        const token = localStorage.getItem('nexus_token');
-        const url = draftId
-          ? `${API_BASE_URL}/travelers/${draftId}`
-          : `${API_BASE_URL}/travelers/`;
-        const method = draftId ? 'PUT' : 'POST';
-
-        const response = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(draftData)
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (!draftId && result.id) {
-            setDraftId(result.id);
-          }
-          lastSavedDataRef.current = currentDataSnapshot;
-          setAutoSaveStatus('saved');
-          console.log('✅ Draft auto-saved successfully');
-
-          // Reset status to idle after 2 seconds
-          setTimeout(() => setAutoSaveStatus('idle'), 2000);
-        } else {
-          console.warn('⚠️ Auto-save failed:', response.status);
-          setAutoSaveStatus('error');
-          setTimeout(() => setAutoSaveStatus('idle'), 3000);
-        }
-      } catch (error) {
-        console.error('❌ Auto-save error:', error);
-        setAutoSaveStatus('error');
-        setTimeout(() => setAutoSaveStatus('idle'), 3000);
-      }
-    }, 3000); // 3 second debounce
-
-    // Cleanup
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-    };
-  }, [formData, formSteps, selectedType, isLeadFree, isITAR, includeLaborHours, mode, showForm, draftId, workOrderPrefix, workOrderSuffix]);
+  // Auto-save disabled - users save explicitly via "Create Traveler" or "Save as Draft" buttons
 
   const travelerTypes = [
     {
@@ -751,14 +658,20 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   }, [formData.jobNumber, formData.workOrderNumber, mode]);
 
   const loadDefaultSteps = (type: TravelerType) => {
-    // Default empty steps with sequential numbering
-    const defaultSteps: FormStep[] = [
-      { id: '1', sequence: 1, workCenter: '', instruction: '', quantity: 0, rejected: 0, accepted: 0, assign: '', date: '' },
-      { id: '2', sequence: 2, workCenter: '', instruction: '', quantity: 0, rejected: 0, accepted: 0, assign: '', date: '' },
-      { id: '3', sequence: 3, workCenter: '', instruction: '', quantity: 0, rejected: 0, accepted: 0, assign: '', date: '' },
-      { id: '4', sequence: 4, workCenter: '', instruction: '', quantity: 0, rejected: 0, accepted: 0, assign: '', date: '' },
-      { id: '5', sequence: 5, workCenter: '', instruction: '', quantity: 0, rejected: 0, accepted: 0, assign: '', date: '' }
-    ];
+    // Pre-populate ALL work center steps for the selected type
+    // User can then delete steps they don't need or add custom ones
+    const workCenters = getWorkCentersByType(type);
+    const defaultSteps: FormStep[] = workCenters.map((wc, index) => ({
+      id: (index + 1).toString(),
+      sequence: index + 1,
+      workCenter: wc.name,
+      instruction: '',
+      quantity: 0,
+      rejected: 0,
+      accepted: 0,
+      assign: '',
+      date: ''
+    }));
 
     setFormSteps(defaultSteps);
   };
@@ -796,48 +709,54 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   };
 
   const updateStep = (id: string, field: keyof FormStep, value: string | number) => {
-    // If sequence number changed, reorder steps properly
+    // If sequence number changed, update immediately but debounce the reorder (3s)
     if (field === 'sequence') {
-      const targetSequence = Number(value);
+      // Update the value immediately so user sees what they typed
+      setFormSteps(prev => prev.map(step => step.id === id ? { ...step, sequence: Number(value) } : step));
 
-      // Find the step being moved
-      const movingStep = formSteps.find(step => step.id === id);
-      if (!movingStep) return;
+      // Clear any pending reorder
+      if (seqReorderTimeout.current) {
+        clearTimeout(seqReorderTimeout.current);
+      }
 
-      // Remove the moving step from the array
-      const otherSteps = formSteps.filter(step => step.id !== id);
+      // Reorder after 3 seconds of no changes
+      seqReorderTimeout.current = setTimeout(() => {
+        setFormSteps(prev => {
+          const targetSequence = Number(value);
+          const movingStep = prev.find(step => step.id === id);
+          if (!movingStep) return prev;
 
-      // Insert it at the target position (targetSequence - 1 because array is 0-indexed)
-      const insertIndex = Math.max(0, Math.min(targetSequence - 1, otherSteps.length));
-      const reorderedSteps = [
-        ...otherSteps.slice(0, insertIndex),
-        movingStep,
-        ...otherSteps.slice(insertIndex)
-      ];
+          const otherSteps = prev.filter(step => step.id !== id);
+          const insertIndex = Math.max(0, Math.min(targetSequence - 1, otherSteps.length));
+          const reorderedSteps = [
+            ...otherSteps.slice(0, insertIndex),
+            movingStep,
+            ...otherSteps.slice(insertIndex)
+          ];
 
-      // Renumber all steps consecutively
-      const renumberedSteps = reorderedSteps.map((step, idx) => ({
-        ...step,
-        sequence: idx + 1
-      }));
+          const renumberedSteps = reorderedSteps.map((step, idx) => ({
+            ...step,
+            sequence: idx + 1
+          }));
 
-      setFormSteps(renumberedSteps);
+          // Scroll to the step at the target position
+          setTimeout(() => {
+            const targetStep = renumberedSteps[Math.min(targetSequence - 1, renumberedSteps.length - 1)];
+            if (targetStep) {
+              const stepElement = stepRowRefs.current[targetStep.id];
+              if (stepElement) {
+                stepElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                stepElement.style.backgroundColor = '#dbeafe';
+                setTimeout(() => {
+                  stepElement.style.backgroundColor = '';
+                }, 1500);
+              }
+            }
+          }, 100);
 
-      // Scroll to the step at the target position
-      setTimeout(() => {
-        const targetStep = renumberedSteps[targetSequence - 1];
-        if (targetStep) {
-          const stepElement = stepRowRefs.current[targetStep.id];
-          if (stepElement) {
-            stepElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Highlight the row briefly
-            stepElement.style.backgroundColor = '#dbeafe'; // Light blue
-            setTimeout(() => {
-              stepElement.style.backgroundColor = '';
-            }, 1500);
-          }
-        }
-      }, 100);
+          return renumberedSteps;
+        });
+      }, 3000);
     } else {
       // For all other fields, just update normally
       const newSteps = formSteps.map(step =>
@@ -984,9 +903,14 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
       toast.success(`Traveler ${action} Successfully! Job: ${fullJobNumber} | Part: ${formData.partNumber}`);
 
-      // Redirect to travelers list
+      // Redirect to the created/updated traveler's detail page
       setTimeout(() => {
-        window.location.href = '/travelers';
+        const travelerId = result.id || result.traveler_id;
+        if (travelerId) {
+          window.location.href = `/travelers/${travelerId}`;
+        } else {
+          window.location.href = '/travelers';
+        }
       }, 1500);
     } catch (error: unknown) {
       console.error('Error saving traveler:', error);
@@ -1105,9 +1029,14 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
       toast.success(`Draft Saved Successfully! Job: ${fullJobNumber} | Status: DRAFT`);
 
-      // Redirect to travelers list
+      // Redirect to the saved draft's detail page
       setTimeout(() => {
-        window.location.href = '/travelers';
+        const travelerId = result.id || draftId;
+        if (travelerId) {
+          window.location.href = `/travelers/${travelerId}`;
+        } else {
+          window.location.href = '/travelers';
+        }
       }, 1500);
     } catch (error: unknown) {
       console.error('Error saving draft:', error);
@@ -1758,22 +1687,36 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </button>
             </div>
 
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={formSteps.map(s => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-3 md:space-y-4 overflow-x-hidden w-full" style={{ maxWidth: '100%' }}>
               {formSteps.map((step, index) => (
+                <SortableStepItem key={step.id} id={step.id}>
+                  {({ dragHandleProps, style, ref }) => (
                 <div
-                  key={step.id}
                   ref={(el) => {
+                    ref(el);
                     stepRowRefs.current[step.id] = el;
                   }}
+                  style={{ ...style, maxWidth: '100%', width: '100%' }}
                   className="bg-white border-2 border-indigo-200 rounded-lg p-3 md:p-4 shadow-sm transition-colors duration-300 overflow-x-hidden max-w-full"
-                  style={{ maxWidth: '100%', width: '100%' }}
                 >
                   {/* Step Header */}
                   <div className="mb-4 pb-3 border-b border-gray-200 overflow-hidden">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="bg-blue-600 text-white font-bold px-3 py-1.5 rounded text-sm">
-                        Step {index + 1}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          {...dragHandleProps}
+                          className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 touch-none"
+                          title="Drag to reorder"
+                        >
+                          <Bars3Icon className="h-4 w-4" />
+                        </button>
+                        <span className="bg-blue-600 text-white font-bold px-2 py-1 rounded text-xs">
+                          Step {step.sequence}
+                        </span>
+                      </div>
                     </div>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 justify-between">
                       <div className="flex items-center gap-2 bg-yellow-100 border-2 border-yellow-400 rounded-lg px-3 py-1.5">
@@ -1788,16 +1731,16 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                               updateStep(step.id, 'sequence', newSeq);
                             }
                           }}
-                          className="w-16 md:w-20 border-2 border-yellow-500 rounded px-2 md:px-3 py-1 text-base md:text-lg font-bold text-center bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="w-28 min-w-[7rem] border-2 border-yellow-500 rounded px-3 py-1.5 text-lg font-bold text-center bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </div>
                       <button
                         onClick={() => removeStep(step.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm font-semibold"
+                        className="flex items-center gap-1 px-2 py-1 text-white bg-red-600 hover:bg-red-700 rounded transition-colors text-xs font-semibold"
                         title="Remove step"
                       >
-                        <TrashIcon className="h-4 w-4" />
-                        <span>Remove Step</span>
+                        <TrashIcon className="h-3.5 w-3.5" />
+                        <span>Remove</span>
                       </button>
                     </div>
                   </div>
@@ -1907,6 +1850,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     </div>
                   </div>
                 </div>
+                  )}
+                </SortableStepItem>
               ))}
 
               {formSteps.length === 0 && (
@@ -1915,6 +1860,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 </div>
               )}
             </div>
+            </SortableContext>
+            </DndContext>
 
             {/* Add Step Button at Bottom */}
             <div className="flex justify-center mt-4">

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   BoltIcon,
   CheckBadgeIcon,
@@ -22,7 +23,8 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
       iconBg: 'bg-blue-500/20',
       iconColor: 'text-blue-300',
       gradient: 'from-blue-600 via-blue-700 to-blue-800',
-      ring: 'ring-blue-500/20'
+      ring: 'ring-blue-500/20',
+      href: '/travelers?status=IN_PROGRESS'
     },
     {
       title: 'Completed',
@@ -32,7 +34,8 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
       iconBg: 'bg-emerald-500/20',
       iconColor: 'text-emerald-300',
       gradient: 'from-emerald-600 via-emerald-700 to-green-800',
-      ring: 'ring-emerald-500/20'
+      ring: 'ring-emerald-500/20',
+      href: '/travelers?status=COMPLETED'
     },
     {
       title: 'Labor Hours',
@@ -42,7 +45,8 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
       iconBg: 'bg-violet-500/20',
       iconColor: 'text-violet-300',
       gradient: 'from-violet-600 via-indigo-700 to-purple-800',
-      ring: 'ring-violet-500/20'
+      ring: 'ring-violet-500/20',
+      href: '/travelers/tracking'
     },
     {
       title: 'On Hold',
@@ -52,16 +56,18 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
       iconBg: 'bg-amber-500/20',
       iconColor: 'text-amber-300',
       gradient: 'from-amber-500 via-orange-600 to-orange-700',
-      ring: 'ring-amber-500/20'
+      ring: 'ring-amber-500/20',
+      href: '/travelers?status=ON_HOLD'
     }
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       {metrics.map((metric, index) => (
-        <div
+        <Link
           key={index}
-          className={`bg-gradient-to-br ${metric.gradient} rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-4 sm:p-5 ring-1 ${metric.ring} relative overflow-hidden group`}
+          href={metric.href}
+          className={`bg-gradient-to-br ${metric.gradient} rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-4 sm:p-5 ring-1 ${metric.ring} relative overflow-hidden group cursor-pointer`}
         >
           {/* Decorative circles */}
           <div className="absolute inset-0 opacity-10 pointer-events-none">
@@ -85,7 +91,7 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
               <metric.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${metric.iconColor}`} />
             </div>
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   );

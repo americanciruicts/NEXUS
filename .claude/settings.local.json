@@ -55,7 +55,9 @@
       "Bash(npx next build:*)",
       "Bash(git fetch:*)",
       "Bash(git reset HEAD backend/.env user_cred.md)",
-      "Bash(sudo chmod -R a+r backend/middleware/__pycache__/)"
+      "Bash(sudo chmod -R a+r backend/middleware/__pycache__/)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git reset HEAD backend/.env)"
     ],
     "deny": [],
     "ask": []

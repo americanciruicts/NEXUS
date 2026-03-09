@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.pytest_cache
+htmlcov
+tests/
+backups/
+migrations/
+logs/
+*.docx
+safety-report.json
+pytest.ini
+.git
