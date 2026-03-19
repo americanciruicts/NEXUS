@@ -156,6 +156,13 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
 
+  // Track auto-filled values to require at least one change before saving
+  const [autoFilledFrom, setAutoFilledFrom] = useState<{
+    workOrder: string;
+    revision: string;
+    customerRevision: string;
+  } | null>(null);
+
   // Dynamic work centers from DB
   const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
 
@@ -834,6 +841,28 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       return;
     }
 
+    // If auto-filled from existing traveler, require at least one key field to be changed
+    if (autoFilledFrom) {
+      // Build current work order for comparison
+      let currentWorkOrder = '';
+      if (workOrderPrefix && workOrderSuffix) {
+        currentWorkOrder = `${workOrderPrefix}-${workOrderSuffix}`;
+      } else if (workOrderPrefix) {
+        currentWorkOrder = workOrderPrefix;
+      } else {
+        currentWorkOrder = editedTraveler.workOrder || '';
+      }
+
+      const woChanged = currentWorkOrder !== autoFilledFrom.workOrder;
+      const revChanged = editedTraveler.revision !== autoFilledFrom.revision;
+      const custRevChanged = (editedTraveler.customerRevision || '') !== autoFilledFrom.customerRevision;
+
+      if (!woChanged && !revChanged && !custRevChanged) {
+        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Traveler Rev, or Customer Rev before saving.');
+        return;
+      }
+    }
+
     let fullJobNumber = editedTraveler.jobNumber;
     if (isLeadFree) fullJobNumber += 'L';
     if (isITAR) fullJobNumber += 'M';
@@ -927,6 +956,27 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     if (!editedTraveler.jobNumber) {
       toast.warning('Please enter a Job Number to save as draft.');
       return;
+    }
+
+    // If auto-filled, require at least one key field change
+    if (autoFilledFrom) {
+      let currentWorkOrder = '';
+      if (workOrderPrefix && workOrderSuffix) {
+        currentWorkOrder = `${workOrderPrefix}-${workOrderSuffix}`;
+      } else if (workOrderPrefix) {
+        currentWorkOrder = workOrderPrefix;
+      } else {
+        currentWorkOrder = editedTraveler.workOrder || '';
+      }
+
+      const woChanged = currentWorkOrder !== autoFilledFrom.workOrder;
+      const revChanged = editedTraveler.revision !== autoFilledFrom.revision;
+      const custRevChanged = (editedTraveler.customerRevision || '') !== autoFilledFrom.customerRevision;
+
+      if (!woChanged && !revChanged && !custRevChanged) {
+        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Traveler Rev, or Customer Rev before saving.');
+        return;
+      }
     }
 
     let fullJobNumber = editedTraveler.jobNumber;
@@ -1124,7 +1174,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       setIncludeLaborHours(data.include_labor_hours || false);
       setShowForm(true);
 
-      toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. Please verify Customer Rev and Traveler Rev.`);
+      // Track auto-filled values so we can require changes before saving
+      setAutoFilledFrom({
+        workOrder: data.work_order_number || '',
+        revision: newRevision,
+        customerRevision: data.customer_revision || '',
+      });
+
+      toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. You must change at least one of: Work Order, Traveler Rev, or Customer Rev before saving.`);
     } catch (error) {
       console.error('Error looking up job number:', error);
       toast.error('Error looking up job number.');
