@@ -213,7 +213,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     quantity: Number(initialData?.quantity) || 0,
     customerCode: String(initialData?.customer_code || ''),
     customerName: String(initialData?.customer_name || ''),
-    priority: (initialData?.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+    priority: (initialData?.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
     notes: String(initialData?.notes || ''),
     poNumber: '',
     operation: '',
@@ -429,7 +429,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         quantity: Number(initialData.quantity) || 0,
         customerCode: String(initialData.customer_code || ''),
         customerName: String(initialData.customer_name || ''),
-        priority: (initialData.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+        priority: (initialData.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
         notes: String(initialData.notes || ''),
         poNumber: String(initialData.po_number || ''),
         operation: '',
@@ -575,7 +575,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 quantity: Number(latestTraveler.quantity) || 0,
                 customerCode: String(latestTraveler.customer_code || ''),
                 customerName: String(latestTraveler.customer_name || ''),
-                priority: (latestTraveler.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+                priority: (latestTraveler.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
                 specs: specsText,
                 fromStock: String(latestTraveler.from_stock || ''),
                 toStock: String(latestTraveler.to_stock || ''),
@@ -1048,10 +1048,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   // If type not selected, show type selection
   if (!showForm) {
     return (
-      <div className="h-[calc(100vh-6rem)] bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 flex flex-col items-center justify-center -m-4 sm:-m-4 rounded-xl overflow-hidden">
+      <div className="h-[calc(100vh-6rem)] bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 flex flex-col items-center justify-center -m-4 sm:-m-4 rounded-xl overflow-hidden">
         <div className="w-full max-w-3xl px-4">
           {/* Header */}
-          <div className="mb-4 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+          <div className="mb-4 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1063,7 +1063,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 </svg>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-1">Select Traveler Type</h1>
-              <p className="text-sm text-blue-200/80">Choose the type that matches your manufacturing process</p>
+              <p className="text-sm text-teal-200/80">Choose the type that matches your manufacturing process</p>
             </div>
           </div>
 
@@ -1174,7 +1174,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           <div className="text-center">
             <button
               onClick={() => window.history.back()}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors duration-200"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 transition-colors duration-200"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -1192,10 +1192,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
   // Main form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
       <div className="w-full max-w-7xl mx-auto overflow-x-hidden">
         {/* Header with Type Badge - NO PRINT */}
-        <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-2xl rounded-2xl p-4 sm:p-5 md:p-8 mb-3 sm:mb-4 md:mb-6 no-print relative overflow-hidden">
+        <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-2xl rounded-2xl p-4 sm:p-5 md:p-8 mb-3 sm:mb-4 md:mb-6 no-print relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1207,7 +1207,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </span>
               <div>
                 <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">Traveler Form</h2>
-                <p className="text-sm text-blue-200/80 mt-0.5">Fill in all required fields</p>
+                <p className="text-sm text-teal-200/80 mt-0.5">Fill in all required fields</p>
               </div>
             </div>
             <button
@@ -1238,7 +1238,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
           <button
             onClick={handleSubmit}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
           >
             <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
           </button>
@@ -1307,11 +1307,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         </div>
 
         {/* Main Form - Page 1 */}
-        <div className="bg-white shadow-lg rounded-lg border-2 border-indigo-100 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 shadow-lg rounded-lg border-2 border-indigo-100 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6 overflow-hidden">
           {/* Top Row - Responsive */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
+              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">
                 Job No * {isLeadFree && <span className="text-green-600">(L)</span>}{isITAR && <span className="text-red-600">(M)</span>}
               </label>
               <div className="flex items-center gap-1 min-w-0">
@@ -1398,7 +1398,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                       }
                     }
                   }}
-                  className="flex-1 min-w-0 border-2 border-blue-300 rounded px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                  className="flex-1 min-w-0 border-2 border-blue-300 dark:border-blue-600 rounded px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="8414"
                 />
                 {isLeadFree && <span className="flex-shrink-0 px-2 py-1.5 bg-green-100 text-green-800 font-bold rounded text-xs border border-green-300">L</span>}
@@ -1406,52 +1406,52 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Work Order *</label>
+              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Work Order *</label>
               <div className="flex items-center gap-1 min-w-0">
                 <input
                   type="text"
                   value={workOrderPrefix}
                   readOnly
-                  className="flex-1 min-w-0 border-2 border-gray-300 bg-gray-100 rounded px-2 py-1.5 text-xs sm:text-sm font-bold text-gray-600 cursor-not-allowed"
+                  className="flex-1 min-w-0 border-2 border-gray-300 dark:border-slate-600 bg-gray-100 dark:bg-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm font-bold text-gray-600 dark:text-slate-400 cursor-not-allowed"
                   placeholder="12345"
                   title="Auto-generated prefix (read-only)"
                 />
-                <span className="text-gray-600 font-bold flex-shrink-0 text-xs sm:text-sm">-</span>
+                <span className="text-gray-600 dark:text-slate-400 font-bold flex-shrink-0 text-xs sm:text-sm">-</span>
                 <input
                   type="text"
                   value={workOrderSuffix}
                   onChange={(e) => setWorkOrderSuffix(e.target.value)}
-                  className="w-14 sm:w-16 md:w-20 flex-shrink-0 border-2 border-blue-300 rounded px-1 sm:px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                  className="w-14 sm:w-16 md:w-20 flex-shrink-0 border-2 border-blue-300 dark:border-blue-600 rounded px-1 sm:px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="6"
                   title="Editable suffix"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Start Date</label>
+              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Start Date</label>
               <input
                 type="date"
                 value={formData.startDate}
                 onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Due Date</label>
+              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Due Date</label>
               <input
                 type="date"
                 value={formData.dueDate}
                 onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
-                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Ship Date</label>
+              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Ship Date</label>
               <input
                 type="date"
                 value={formData.shipDate}
                 onChange={(e) => setFormData({...formData, shipDate: e.target.value})}
-                className="w-full min-w-0 border-2 border-gray-300 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                className="w-full min-w-0 border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
             </div>
           </div>
@@ -1461,22 +1461,22 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             {/* Row 1: Customer Code + Quantity */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Customer Code</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Customer Code</label>
                 <input
                   type="text"
                   value={formData.customerCode}
                   onChange={(e) => setFormData({...formData, customerCode: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="750"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Quantity *</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Quantity *</label>
                 <input
                   type="number"
                   value={formData.quantity}
                   onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 0})}
-                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-blue-300 dark:border-blue-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="250"
                 />
               </div>
@@ -1485,22 +1485,22 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             {/* Row 2: Customer Name + PO Number (side by side) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Customer Name</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Customer Name</label>
                 <input
                   type="text"
                   value={formData.customerName}
                   onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="ACME Corporation"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">PO Number</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">PO Number</label>
                 <input
                   type="text"
                   value={formData.poNumber}
                   onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="PO-12345"
                 />
               </div>
@@ -1509,22 +1509,22 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             {/* Row 3: Part No + Part Description (side by side) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Part No *</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Part No *</label>
                 <input
                   type="text"
                   value={formData.partNumber}
                   onChange={(e) => setFormData({...formData, partNumber: e.target.value})}
-                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-blue-300 dark:border-blue-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="METSHIFT"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Part Description *</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Part Description *</label>
                 <input
                   type="text"
                   value={formData.partDescription}
                   onChange={(e) => setFormData({...formData, partDescription: e.target.value})}
-                  className="w-full border-2 border-blue-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-blue-300 dark:border-blue-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="METSHIFT Assembly"
                 />
               </div>
@@ -1533,7 +1533,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             {/* Row 4: Traveler Revision + Customer Revision (side by side) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Traveler Revision</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Traveler Revision</label>
                 <input
                   type="text"
                   value={formData.revision}
@@ -1543,28 +1543,46 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                       setWasAutoPopulated(false);
                     }
                   }}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="A"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Customer Revision</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Customer Revision</label>
                 <input
                   type="text"
                   value={formData.customerRevision}
                   onChange={(e) => setFormData({...formData, customerRevision: e.target.value})}
-                  className="w-full border-2 border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                  className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="REV A"
                 />
+              </div>
+            </div>
+
+            {/* Row 5: Priority */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Priority</label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({...formData, priority: e.target.value as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT'})}
+                  className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 md:px-4 py-2 md:py-3 text-sm md:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="NORMAL">Normal</option>
+                  <option value="PREMIUM">Premium</option>
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
               </div>
             </div>
           </div>
 
           {/* Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border-2 border-indigo-200 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-700 dark:to-slate-700 rounded-lg border-2 border-indigo-200 dark:border-slate-600 shadow-sm">
             {/* Only show labor hours option for non-PCB travelers */}
             {selectedType !== 'PCB' && (
-              <div className={`flex items-center space-x-4 p-3 rounded border-2 transition-all ${includeLaborHours ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200'}`}>
+              <div className={`flex items-center space-x-4 p-3 rounded border-2 transition-all ${includeLaborHours ? 'bg-green-50 dark:bg-green-900/20 border-green-500' : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600'}`}>
                 <input
                   type="checkbox"
                   id="includeLaborHours"
@@ -1580,8 +1598,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 />
                 <label htmlFor="includeLaborHours" className="flex-1 cursor-pointer">
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm md:text-base">Include Labor Hours Table</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm md:text-base">Include Labor Hours Table</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
                       {includeLaborHours ? '✓ Labor tracking enabled' : 'Add labor tracking section'}
                     </p>
                   </div>
@@ -1589,7 +1607,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               </div>
             )}
 
-            <div className={`flex items-center space-x-4 p-3 rounded border-2 transition-all ${isActive ? 'bg-green-50 border-green-500' : 'bg-gray-50 border-gray-300'}`}>
+            <div className={`flex items-center space-x-4 p-3 rounded border-2 transition-all ${isActive ? 'bg-green-50 dark:bg-green-900/20 border-green-500' : 'bg-gray-50 dark:bg-slate-800 border-gray-300 dark:border-slate-600'}`}>
               <input
                 type="checkbox"
                 id="isActive"
@@ -1607,67 +1625,66 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               />
               <label htmlFor="isActive" className="flex-1 cursor-pointer">
                 <div>
-                  <p className="font-semibold text-gray-900 text-sm md:text-base">Active Traveler</p>
-                  <p className="text-xs text-gray-500">Mark as active in production</p>
+                  <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm md:text-base">Active Traveler</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Mark as active in production</p>
                 </div>
               </label>
             </div>
           </div>
 
           {/* Specifications - Prominent Section with Date */}
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-yellow-50 rounded-lg border-2 border-yellow-200 shadow-sm">
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border-2 border-yellow-200 dark:border-yellow-800 shadow-sm">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-3">
-              <label className="block text-sm md:text-base font-bold text-gray-900">Specifications</label>
+              <label className="block text-sm md:text-base font-bold text-gray-900 dark:text-slate-100">Specifications</label>
               <div className="flex items-center space-x-2 w-full sm:w-auto">
-                <label className="text-xs md:text-sm font-semibold text-gray-700">Date:</label>
+                <label className="text-xs md:text-sm font-semibold text-gray-700 dark:text-slate-300">Date:</label>
                 <input
                   type="date"
                   value={formData.specsDate}
                   onChange={(e) => setFormData({...formData, specsDate: e.target.value})}
-                  className="flex-1 sm:flex-none border border-gray-300 rounded px-2 md:px-3 py-1.5 text-sm focus:border-blue-500"
+                  className="flex-1 sm:flex-none border border-gray-300 dark:border-slate-600 rounded px-2 md:px-3 py-1.5 text-sm focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 />
               </div>
             </div>
             <textarea
               value={formData.specs}
               onChange={(e) => setFormData({...formData, specs: e.target.value})}
-              className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-gray-900 focus:border-blue-500 min-h-[100px] md:min-h-[120px] resize-y"
+              className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-gray-900 dark:text-slate-100 focus:border-blue-500 min-h-[100px] md:min-h-[120px] resize-y bg-white dark:bg-slate-700"
               placeholder="Enter specifications, notes, and special requirements..."
-              style={{color: '#000000', backgroundColor: '#ffffff'}}
             />
           </div>
 
           {/* Stock and Shipping Info */}
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-blue-50 rounded-lg border-2 border-blue-200 shadow-sm">
-            <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3">Stock &amp; Shipping Information</h3>
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-blue-50 dark:bg-blue-900/10 rounded-lg border-2 border-blue-200 dark:border-blue-800 shadow-sm">
+            <h3 className="text-sm md:text-base font-bold text-gray-900 dark:text-slate-100 mb-3">Stock &amp; Shipping Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">From Stock</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">From Stock</label>
                 <input
                   type="text"
                   value={formData.fromStock}
                   onChange={(e) => setFormData({...formData, fromStock: e.target.value})}
-                  className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500"
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="Location..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">To Stock</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">To Stock</label>
                 <input
                   type="text"
                   value={formData.toStock}
                   onChange={(e) => setFormData({...formData, toStock: e.target.value})}
-                  className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500"
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="Location..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Ship Via</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Ship Via</label>
                 <input
                   type="text"
                   value={formData.shipVia}
                   onChange={(e) => setFormData({...formData, shipVia: e.target.value})}
-                  className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500"
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 md:px-4 py-2 text-sm md:text-base focus:border-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   placeholder="Shipping method..."
                 />
               </div>
@@ -1675,9 +1692,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Process Steps - Card-Based Layout */}
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 shadow-sm max-w-full overflow-hidden" style={{ maxWidth: '100%' }}>
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-slate-700 dark:to-slate-700 rounded-lg border-2 border-blue-200 dark:border-slate-600 shadow-sm max-w-full overflow-hidden" style={{ maxWidth: '100%' }}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-              <h3 className="text-lg md:text-xl font-bold text-gray-900">Process Steps (Routing)</h3>
+              <h3 className="text-lg md:text-xl font-bold text-gray-900 dark:text-slate-100">Process Steps (Routing)</h3>
               <button
                 onClick={addNewStep}
                 className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-semibold transition-colors shadow-md"
@@ -1699,16 +1716,16 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     stepRowRefs.current[step.id] = el;
                   }}
                   style={{ ...style, maxWidth: '100%', width: '100%' }}
-                  className="bg-white border-2 border-indigo-200 rounded-lg p-3 md:p-4 shadow-sm transition-colors duration-300 overflow-x-hidden max-w-full"
+                  className="bg-white dark:bg-slate-800 border-2 border-indigo-200 dark:border-slate-600 rounded-lg p-3 md:p-4 shadow-sm transition-colors duration-300 overflow-x-hidden max-w-full"
                 >
                   {/* Step Header */}
-                  <div className="mb-4 pb-3 border-b border-gray-200 overflow-hidden">
+                  <div className="mb-4 pb-3 border-b border-gray-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           {...dragHandleProps}
-                          className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 touch-none"
+                          className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 touch-none"
                           title="Drag to reorder"
                         >
                           <Bars3Icon className="h-4 w-4" />
@@ -1719,8 +1736,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 justify-between">
-                      <div className="flex items-center gap-2 bg-yellow-100 border-2 border-yellow-400 rounded-lg px-3 py-1.5">
-                        <label className="text-xs md:text-sm font-bold text-yellow-800">SEQ #</label>
+                      <div className="flex items-center gap-2 bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-400 dark:border-yellow-700 rounded-lg px-3 py-1.5">
+                        <label className="text-xs md:text-sm font-bold text-yellow-800 dark:text-yellow-300">SEQ #</label>
                         <input
                           type="number"
                           min="1"
@@ -1731,7 +1748,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                               updateStep(step.id, 'sequence', newSeq);
                             }
                           }}
-                          className="w-28 min-w-[7rem] border-2 border-yellow-500 rounded px-3 py-1.5 text-lg font-bold text-center bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          className="w-28 min-w-[7rem] border-2 border-yellow-500 dark:border-yellow-700 rounded px-3 py-1.5 text-lg font-bold text-center bg-white dark:bg-slate-700 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </div>
                       <button
@@ -1754,7 +1771,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                         <select
                           value={step.workCenter}
                           onChange={(e) => updateStep(step.id, 'workCenter', e.target.value)}
-                          className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                          className="block w-full border-2 border-blue-400 dark:border-blue-600 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 dark:text-slate-100 cursor-pointer"
                           style={{
                             minHeight: '28px',
                             fontSize: '13px',
@@ -1794,7 +1811,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           type="number"
                           value={step.quantity}
                           onChange={(e) => updateStep(step.id, 'quantity', parseInt(e.target.value) || 0)}
-                          className="w-full border-2 border-gray-300 rounded px-2 py-2 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
+                          className="w-full border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-2 text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                         />
                       </div>
                       <div className="col-span-1">
@@ -1803,7 +1820,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           type="number"
                           value={step.rejected}
                           onChange={(e) => updateStep(step.id, 'rejected', parseInt(e.target.value) || 0)}
-                          className="w-full border-2 border-red-300 rounded px-2 py-2 text-sm text-center focus:border-red-500 focus:ring-1 focus:ring-red-200"
+                          className="w-full border-2 border-red-300 dark:border-red-700 rounded px-2 py-2 text-sm text-center focus:border-red-500 focus:ring-1 focus:ring-red-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                         />
                       </div>
                       <div className="col-span-1">
@@ -1812,7 +1829,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           type="number"
                           value={step.accepted}
                           onChange={(e) => updateStep(step.id, 'accepted', parseInt(e.target.value) || 0)}
-                          className="w-full border-2 border-green-300 rounded px-2 py-2 text-sm text-center focus:border-green-500 focus:ring-1 focus:ring-green-200"
+                          className="w-full border-2 border-green-300 dark:border-green-700 rounded px-2 py-2 text-sm text-center focus:border-green-500 focus:ring-1 focus:ring-green-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                         />
                       </div>
                       <div className="col-span-1">
@@ -1821,7 +1838,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           type="text"
                           value={step.assign}
                           onChange={(e) => updateStep(step.id, 'assign', e.target.value)}
-                          className="w-full border-2 border-purple-300 rounded px-2 py-2 text-sm text-center focus:border-purple-500 focus:ring-1 focus:ring-purple-200"
+                          className="w-full border-2 border-purple-300 dark:border-purple-700 rounded px-2 py-2 text-sm text-center focus:border-purple-500 focus:ring-1 focus:ring-purple-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                           placeholder="Init"
                         />
                       </div>
@@ -1831,7 +1848,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                           type="date"
                           value={step.date}
                           onChange={(e) => updateStep(step.id, 'date', e.target.value)}
-                          className="w-full border-2 border-gray-300 rounded px-1.5 md:px-2 py-2 text-xs md:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 overflow-hidden"
+                          className="w-full border-2 border-gray-300 dark:border-slate-600 rounded px-1.5 md:px-2 py-2 text-xs md:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 overflow-hidden bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                           style={{ maxWidth: '100%' }}
                         />
                       </div>
@@ -1839,13 +1856,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
                     {/* Row 2: Instructions - Full Width */}
                     <div>
-                      <label className="block text-xs md:text-sm font-bold text-gray-700 mb-2">Instructions</label>
+                      <label className="block text-xs md:text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Instructions</label>
                       <textarea
                         value={step.instruction}
                         onChange={(e) => updateStep(step.id, 'instruction', e.target.value)}
-                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 min-h-[60px] md:min-h-[80px] resize-y"
+                        className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 min-h-[60px] md:min-h-[80px] resize-y bg-white dark:bg-slate-700"
                         placeholder="Enter detailed instructions for this step..."
-                        style={{color: '#000000', backgroundColor: '#ffffff'}}
                       />
                     </div>
                   </div>
@@ -1855,8 +1871,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               ))}
 
               {formSteps.length === 0 && (
-                <div className="text-center py-6 md:py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                  <p className="text-sm md:text-base text-gray-600">No process steps yet. Click &quot;Add Step&quot; to create one.</p>
+                <div className="text-center py-6 md:py-8 bg-gray-50 dark:bg-slate-900 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600">
+                  <p className="text-sm md:text-base text-gray-600 dark:text-slate-400">No process steps yet. Click &quot;Add Step&quot; to create one.</p>
                 </div>
               )}
             </div>
@@ -1876,14 +1892,13 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           </div>
 
           {/* Comments Section - Prominent */}
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-green-50 rounded-lg border-2 border-green-200 shadow-sm">
-            <label className="block text-sm md:text-base font-bold text-gray-900 mb-3">Comments &amp; Notes</label>
+          <div className="mb-3 sm:mb-4 md:mb-6 p-2 sm:p-3 md:p-5 bg-green-50 dark:bg-green-900/10 rounded-lg border-2 border-green-200 dark:border-green-800 shadow-sm">
+            <label className="block text-sm md:text-base font-bold text-gray-900 dark:text-slate-100 mb-3">Comments &amp; Notes</label>
             <textarea
               value={formData.comments}
               onChange={(e) => setFormData({...formData, comments: e.target.value})}
-              className="w-full border border-gray-300 rounded px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-gray-900 focus:border-blue-500 min-h-[120px] md:min-h-[150px] resize-y"
+              className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-gray-900 dark:text-slate-100 focus:border-blue-500 min-h-[120px] md:min-h-[150px] resize-y bg-white dark:bg-slate-700"
               placeholder="Enter any additional comments, notes, quality issues, or special instructions..."
-              style={{color: '#000000', backgroundColor: '#ffffff'}}
             />
           </div>
         </div>
@@ -1920,7 +1935,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         )}
 
         {/* Action Buttons - Bottom of Form */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200 dark:border-slate-700">
           <button
             onClick={handlePrint}
             className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
@@ -1938,7 +1953,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
 
           <button
             onClick={handleSubmit}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
           >
             <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
           </button>

@@ -542,7 +542,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         is_active: editedTraveler.isActive !== undefined ? editedTraveler.isActive : true,
         include_labor_hours: editedTraveler.includeLaborHours !== undefined ? editedTraveler.includeLaborHours : false,
         traveler_type: editedTraveler.travelerType || 'PCB_ASSEMBLY',
-        priority: 'NORMAL',
+        priority: editedTraveler.priority || 'NORMAL',
         work_center: editedTraveler.steps.length > 0 ? (editedTraveler.steps[0].workCenter || 'ASSEMBLY') : 'ASSEMBLY',
         notes: '',
         process_steps: editedTraveler.steps.map(step => ({
@@ -581,8 +581,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         setTraveler(editedTraveler);
         setIsEditing(false);
         toast.success('Traveler updated successfully!');
-        // Redirect to view page without ?edit=true to prevent re-entering edit mode
-        window.location.href = `/travelers/${editedTraveler.travelerId}`;
+        // Update URL without full page reload to prevent re-entering edit mode
+        router.replace(`/travelers/${editedTraveler.travelerId}`);
       } else {
         let errorMessage = 'Failed to update traveler';
         try {
@@ -1672,6 +1672,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                   });
                                   if (res.ok) {
                                     setTraveler(prev => prev ? { ...prev, priority: opt.value } : prev);
+                                    setEditedTraveler(prev => prev ? { ...prev, priority: opt.value } : prev);
                                     toast.success(`Priority changed to ${opt.label}`);
                                   }
                                 } catch { /* ignore */ }
@@ -2069,19 +2070,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">PO Number:</span>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editData.poNumber || ''}
-                      onChange={(e) => updateField('poNumber', e.target.value)}
-                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
-                    />
-                  ) : (
-                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.poNumber || '-'}</span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Quantity:</span>
                   {isEditing ? (
                     <input
@@ -2095,18 +2083,29 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Traveler Rev:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">PO Number:</span>
                   {isEditing ? (
                     <input
                       type="text"
-                      value={editData.revision}
-                      onChange={(e) => updateField('revision', e.target.value)}
+                      value={editData.poNumber || ''}
+                      onChange={(e) => updateField('poNumber', e.target.value)}
                       className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">
-                      {displayTraveler.revision ? displayTraveler.revision : '- -'}
-                    </span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.poNumber || '-'}</span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Part No:</span>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.partNumber}
+                      onChange={(e) => updateField('partNumber', e.target.value)}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
+                    />
+                  ) : (
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
               </div>
@@ -2152,19 +2151,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               {/* Right Column */}
               <div className="space-y-0.5 print:space-y-0.5 flex flex-col items-end">
                 <div className="flex items-baseline gap-2 print:gap-1 ">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Part No:</span>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editData.partNumber}
-                      onChange={(e) => updateField('partNumber', e.target.value)}
-                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right text-black dark:text-white"
-                    />
-                  ) : (
-                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.partNumber || '-'}</span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-2 print:gap-1 ">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Description:</span>
                   {isEditing ? (
                     <input
@@ -2178,7 +2164,22 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1 ">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Cust. Revision:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Traveler Rev:</span>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.revision}
+                      onChange={(e) => updateField('revision', e.target.value)}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right text-black dark:text-white"
+                    />
+                  ) : (
+                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">
+                      {displayTraveler.revision ? displayTraveler.revision : '- -'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Cust. Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"
