@@ -3,10 +3,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
+import re
 from datetime import datetime
 
 from database import get_db
-from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus, LaborEntry
+from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus, LaborEntry, UserRole
 from schemas.traveler_schemas import (
     TravelerCreate, Traveler as TravelerSchema, TravelerUpdate,
     TravelerList, ProcessStepCreate, ManualStepCreate
@@ -31,25 +32,29 @@ async def get_user_or_system(
     if credentials:
         try:
             return await get_current_user(credentials, db)
-        except HTTPException:
-            pass  # Fall through to system user
+        except Exception:
+            pass  # Fall through to system user on ANY error
 
     # Fall back to system user for backward compatibility
     system_user = db.query(User).filter(User.username == "system").first()
     if not system_user:
-        # Create system user if doesn't exist
-        system_user = User(
-            username="system",
-            email="system@nexus.local",
-            first_name="System",
-            last_name="User",
-            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
-            role="OPERATOR",
-            is_approver=False
-        )
-        db.add(system_user)
-        db.commit()
-        db.refresh(system_user)
+        try:
+            system_user = User(
+                username="system",
+                email="system@nexus.local",
+                first_name="System",
+                last_name="User",
+                hashed_password="$2b$12$dummyhashforbackwardcompatibility",
+                role=UserRole.OPERATOR,
+                is_approver=False
+            )
+            db.add(system_user)
+            db.commit()
+            db.refresh(system_user)
+        except Exception:
+            db.rollback()
+            # Race condition: another request created it
+            system_user = db.query(User).filter(User.username == "system").first()
 
     return system_user
 
@@ -365,16 +370,33 @@ async def get_travelers(
 
     query = db.query(Traveler).options(joinedload(Traveler.process_steps))
 
-    # Filter ITAR travelers (job_number contains 'M') for non-privileged users
+    # Filter ITAR travelers for non-privileged users
+    # ITAR job numbers have M right after the digits, e.g. "12345M ASSY", "12345ML CABLE"
     # ADMIN users and users with is_itar=True can see all travelers
     is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
     has_itar_access = getattr(current_user, 'is_itar', False)
 
     if not is_admin and not has_itar_access:
-        # Exclude travelers where job_number contains 'M' (case-insensitive)
-        query = query.filter(~Traveler.job_number.ilike('%M%'))
+        # Exclude ITAR travelers: job numbers matching pattern like "1234M", "1234M ASSY", "1234ML CABLE"
+        # Pattern: digits followed by M (with optional L) then space or end of string
+        # Uses PostgreSQL POSIX regex — [[:space:]] for whitespace (not \s which fails in brackets)
+        from sqlalchemy import not_
+        query = query.filter(not_(Traveler.job_number.op('~')(r'[0-9]M[L[:space:]]|[0-9]M$|[0-9]ML$')))
 
     travelers = query.offset(skip).limit(limit).all()
+
+    # Build work center -> department map
+    all_work_centers = db.query(WorkCenter).all()
+    wc_dept_map = {wc.code: wc.department or 'Other' for wc in all_work_centers}
+
+    # Get labor entries for all travelers in bulk
+    from sqlalchemy import func as sqlfunc
+    traveler_ids = [t.id for t in travelers]
+    labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id.in_(traveler_ids)).all() if traveler_ids else []
+    # Group labor entries by traveler_id
+    labor_by_traveler = {}
+    for le in labor_entries:
+        labor_by_traveler.setdefault(le.traveler_id, []).append(le)
 
     # Calculate progress for each traveler
     results = []
@@ -386,6 +408,55 @@ async def get_travelers(
         data['total_steps'] = total
         data['completed_steps'] = completed
         data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0.0
+
+        # Department progress
+        KNOWN_DEPTS_LIST = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
+                       'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+        dept_progress = {}
+        for step in steps:
+            dept = wc_dept_map.get(step.work_center_code, 'Other')
+            # Split multi-department assignments into individual departments
+            if dept in KNOWN_DEPTS_LIST:
+                split_depts = [dept]
+            else:
+                parts = [d.strip() for d in dept.split('/') if d.strip()]
+                if all(p in KNOWN_DEPTS_LIST for p in parts) and len(parts) > 1:
+                    split_depts = parts
+                else:
+                    split_depts = [dept] if dept else ['Other']
+            for individual_dept in split_depts:
+                if individual_dept not in dept_progress:
+                    dept_progress[individual_dept] = {'total': 0, 'completed': 0}
+                dept_progress[individual_dept]['total'] += 1
+                if step.is_completed:
+                    dept_progress[individual_dept]['completed'] += 1
+
+        data['department_progress'] = [
+            {
+                'department': dept,
+                'total_steps': d['total'],
+                'completed_steps': d['completed'],
+                'percent_complete': round((d['completed'] / d['total']) * 100, 1) if d['total'] > 0 else 0,
+            }
+            for dept, d in dept_progress.items()
+        ]
+
+        # Labor progress
+        t_labor = labor_by_traveler.get(t.id, [])
+        total_labor_hours = round(sum(le.hours_worked or 0 for le in t_labor), 2)
+        labor_entries_count = len(t_labor)
+        active_labor = sum(1 for le in t_labor if not le.is_completed)
+        steps_with_labor = len(set(le.step_id for le in t_labor if le.step_id))
+        labor_percent = round((steps_with_labor / total) * 100, 1) if total > 0 else 0.0
+        data['labor_progress'] = {
+            'total_hours': total_labor_hours,
+            'entries_count': labor_entries_count,
+            'active_entries': active_labor,
+            'steps_with_labor': steps_with_labor,
+            'total_steps': total,
+            'percent': labor_percent,
+        }
+
         results.append(data)
 
     return results
@@ -422,6 +493,8 @@ async def get_latest_revision_traveler(
         "part_number": traveler.part_number,
         "part_description": traveler.part_description,
         "revision": traveler.revision,
+        "customer_revision": traveler.customer_revision,
+        "part_revision": getattr(traveler, 'part_revision', ''),
         "quantity": traveler.quantity,
         "customer_code": traveler.customer_code,
         "customer_name": traveler.customer_name,
@@ -468,6 +541,78 @@ async def get_latest_revision_traveler(
     print(f"Returning traveler with {len(result['process_steps'])} process steps")
     return result
 
+@router.get("/by-job-number/{job_number}")
+async def get_traveler_by_job_number(
+    job_number: str,
+    db: Session = Depends(get_db)
+):
+    """Get the latest revision traveler for a given job number (no work order required)"""
+    from sqlalchemy.orm import joinedload
+
+    travelers = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(
+        Traveler.job_number == job_number
+    ).order_by(Traveler.revision.desc()).all()
+
+    if not travelers:
+        return None
+
+    traveler = travelers[0]
+
+    result = {
+        "id": traveler.id,
+        "job_number": traveler.job_number,
+        "work_order_number": traveler.work_order_number,
+        "po_number": traveler.po_number,
+        "traveler_type": traveler.traveler_type.value if hasattr(traveler.traveler_type, 'value') else str(traveler.traveler_type),
+        "part_number": traveler.part_number,
+        "part_description": traveler.part_description,
+        "revision": traveler.revision,
+        "customer_revision": traveler.customer_revision,
+        "part_revision": getattr(traveler, 'part_revision', ''),
+        "quantity": traveler.quantity,
+        "customer_code": traveler.customer_code,
+        "customer_name": traveler.customer_name,
+        "priority": traveler.priority.value if hasattr(traveler.priority, 'value') else str(traveler.priority),
+        "work_center": traveler.work_center,
+        "status": traveler.status.value if hasattr(traveler.status, 'value') else str(traveler.status),
+        "is_active": traveler.is_active,
+        "notes": traveler.notes,
+        "specs": traveler.specs,
+        "specs_date": traveler.specs_date,
+        "from_stock": traveler.from_stock,
+        "to_stock": traveler.to_stock,
+        "ship_via": traveler.ship_via,
+        "comments": traveler.comments,
+        "due_date": traveler.due_date,
+        "ship_date": traveler.ship_date,
+        "include_labor_hours": traveler.include_labor_hours,
+        "is_lead_free": getattr(traveler, 'is_lead_free', False),
+        "is_itar": getattr(traveler, 'is_itar', False),
+        "created_at": traveler.created_at.isoformat() if traveler.created_at else None,
+        "process_steps": [
+            {
+                "id": step.id,
+                "step_number": step.step_number,
+                "operation": step.operation,
+                "work_center_code": step.work_center_code,
+                "instructions": step.instructions,
+                "quantity": step.quantity,
+                "accepted": step.accepted,
+                "rejected": step.rejected,
+                "sign": step.sign,
+                "completed_date": step.completed_date,
+                "estimated_time": step.estimated_time,
+                "is_required": step.is_required,
+                "is_completed": step.is_completed,
+            }
+            for step in sorted(traveler.process_steps, key=lambda s: s.step_number)
+        ]
+    }
+
+    return result
+
 @router.get("/dashboard-summary")
 async def get_dashboard_summary(
     current_user: User = Depends(get_user_or_system),
@@ -487,7 +632,8 @@ async def get_dashboard_summary(
     is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
     has_itar_access = getattr(current_user, 'is_itar', False)
     if not is_admin and not has_itar_access:
-        query = query.filter(~Traveler.job_number.ilike('%M%'))
+        from sqlalchemy import not_
+        query = query.filter(not_(Traveler.job_number.op('~')(r'[0-9]M[L[:space:]]|[0-9]M$|[0-9]ML$')))
 
     travelers = query.order_by(Traveler.created_at.desc()).all()
 
@@ -513,6 +659,17 @@ async def get_dashboard_summary(
         for scan in scans:
             latest_scans[scan.traveler_id] = scan.work_center
 
+    # Build work center -> department map for all work centers
+    all_work_centers = db.query(WorkCenter).all()
+    wc_dept_map = {wc.code: wc.department or 'Other' for wc in all_work_centers}
+
+    # Get labor entries for all dashboard travelers in bulk
+    dash_traveler_ids = [t.id for t in travelers]
+    dash_labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id.in_(dash_traveler_ids)).all() if dash_traveler_ids else []
+    dash_labor_by_traveler = {}
+    for le in dash_labor_entries:
+        dash_labor_by_traveler.setdefault(le.traveler_id, []).append(le)
+
     results = []
     for t in travelers:
         steps = sorted(t.process_steps, key=lambda s: s.step_number)
@@ -528,6 +685,45 @@ async def get_dashboard_summary(
         # Sum accepted/rejected across all steps
         qty_accepted = sum(s.accepted or 0 for s in steps)
         qty_rejected = sum(s.rejected or 0 for s in steps)
+
+        # Department progress
+        KNOWN_DEPTS_DASH = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
+                       'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+        dept_progress = {}
+        for step in steps:
+            dept = wc_dept_map.get(step.work_center_code, 'Other')
+            if dept in KNOWN_DEPTS_DASH:
+                split_depts = [dept]
+            else:
+                parts = [d.strip() for d in dept.split('/') if d.strip()]
+                if all(p in KNOWN_DEPTS_DASH for p in parts) and len(parts) > 1:
+                    split_depts = parts
+                else:
+                    split_depts = [dept] if dept else ['Other']
+            for individual_dept in split_depts:
+                if individual_dept not in dept_progress:
+                    dept_progress[individual_dept] = {'total': 0, 'completed': 0}
+                dept_progress[individual_dept]['total'] += 1
+                if step.is_completed:
+                    dept_progress[individual_dept]['completed'] += 1
+
+        department_progress = [
+            {
+                'department': dept,
+                'total_steps': data['total'],
+                'completed_steps': data['completed'],
+                'percent_complete': round((data['completed'] / data['total']) * 100, 1) if data['total'] > 0 else 0,
+            }
+            for dept, data in dept_progress.items()
+        ]
+
+        # Labor progress
+        t_labor = dash_labor_by_traveler.get(t.id, [])
+        total_labor_hours = round(sum(le.hours_worked or 0 for le in t_labor), 2)
+        labor_entries_count = len(t_labor)
+        active_labor = sum(1 for le in t_labor if not le.is_completed)
+        steps_with_labor = len(set(le.step_id for le in t_labor if le.step_id))
+        labor_percent = round((steps_with_labor / total_steps) * 100, 1) if total_steps > 0 else 0.0
 
         results.append({
             "id": t.id,
@@ -548,9 +744,182 @@ async def get_dashboard_summary(
             "current_work_center": current_work_center or latest_scans.get(t.id),
             "qty_accepted": qty_accepted,
             "qty_rejected": qty_rejected,
+            "department_progress": department_progress,
+            "labor_progress": {
+                "total_hours": total_labor_hours,
+                "entries_count": labor_entries_count,
+                "active_entries": active_labor,
+                "steps_with_labor": steps_with_labor,
+                "total_steps": total_steps,
+                "percent": labor_percent,
+            },
         })
 
     return results
+
+@router.get("/department-progress/{traveler_id}")
+async def get_department_progress(
+    traveler_id: int,
+    current_user: User = Depends(get_user_or_system),
+    db: Session = Depends(get_db)
+):
+    """Get department-wise and step-wise progress for a traveler.
+    Returns progress grouped by department with individual step completion status."""
+    from sqlalchemy.orm import joinedload
+
+    traveler = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(Traveler.id == traveler_id).first()
+
+    if not traveler:
+        raise HTTPException(status_code=404, detail="Traveler not found")
+
+    steps = sorted(traveler.process_steps, key=lambda s: s.step_number)
+
+    # Get department mapping from work centers
+    wc_codes = list(set(s.work_center_code for s in steps))
+    work_centers = db.query(WorkCenter).filter(WorkCenter.code.in_(wc_codes)).all()
+    wc_dept_map = {wc.code: wc.department or 'Other' for wc in work_centers}
+
+    # Build department progress
+    departments = {}
+    for step in steps:
+        dept = wc_dept_map.get(step.work_center_code, 'Other')
+        # Handle multi-department assignments (e.g., "SMT/Soldering/Test", "Engineering/Prep")
+        # Each part gets its own department entry
+        KNOWN_DEPTS = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
+                       'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+        if dept in KNOWN_DEPTS:
+            split_depts = [dept]
+        else:
+            parts = [d.strip() for d in dept.split('/') if d.strip()]
+            if all(p in KNOWN_DEPTS for p in parts) and len(parts) > 1:
+                split_depts = parts
+            else:
+                split_depts = [dept] if dept else ['Other']
+
+        step_data = {
+            'id': step.id,
+            'step_number': step.step_number,
+            'operation': step.operation,
+            'work_center_code': step.work_center_code,
+            'is_completed': step.is_completed,
+            'completed_by': step.completed_by,
+            'completed_at': step.completed_at.isoformat() if step.completed_at else None,
+            'department': dept,
+        }
+
+        for individual_dept in split_depts:
+            if individual_dept not in departments:
+                departments[individual_dept] = {
+                    'department': individual_dept,
+                    'total_steps': 0,
+                    'completed_steps': 0,
+                    'percent_complete': 0,
+                    'steps': []
+                }
+
+            departments[individual_dept]['total_steps'] += 1
+            if step.is_completed:
+                departments[individual_dept]['completed_steps'] += 1
+
+            departments[individual_dept]['steps'].append(step_data)
+
+    # Calculate percentages
+    for dept_data in departments.values():
+        total = dept_data['total_steps']
+        completed = dept_data['completed_steps']
+        dept_data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0
+
+    # Overall progress
+    total_steps = len(steps)
+    completed_steps = sum(1 for s in steps if s.is_completed)
+    overall_percent = round((completed_steps / total_steps) * 100, 1) if total_steps > 0 else 0
+
+    # Labor progress for this traveler
+    labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id == traveler_id).all()
+    total_labor_hours = round(sum(le.hours_worked or 0 for le in labor_entries), 2)
+    labor_entries_count = len(labor_entries)
+    active_labor = sum(1 for le in labor_entries if not le.is_completed)
+    steps_with_labor = len(set(le.step_id for le in labor_entries if le.step_id))
+    labor_percent = round((steps_with_labor / total_steps) * 100, 1) if total_steps > 0 else 0.0
+
+    # Labor hours per department
+    labor_by_step_id = {}
+    for le in labor_entries:
+        if le.step_id:
+            labor_by_step_id.setdefault(le.step_id, []).append(le)
+
+    for dept_data in departments.values():
+        dept_labor_hours = 0
+        dept_steps_with_labor = 0
+        for s in dept_data['steps']:
+            step_labor = labor_by_step_id.get(s['id'], [])
+            step_hours = sum(le.hours_worked or 0 for le in step_labor)
+            dept_labor_hours += step_hours
+            if step_labor:
+                dept_steps_with_labor += 1
+            s['labor_hours'] = round(step_hours, 2)
+            s['has_labor'] = len(step_labor) > 0
+        dept_data['labor_hours'] = round(dept_labor_hours, 2)
+        dept_data['steps_with_labor'] = dept_steps_with_labor
+        dept_data['labor_percent'] = round((dept_steps_with_labor / dept_data['total_steps']) * 100, 1) if dept_data['total_steps'] > 0 else 0
+
+    # Labor hours grouped by work center category (e.g. SMT, Hand, TH, AOI, etc.)
+    wc_category_map = {wc.code: wc.category for wc in work_centers if wc.category}
+    # Also map by name for labor entries that use work_center name
+    wc_name_category_map = {wc.name.upper().strip(): wc.category for wc in work_centers if wc.name and wc.category}
+    # Map code to name
+    wc_code_name_map = {wc.code: wc.name for wc in work_centers if wc.name}
+
+    category_hours: dict = {}
+    for le in labor_entries:
+        # Try to get category from work_center code or name
+        cat = None
+        if le.work_center:
+            wc_upper = le.work_center.upper().strip()
+            # Try by code first
+            cat = wc_category_map.get(le.work_center)
+            if not cat:
+                cat = wc_name_category_map.get(wc_upper)
+        if not cat and le.step_id:
+            # Try from the step's work center code
+            for step in steps:
+                if step.id == le.step_id:
+                    cat = wc_category_map.get(step.work_center_code)
+                    break
+        if not cat:
+            cat = 'Other'
+        # Clean up category name to short form
+        CATEGORY_SHORT_NAMES = {
+            'SMT hrs. Actual': 'SMT',
+            'HAND hrs. Actual': 'Hand',
+            'TH hrs. Actual': 'TH',
+            'AOI & Final Inspection, QC hrs. Actual': 'AOI',
+            'E-TEST hrs. Actual': 'E-Test',
+            'Labelling, Packaging, Shipping hrs. Actual': 'Labeling',
+        }
+        cat_short = CATEGORY_SHORT_NAMES.get(cat, cat.split(' ')[0].strip().rstrip(',')) if cat else 'Other'
+        category_hours[cat_short] = round(category_hours.get(cat_short, 0) + (le.hours_worked or 0), 2)
+
+    return {
+        'traveler_id': traveler_id,
+        'overall': {
+            'total_steps': total_steps,
+            'completed_steps': completed_steps,
+            'percent_complete': overall_percent,
+        },
+        'labor': {
+            'total_hours': total_labor_hours,
+            'entries_count': labor_entries_count,
+            'active_entries': active_labor,
+            'steps_with_labor': steps_with_labor,
+            'total_steps': total_steps,
+            'percent': labor_percent,
+        },
+        'category_hours': category_hours,
+        'departments': list(departments.values()),
+    }
 
 @router.get("/by-job/{job_number}", response_model=TravelerSchema)
 async def get_traveler_by_job(
@@ -570,7 +939,8 @@ async def get_traveler_by_job(
     is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
     has_itar_access = getattr(current_user, 'is_itar', False)
 
-    if 'M' in traveler.job_number.upper() and not is_admin and not has_itar_access:
+    is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', traveler.job_number))
+    if is_itar_job and not is_admin and not has_itar_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="ITAR restricted: You do not have permission to view this traveler"
@@ -600,7 +970,8 @@ async def get_traveler(
     is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
     has_itar_access = getattr(current_user, 'is_itar', False)
 
-    if 'M' in traveler.job_number.upper() and not is_admin and not has_itar_access:
+    is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', traveler.job_number))
+    if is_itar_job and not is_admin and not has_itar_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="ITAR restricted: You do not have permission to view this traveler"
@@ -631,7 +1002,7 @@ async def update_traveler(
             first_name="System",
             last_name="User",
             hashed_password="$2b$12$dummyhashforbackwardcompatibility",
-            role="OPERATOR",
+            role=UserRole.OPERATOR,
             is_approver=False
         )
         db.add(default_user)
@@ -841,7 +1212,7 @@ async def delete_traveler(
             first_name="System",
             last_name="User",
             hashed_password="$2b$12$dummyhashforbackwardcompatibility",
-            role="OPERATOR",
+            role=UserRole.OPERATOR,
             is_approver=False
         )
         db.add(default_user)

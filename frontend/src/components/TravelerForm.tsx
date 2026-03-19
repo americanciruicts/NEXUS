@@ -84,17 +84,28 @@ interface FullTravelerData {
   id: number;
   job_number: string;
   work_order_number?: string;
+  po_number?: string;
+  traveler_type?: string;
   part_number: string;
   part_description: string;
   revision: string;
+  customer_revision?: string;
+  part_revision?: string;
   quantity: number;
   customer_code?: string;
   customer_name?: string;
+  priority?: string;
   specs?: string;
+  specs_date?: string;
   from_stock?: string;
   to_stock?: string;
   ship_via?: string;
   comments?: string;
+  due_date?: string;
+  ship_date?: string;
+  include_labor_hours?: boolean;
+  is_lead_free?: boolean;
+  is_itar?: boolean;
   process_steps?: ProcessStepData[];
 }
 
@@ -1318,80 +1329,110 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 <input
                   type="text"
                   value={formData.jobNumber}
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     const value = e.target.value;
                     setFormData({...formData, jobNumber: value});
-                    // Auto-populate from existing traveler with same job number
+                  }}
+                  onBlur={async (e) => {
+                    const value = e.target.value.trim();
+                    // Auto-populate from existing traveler when job number is entered
                     if (value.length >= 3 && mode === 'create') {
                       try {
-                        const response = await fetch(`${API_BASE_URL}/travelers/`, {
-                          headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
-                          }
+                        const token = localStorage.getItem('nexus_token') || 'mock-token';
+                        const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
                         });
+
                         if (response.ok) {
-                          const travelers: TravelerListItem[] = await response.json();
-                          // Find traveler with matching job number
-                          const matchingTraveler = travelers.find((t: TravelerListItem) =>
-                            t.job_number.toLowerCase() === value.toLowerCase()
-                          );
+                          const fullData: FullTravelerData = await response.json();
+                          if (!fullData) return;
 
-                          if (matchingTraveler) {
-                            // Fetch full traveler details with steps
-                            const detailResponse = await fetch(`${API_BASE_URL}/travelers/${matchingTraveler.id}`, {
-                              headers: {
-                                'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+                          // Auto-increment the traveler revision
+                          const oldRevision = String(fullData.revision || 'A');
+                          const newRevision = incrementRevision(oldRevision);
+
+                          // Parse specs
+                          let specsText = '';
+                          try {
+                            const specsData = fullData.specs;
+                            if (specsData) {
+                              if (typeof specsData === 'string') {
+                                const parsed = JSON.parse(specsData);
+                                if (Array.isArray(parsed)) {
+                                  specsText = parsed.map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
+                                } else {
+                                  specsText = specsData;
+                                }
+                              } else if (Array.isArray(specsData)) {
+                                specsText = (specsData as Record<string, unknown>[]).map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
                               }
-                            });
-
-                            if (detailResponse.ok) {
-                              const fullData: FullTravelerData = await detailResponse.json();
-
-                              // Split work order number into prefix and suffix
-                              if (fullData.work_order_number) {
-                                const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
-                                setWorkOrderPrefix(prefix);
-                                setWorkOrderSuffix(suffix);
-                              }
-
-                              // Auto-populate all fields
-                              setFormData(prev => ({
-                                ...prev,
-                                workOrderNumber: fullData.work_order_number || prev.workOrderNumber,
-                                partNumber: fullData.part_number || prev.partNumber,
-                                partDescription: fullData.part_description || prev.partDescription,
-                                revision: fullData.revision || prev.revision,
-                                quantity: fullData.quantity || prev.quantity,
-                                customerCode: fullData.customer_code || prev.customerCode,
-                                customerName: fullData.customer_name || prev.customerName,
-                                specs: fullData.specs || prev.specs,
-                                fromStock: fullData.from_stock || prev.fromStock,
-                                toStock: fullData.to_stock || prev.toStock,
-                                shipVia: fullData.ship_via || prev.shipVia,
-                                comments: fullData.comments || prev.comments
-                              }));
-
-                              // Auto-populate process steps
-                              if (fullData.process_steps && fullData.process_steps.length > 0) {
-                                console.log('📋 Auto-populating steps:', fullData.process_steps.length);
-                                const newSteps = fullData.process_steps.map((step: ProcessStepData, index: number) => ({
-                                  id: `step-${Date.now()}-${index}`,
-                                  sequence: step.step_number,
-                                  workCenter: step.operation || step.work_center_code || '',
-                                  instruction: step.instructions || '',
-                                  quantity: step.quantity || 0,
-                                  rejected: step.rejected || 0,
-                                  accepted: step.accepted || 0,
-                                  assign: step.sign || '',
-                                  date: step.completed_date || ''
-                                }));
-                                console.log('✅ Setting form steps:', newSteps);
-                                setFormSteps(newSteps);
-                              }
-
-                              console.log('✅ Auto-populated data from existing traveler:', matchingTraveler.job_number);
                             }
+                          } catch {
+                            specsText = String(fullData.specs || '');
                           }
+
+                          // Split work order number into prefix and suffix
+                          if (fullData.work_order_number) {
+                            const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
+                            setWorkOrderPrefix(prefix);
+                            setWorkOrderSuffix(suffix);
+                          }
+
+                          // Auto-populate ALL fields from the existing traveler
+                          setFormData(prev => ({
+                            ...prev,
+                            workOrderNumber: fullData.work_order_number || prev.workOrderNumber,
+                            poNumber: fullData.po_number || prev.poNumber,
+                            partNumber: fullData.part_number || prev.partNumber,
+                            partDescription: fullData.part_description || prev.partDescription,
+                            revision: newRevision,
+                            customerRevision: fullData.customer_revision || '',
+                            partRevision: fullData.part_revision || '',
+                            quantity: fullData.quantity || prev.quantity,
+                            customerCode: fullData.customer_code || prev.customerCode,
+                            customerName: fullData.customer_name || prev.customerName,
+                            priority: (fullData.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
+                            specs: specsText,
+                            fromStock: fullData.from_stock || '',
+                            toStock: fullData.to_stock || '',
+                            shipVia: fullData.ship_via || '',
+                            dueDate: extractDateOnly(fullData.due_date),
+                            shipDate: extractDateOnly(fullData.ship_date),
+                            comments: fullData.comments || ''
+                          }));
+
+                          // Set traveler type
+                          if (fullData.traveler_type) {
+                            setSelectedType(fullData.traveler_type as TravelerType);
+                          }
+
+                          // Set flags
+                          setIsLeadFree(fullData.is_lead_free || false);
+                          setIsITAR(fullData.is_itar || false);
+                          setIncludeLaborHours(fullData.include_labor_hours || false);
+
+                          // Auto-populate process steps
+                          if (fullData.process_steps && fullData.process_steps.length > 0) {
+                            const newSteps = fullData.process_steps.map((step: ProcessStepData, index: number) => ({
+                              id: `step-${Date.now()}-${index}`,
+                              sequence: step.step_number,
+                              workCenter: step.operation || step.work_center_code || '',
+                              instruction: step.instructions || '',
+                              quantity: 0,
+                              rejected: 0,
+                              accepted: 0,
+                              assign: '',
+                              date: ''
+                            }));
+                            setFormSteps(newSteps);
+                          }
+
+                          // Store revision info for validation
+                          setAutoPopulatedRevision(newRevision);
+                          setWasAutoPopulated(true);
+
+                          toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. Please verify Customer Rev and Traveler Rev.`);
+                          setTimeout(() => window.scrollTo(0, 0), 0);
                         }
                       } catch (error) {
                         console.error('Error fetching traveler data:', error);
