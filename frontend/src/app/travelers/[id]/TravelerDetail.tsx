@@ -1045,10 +1045,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           if (typeof specsData === 'string') {
             const parsed = JSON.parse(specsData);
             if (Array.isArray(parsed)) {
-              specsArr = parsed.map((s: Record<string, unknown>) => ({ text: String(s.text || ''), date: String(s.date || '') }));
+              specsArr = parsed.map((s: Record<string, unknown>, i: number) => ({ id: String(i + 1), text: String(s.text || ''), date: String(s.date || '') }));
             }
           } else if (Array.isArray(specsData)) {
-            specsArr = specsData.map((s: Record<string, unknown>) => ({ text: String(s.text || ''), date: String(s.date || '') }));
+            specsArr = specsData.map((s: Record<string, unknown>, i: number) => ({ id: String(i + 1), text: String(s.text || ''), date: String(s.date || '') }));
           }
         }
       } catch { /* ignore */ }
