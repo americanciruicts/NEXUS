@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4: use class-based dark mode instead of prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -8,18 +11,16 @@
   --primary-blue-light: #3b82f6;
 }
 
+html.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #f8fafc;
-    --foreground: #0f172a;
-  }
 }
 
 body {
@@ -30,10 +31,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* CRITICAL FIX: Force all form inputs to have BLACK text on WHITE background */
-input,
-textarea,
-select {
+/* ─── Light mode form inputs ─── */
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select {
   color: #000000 !important;
   background-color: #ffffff !important;
   border: 2px solid #cbd5e1 !important;
@@ -45,9 +46,9 @@ select {
   padding: 0.75rem 1rem !important;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
+html:not(.dark) input:focus,
+html:not(.dark) textarea:focus,
+html:not(.dark) select:focus {
   color: #000000 !important;
   background-color: #ffffff !important;
   border-color: #2563eb !important;
@@ -57,16 +58,16 @@ select:focus {
   -webkit-text-fill-color: #000000 !important;
 }
 
-input::placeholder,
-textarea::placeholder {
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
   color: #94a3b8 !important;
   opacity: 1 !important;
   -webkit-text-fill-color: #94a3b8 !important;
 }
 
-input:disabled,
-textarea:disabled,
-select:disabled {
+html:not(.dark) input:disabled,
+html:not(.dark) textarea:disabled,
+html:not(.dark) select:disabled {
   background-color: #f1f5f9 !important;
   color: #64748b !important;
   cursor: not-allowed !important;
@@ -74,16 +75,15 @@ select:disabled {
   opacity: 0.7 !important;
 }
 
-/* Ensure proper text colors for all input types */
-input[type="text"],
-input[type="number"],
-input[type="date"],
-input[type="email"],
-input[type="password"],
-input[type="tel"],
-input[type="url"],
-textarea,
-select {
+html:not(.dark) input[type="text"],
+html:not(.dark) input[type="number"],
+html:not(.dark) input[type="date"],
+html:not(.dark) input[type="email"],
+html:not(.dark) input[type="password"],
+html:not(.dark) input[type="tel"],
+html:not(.dark) input[type="url"],
+html:not(.dark) textarea,
+html:not(.dark) select {
   color: #000000 !important;
   background-color: #ffffff !important;
   -webkit-text-fill-color: #000000 !important;
@@ -92,24 +92,74 @@ select {
   appearance: none;
 }
 
-/* Form container text visibility */
-form input,
-form textarea,
-form select {
+html:not(.dark) option {
   color: #000000 !important;
   background-color: #ffffff !important;
   -webkit-text-fill-color: #000000 !important;
 }
 
-/* Option elements in select dropdowns */
-option {
-  color: #000000 !important;
-  background-color: #ffffff !important;
-  -webkit-text-fill-color: #000000 !important;
+/* ─── Dark mode form inputs ─── */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  color: #f1f5f9 !important;
+  background-color: #1e293b !important;
+  border: 2px solid #475569 !important;
+  transition: all 0.2s ease !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  font-size: 1rem !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  padding: 0.75rem 1rem !important;
 }
 
-/* Pagination select - compact override */
-select.pagination-select {
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  color: #f1f5f9 !important;
+  background-color: #1e293b !important;
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25) !important;
+  transform: translateY(-1px);
+  -webkit-text-fill-color: #f1f5f9 !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #64748b !important;
+}
+
+html.dark input:disabled,
+html.dark textarea:disabled,
+html.dark select:disabled {
+  background-color: #0f172a !important;
+  color: #475569 !important;
+  cursor: not-allowed !important;
+  -webkit-text-fill-color: #475569 !important;
+  opacity: 0.7 !important;
+}
+
+html.dark option {
+  color: #f1f5f9 !important;
+  background-color: #1e293b !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+}
+
+/* ─── Color scheme ─── */
+html:not(.dark) {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Pagination select - compact override (must beat global input styles) */
+html:not(.dark) select.pagination-select,
+html.dark select.pagination-select {
   padding: 2px 4px !important;
   font-size: 12px !important;
   font-weight: 700 !important;
@@ -128,59 +178,30 @@ select.pagination-select {
   cursor: pointer !important;
 }
 
-/* Force light color scheme */
-* {
-  color-scheme: light !important;
-}
-
-html, body {
-  color-scheme: light !important;
+html:not(.dark) select.pagination-select option,
+html.dark select.pagination-select option {
+  color: #1e1b4b !important;
   background-color: #ffffff !important;
+  -webkit-text-fill-color: #1e1b4b !important;
 }
 
-/* Force all backgrounds to be light - REMOVED button and div from this rule */
-/* Only apply transparent background to specific layout elements, not all divs */
-body, html, #__next, main {
-  background-color: transparent !important;
-}
-
-/* Ensure no dark backgrounds anywhere */
-.dark, .dark * {
-  background-color: #ffffff !important;
+/* ─── Autofill ─── */
+html:not(.dark) input:-webkit-autofill,
+html:not(.dark) input:-webkit-autofill:hover,
+html:not(.dark) input:-webkit-autofill:focus,
+html:not(.dark) input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  -webkit-text-fill-color: #000000 !important;
   color: #000000 !important;
 }
 
-/* Force modal backgrounds to be transparent */
-.fixed.inset-0.z-50 {
-  background-color: transparent !important;
-}
-
-.relative.bg-white {
-  background-color: #ffffff !important;
-}
-
-/* Force all page backgrounds to be light - REMOVED to allow login page gradient */
-
-/* Force all containers to have light backgrounds */
-.bg-white {
-  background-color: #ffffff !important;
-}
-
-.bg-gray-50 {
-  background-color: #f9fafb !important;
-}
-
-/* Force all text to be dark */
-.text-gray-900 {
-  color: #111827 !important;
-}
-
-.text-gray-700 {
-  color: #374151 !important;
-}
-
-.text-gray-600 {
-  color: #4b5563 !important;
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover,
+html.dark input:-webkit-autofill:focus,
+html.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #1e293b inset !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  color: #f1f5f9 !important;
 }
 
 /* Larger textareas for better data entry */
@@ -189,19 +210,8 @@ textarea {
   resize: vertical !important;
 }
 
-/* Make sure auto-filled inputs are visible */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 30px white inset !important;
-  -webkit-text-fill-color: #000000 !important;
-  color: #000000 !important;
-}
-
-/* Print Styles - LARGE READABLE FONTS */
+/* ─── Print Styles ─── */
 @media print {
-  /* Hide unnecessary elements when printing */
   .no-print,
   nav,
   header,
@@ -211,7 +221,6 @@ input:-webkit-autofill:active {
     display: none !important;
   }
 
-  /* Reset page margins */
   @page {
     margin: 0.1in;
     size: letter portrait;
@@ -225,30 +234,25 @@ input:-webkit-autofill:active {
     font-size: 20px !important;
   }
 
-  /* Page break control */
   .print-page-break {
     page-break-before: always !important;
     break-before: always !important;
   }
 
-  /* Ensure proper backgrounds and colors */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     box-shadow: none !important;
     text-shadow: none !important;
+    color-scheme: light !important;
   }
 
-  /* LARGE FONTS FOR READABILITY */
-
-  /* Headers - Customer info section */
   .print-header,
   .print-header * {
     font-size: 30px !important;
     line-height: 1.4 !important;
   }
 
-  /* Section titles - SPECIFICATIONS, ROUTING, COMMENTS */
   .print-section-title {
     font-size: 52px !important;
     line-height: 1.2 !important;
@@ -256,7 +260,6 @@ input:-webkit-autofill:active {
     padding: 16px !important;
   }
 
-  /* Content areas */
   .print-content,
   .print-content * {
     font-size: 30px !important;
@@ -264,7 +267,6 @@ input:-webkit-autofill:active {
     padding: 22px !important;
   }
 
-  /* Table headers */
   .print-table-header {
     font-size: 38px !important;
     line-height: 1.4 !important;
@@ -272,14 +274,12 @@ input:-webkit-autofill:active {
     padding: 24px 20px !important;
   }
 
-  /* Table cells */
   .print-table-cell {
     font-size: 32px !important;
     line-height: 1.4 !important;
     padding: 22px 20px !important;
   }
 
-  /* Override ALL Tailwind text utilities */
   .text-xs, .text-sm, .text-base, .text-lg, .text-xl, .text-2xl {
     font-size: inherit !important;
   }
@@ -288,7 +288,6 @@ input:-webkit-autofill:active {
     font-size: inherit !important;
   }
 
-  /* Tables */
   table {
     width: 100% !important;
     border-collapse: collapse !important;
@@ -298,12 +297,10 @@ input:-webkit-autofill:active {
     border: 1px solid #000 !important;
   }
 
-  /* Headers and sections */
   h1, h2, h3 {
     page-break-after: avoid !important;
   }
 
-  /* Borders */
   .border-2,
   .border {
     border-width: 1px !important;
@@ -315,7 +312,6 @@ input:-webkit-autofill:active {
     border-radius: 2px !important;
   }
 
-  /* Remove shadows */
   .shadow, .shadow-lg, .shadow-md {
     box-shadow: none !important;
   }
@@ -325,9 +321,16 @@ input:-webkit-autofill:active {
   .bg-gradient-to-l {
     background: white !important;
   }
+
+  input, textarea, select {
+    border: 1px solid #000 !important;
+    color: #000 !important;
+    background: white !important;
+    -webkit-text-fill-color: #000 !important;
+  }
 }
 
-/* Navigation styles with modern look */
+/* ─── Navigation ─── */
 .nav-link {
   color: #475569 !important;
   font-weight: 600 !important;
@@ -356,9 +359,7 @@ input:-webkit-autofill:active {
   transform: scaleX(1);
 }
 
-/* Removed dark mode navigation overrides */
-
-/* Simple Button styles */
+/* ─── Buttons ─── */
 .btn-primary {
   background: #2563eb;
   color: #ffffff;
@@ -388,7 +389,18 @@ input:-webkit-autofill:active {
   border-color: #94a3b8;
 }
 
-/* Card styles */
+html.dark .btn-secondary {
+  background-color: #1e293b;
+  color: #cbd5e1;
+  border-color: #475569;
+}
+
+html.dark .btn-secondary:hover {
+  background-color: #334155;
+  border-color: #64748b;
+}
+
+/* ─── Cards ─── */
 .card {
   background: #ffffff;
   border-radius: 12px;
@@ -401,59 +413,91 @@ input:-webkit-autofill:active {
   transform: translateY(-2px);
 }
 
-/* Table enhancements */
+html.dark .card {
+  background: #1e293b;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+html.dark .card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Tables ─── */
 table {
   border-collapse: separate;
   border-spacing: 0;
 }
 
-thead {
+html:not(.dark) thead {
   background: #f8fafc;
+}
+
+html.dark thead {
+  background: #1e293b;
 }
 
 tbody tr {
   transition: all 0.2s ease;
 }
 
-tbody tr:hover {
+html:not(.dark) tbody tr:hover {
   background-color: #f8fafc;
 }
 
-/* Smooth scrolling */
+html.dark tbody tr:hover {
+  background-color: #334155;
+}
+
+/* ─── Scrollbar ─── */
 html {
   scroll-behavior: smooth;
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
-::-webkit-scrollbar-track {
+html:not(.dark) ::-webkit-scrollbar-track {
   background: #f1f5f9;
 }
 
-::-webkit-scrollbar-thumb {
+html:not(.dark) ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 5px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
-/* Print styles */
-@media print {
-  body {
-    background: white;
-  }
+html.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
 
-  .no-print {
-    display: none !important;
-  }
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 5px;
+}
 
-  input, textarea, select {
-    border: 1px solid #000 !important;
-  }
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* ─── Skeleton animation ─── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+html.dark .skeleton {
+  background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+  background-size: 200% 100%;
 }
