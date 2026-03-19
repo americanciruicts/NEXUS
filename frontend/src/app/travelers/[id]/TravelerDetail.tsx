@@ -4,7 +4,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Layout from '@/components/layout/Layout';
 import { ArrowLeftIcon, PrinterIcon, CheckIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon, Bars3Icon, DocumentTextIcon, CpuChipIcon, WrenchScrewdriverIcon, BoltIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
-import { getWorkCentersByType, WorkCenterItem } from '@/data/workCenters';
+import { getWorkCentersByType, WorkCenterItem, DEPARTMENT_BAR_COLORS, DEPARTMENT_COLORS } from '@/data/workCenters';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
@@ -100,6 +100,7 @@ interface Traveler {
   travelerType: string;
   isActive: boolean;
   includeLaborHours: boolean;
+  priority: string;
 }
 
 // Sortable table row wrapper for drag-and-drop in desktop view
@@ -153,9 +154,33 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [stepQRCodes, setStepQRCodes] = useState<Record<number, string>>({});
   const [headerBarcode, setHeaderBarcode] = useState<string>('');
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
 
   // Dynamic work centers from DB
   const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
+
+  // Department progress state
+  interface DeptProgress {
+    department: string;
+    total_steps: number;
+    completed_steps: number;
+    percent_complete: number;
+    labor_hours?: number;
+    steps_with_labor?: number;
+    labor_percent?: number;
+  }
+  interface LaborOverall {
+    total_hours: number;
+    entries_count: number;
+    active_entries: number;
+    steps_with_labor: number;
+    total_steps: number;
+    percent: number;
+  }
+  const [departmentProgress, setDepartmentProgress] = useState<DeptProgress[]>([]);
+  const [overallProgress, setOverallProgress] = useState({ total_steps: 0, completed_steps: 0, percent_complete: 0 });
+  const [laborOverall, setLaborOverall] = useState<LaborOverall>({ total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 });
+  const [categoryHours, setCategoryHours] = useState<Record<string, number>>({});
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: number]: HTMLTableRowElement | null }>({});
@@ -269,6 +294,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             travelerType: String(data.traveler_type || 'PCB_ASSEMBLY'),
             isActive: Boolean(data.is_active),
             includeLaborHours: Boolean(data.include_labor_hours),
+            priority: String(data.priority || 'NORMAL'),
             steps: (data.process_steps || []).map((step: Record<string, unknown>) => ({
               id: Number(step.id),
               seq: Number(step.step_number),
@@ -299,6 +325,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
           // Fetch header barcode
           fetchHeaderBarcode(Number(data.id));
+
+          // Fetch department progress
+          fetchDepartmentProgress(Number(data.id));
         } else {
           console.error('Failed to fetch traveler');
         }
@@ -331,6 +360,24 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         }
       } catch (error) {
         console.error('❌ Error fetching header barcode:', error);
+      }
+    };
+
+    const fetchDepartmentProgress = async (travelerDbId: number) => {
+      try {
+        const token = localStorage.getItem('nexus_token');
+        const response = await fetch(`${API_BASE_URL}/travelers/department-progress/${travelerDbId}`, {
+          headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setDepartmentProgress(data.departments || []);
+          setOverallProgress(data.overall || { total_steps: 0, completed_steps: 0, percent_complete: 0 });
+          setLaborOverall(data.labor || { total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 });
+          setCategoryHours(data.category_hours || {});
+        }
+      } catch (error) {
+        console.error('Error fetching department progress:', error);
       }
     };
 
@@ -400,6 +447,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   }, [autoEdit, traveler]);
 
   const handlePrint = () => {
+    const wasDark = document.documentElement.classList.contains('dark');
+    if (wasDark) {
+      // Temporarily remove dark class so print uses light mode styles
+      document.documentElement.classList.remove('dark');
+    }
+    window.addEventListener('afterprint', () => {
+      if (wasDark) document.documentElement.classList.add('dark');
+    }, { once: true });
     window.print();
   };
 
@@ -704,8 +759,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   }, [createMode]);
 
   const travelerTypes = [
-    { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', description: 'Full board assembly with components', subtitle: 'SMT, Through-Hole, Inspection, Testing', gradient: 'from-blue-600 to-indigo-700', borderColor: 'border-blue-400', iconBg: 'bg-white/20', bubbleColor: 'bg-blue-400/20', icon: CpuChipIcon },
-    { value: 'PCB', label: 'PCB Fabrication', description: 'Bare circuit board fabrication', subtitle: 'Etching, Drilling, Plating, Solder Mask', gradient: 'from-emerald-600 to-green-700', borderColor: 'border-green-400', iconBg: 'bg-white/20', bubbleColor: 'bg-green-400/20', icon: WrenchScrewdriverIcon },
+    { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', description: 'Full board assembly with components', subtitle: 'SMT, Through-Hole, Inspection, Testing', gradient: 'from-teal-600 to-emerald-700', borderColor: 'border-blue-400', iconBg: 'bg-white/20', bubbleColor: 'bg-blue-400/20', icon: CpuChipIcon },
+    { value: 'PCB', label: 'PCB', description: 'Bare circuit board fabrication', subtitle: 'Etching, Drilling, Plating, Solder Mask', gradient: 'from-emerald-600 to-green-700', borderColor: 'border-green-400', iconBg: 'bg-white/20', bubbleColor: 'bg-green-400/20', icon: WrenchScrewdriverIcon },
     { value: 'CABLE', label: 'Cable Assembly', description: 'Cable and wire harness assembly', subtitle: 'Cutting, Stripping, Crimping, Testing', gradient: 'from-purple-600 to-violet-700', borderColor: 'border-purple-400', iconBg: 'bg-white/20', bubbleColor: 'bg-purple-400/20', icon: BoltIcon },
     { value: 'PURCHASING', label: 'Purchasing', description: 'Parts and components procurement', subtitle: 'Sourcing, Receiving, QC Inspection', gradient: 'from-orange-500 to-amber-700', borderColor: 'border-orange-400', iconBg: 'bg-white/20', bubbleColor: 'bg-orange-400/20', icon: ShoppingCartIcon },
   ];
@@ -762,7 +817,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       })),
       travelerType: type,
       isActive: true,
-      includeLaborHours: type !== 'PCB'
+      includeLaborHours: type !== 'PCB',
+      priority: 'NORMAL'
     };
 
     setEditedTraveler(emptyTraveler);
@@ -805,7 +861,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       quantity: Number(editedTraveler.quantity) || 1,
       customer_code: editedTraveler.customerCode || '',
       customer_name: editedTraveler.customerName || '',
-      priority: 'NORMAL',
+      priority: editedTraveler.priority || 'NORMAL',
       work_center: editedTraveler.steps.length > 0 ? editedTraveler.steps[0].workCenter || 'ASSEMBLY' : 'ASSEMBLY',
       status: 'CREATED',
       is_active: true,
@@ -899,7 +955,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       quantity: Number(editedTraveler.quantity) || 1,
       customer_code: editedTraveler.customerCode || '',
       customer_name: editedTraveler.customerName || '',
-      priority: 'NORMAL',
+      priority: editedTraveler.priority || 'NORMAL',
       work_center: editedTraveler.steps.length > 0 ? editedTraveler.steps[0].workCenter || 'ASSEMBLY' : 'ASSEMBLY',
       status: 'DRAFT',
       is_active: false,
@@ -962,18 +1018,18 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   if (createMode && !showForm) {
     return (
       <Layout fullWidth>
-        <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 md:p-8" style={{background: 'linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 50%, #fff3e0 100%)'}}>
+        <div className="min-h-[80vh] flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-50 via-green-50 to-orange-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
           {/* Header */}
           <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center rounded-full bg-blue-100 p-3 mb-4">
-              <DocumentTextIcon className="h-8 w-8 text-blue-600" />
+            <div className="inline-flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50 p-3 mb-4">
+              <DocumentTextIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">Create New Traveler</h1>
-            <p className="text-gray-500 mt-2 text-lg">Choose the traveler type to get started</p>
+            <h1 className="text-4xl font-extrabold text-gray-900 dark:text-slate-100 tracking-tight">Create New Traveler</h1>
+            <p className="text-gray-500 dark:text-slate-400 mt-2 text-lg">Choose the traveler type to get started</p>
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl w-full">
+          <div className="grid grid-cols-2 gap-5 max-w-3xl w-full">
             {travelerTypes.map((type) => {
               const IconComponent = type.icon;
               return (
@@ -1023,7 +1079,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           {/* Back button */}
           <button
             onClick={() => router.back()}
-            className="mt-8 flex items-center space-x-2 px-5 py-2.5 text-gray-600 hover:text-gray-900 bg-white/70 hover:bg-white border border-gray-200 rounded-full shadow-sm hover:shadow transition-all duration-200"
+            className="mt-8 flex items-center space-x-2 px-5 py-2.5 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 bg-white/70 dark:bg-slate-800/70 hover:bg-white dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full shadow-sm hover:shadow transition-all duration-200"
           >
             <ArrowLeftIcon className="h-4 w-4" />
             <span className="text-sm font-medium">Back to Travelers</span>
@@ -1038,7 +1094,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     return (
       <Layout fullWidth>
         <div className="flex items-center justify-center h-64">
-          <div className="text-xl text-gray-600">Initializing...</div>
+          <div className="text-xl text-gray-600 dark:text-slate-400">Initializing...</div>
         </div>
       </Layout>
     );
@@ -1048,7 +1104,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     return (
       <Layout fullWidth>
         <div className="flex items-center justify-center h-64">
-          <div className="text-xl text-gray-600">Loading traveler...</div>
+          <div className="text-xl text-gray-600 dark:text-slate-400">Loading traveler...</div>
         </div>
       </Layout>
     );
@@ -1077,47 +1133,18 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         /* Print-only elements hidden on screen, screen-only elements hidden in print */
         .print-only { display: none !important; }
 
-        /* Mobile responsive styles - hide less important columns on small screens (but not when printing) */
-        @media screen and (max-width: 768px) {
-          .mobile-hide {
-            display: none !important;
-          }
-          .routing-table {
-            min-width: 100% !important;
-          }
-          /* Hide table on mobile, show card view instead */
-          .routing-table-desktop {
-            display: none !important;
-          }
-          .routing-cards-mobile {
-            display: block !important;
-          }
+        /* Always show desktop tables, always hide mobile card views */
+        .routing-table-desktop {
+          display: table !important;
         }
-
-        /* Desktop: Show table, hide cards */
-        @media (min-width: 769px) {
-          .routing-table-desktop {
-            display: table !important;
-          }
-          .routing-cards-mobile {
-            display: none !important;
-          }
-          .labor-table-desktop {
-            display: table !important;
-          }
-          .labor-cards-mobile {
-            display: none !important;
-          }
+        .routing-cards-mobile {
+          display: none !important;
         }
-
-        /* Mobile: Hide labor table, show cards (but not when printing) */
-        @media screen and (max-width: 768px) {
-          .labor-table-desktop {
-            display: none !important;
-          }
-          .labor-cards-mobile {
-            display: block !important;
-          }
+        .labor-table-desktop {
+          display: table !important;
+        }
+        .labor-cards-mobile {
+          display: none !important;
         }
 
         /* Header styling for digital version */
@@ -1164,6 +1191,41 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         }
 
         @media print {
+          /* Force light mode for print — override ALL dark mode styles */
+          html { color-scheme: light !important; }
+          html.dark, html.dark body { background: white !important; color: black !important; }
+          body { background: white !important; color: black !important; }
+
+          /* Strip all dark mode backgrounds */
+          .dark .bg-slate-900, .dark .bg-slate-800, .dark .bg-slate-700,
+          .dark .bg-gray-900, .dark .bg-gray-800, .dark .bg-gray-700,
+          [class*="dark:bg-slate"], [class*="dark:bg-gray"] {
+            background-color: white !important;
+          }
+
+          /* Force all text to black in print */
+          .dark .text-white, .dark .text-slate-100, .dark .text-slate-200,
+          .dark .text-slate-300, .dark .text-slate-400,
+          .dark .text-gray-100, .dark .text-gray-200, .dark .text-gray-300,
+          [class*="dark:text-white"], [class*="dark:text-slate"], [class*="dark:text-gray"] {
+            color: black !important;
+            -webkit-text-fill-color: black !important;
+          }
+
+          /* Force dark mode borders to visible gray */
+          .dark .border-slate-600, .dark .border-slate-700, .dark .border-slate-800,
+          [class*="dark:border-slate"] {
+            border-color: #9ca3af !important;
+          }
+
+          /* Fix section backgrounds that use dark variants */
+          [class*="dark:from-"], [class*="dark:to-"], [class*="dark:via-"] {
+            background-image: none !important;
+          }
+          .bg-blue-50, .bg-green-50, .bg-yellow-50, .bg-purple-50, .bg-indigo-50 {
+            background-color: inherit !important;
+          }
+
           /* Override mobile-hide to show all columns when printing */
           .mobile-hide {
             display: table-cell !important;
@@ -1530,58 +1592,105 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-purple-200.border-t-4 td { font-size: 12px !important; padding: 0.3rem !important; }
         }
       `}</style>
-      <div className="max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Action Bar - Screen Only */}
-        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-2 md:gap-3 no-print bg-white shadow-md rounded-lg p-3 md:p-4">
+        <div className="flex flex-row justify-between items-center gap-3 no-print bg-white dark:bg-slate-800 shadow-md rounded-lg p-4">
           <button
             onClick={() => createMode ? router.push('/travelers') : router.back()}
-            className="flex items-center justify-center md:justify-start space-x-2 px-3 md:px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm md:text-base font-medium"
+            className="flex items-center justify-start space-x-2 px-4 py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-base font-medium"
           >
-            <ArrowLeftIcon className="h-4 md:h-5 w-4 md:w-5" />
+            <ArrowLeftIcon className="h-5 w-5" />
             <span>{createMode ? 'Back to Travelers' : 'Back to Travelers'}</span>
           </button>
-          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {createMode ? (
               <>
                 <button
                   onClick={handlePrint}
-                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <PrinterIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <PrinterIcon className="h-5 w-5" />
                   <span>Print</span>
                 </button>
                 <button
                   onClick={handleSaveDraft}
-                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <DocumentTextIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <DocumentTextIcon className="h-5 w-5" />
                   <span>Save Draft</span>
                 </button>
                 <button
                   onClick={handleCreate}
-                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <CheckIcon className="h-5 w-5" />
                   <span>Create Traveler</span>
                 </button>
               </>
             ) : !isEditing ? (
               <>
-                {user?.role !== 'OPERATOR' && (
-                  <>
                     <button
                       onClick={handlePrint}
-                      className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <PrinterIcon className="h-4 md:h-5 w-4 md:w-5" />
-                      <span className="hidden sm:inline">Print</span>
-                      <span className="sm:hidden">Print</span>
+                      <PrinterIcon className="h-5 w-5" />
+                      <span>Print</span>
                     </button>
+                {user?.role !== 'OPERATOR' && (
+                  <>
+                    <div className="relative">
+                      <button
+                        onClick={() => setPriorityDropdownOpen(!priorityDropdownOpen)}
+                        className={`flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm ${
+                          (displayTraveler.priority || 'NORMAL') === 'URGENT' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                          (displayTraveler.priority || 'NORMAL') === 'PREMIUM' ? 'bg-orange-500 hover:bg-orange-600 text-white' :
+                          (displayTraveler.priority || 'NORMAL') === 'LOW' ? 'bg-gray-500 hover:bg-gray-600 text-white' :
+                          'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
+                      >
+                        <span>{{ 'URGENT': 'Urgent', 'PREMIUM': 'Premium', 'NORMAL': 'Normal', 'LOW': 'Low' }[displayTraveler.priority || 'NORMAL'] || displayTraveler.priority}</span>
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      {priorityDropdownOpen && (
+                        <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 min-w-[140px]">
+                          {[
+                            { value: 'URGENT', label: 'Urgent', bg: 'hover:bg-red-50 text-red-700' },
+                            { value: 'PREMIUM', label: 'Premium', bg: 'hover:bg-orange-50 text-orange-700' },
+                            { value: 'NORMAL', label: 'Normal', bg: 'hover:bg-indigo-50 text-indigo-700' },
+                            { value: 'LOW', label: 'Low', bg: 'hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400' },
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={async () => {
+                                setPriorityDropdownOpen(false);
+                                try {
+                                  const token = localStorage.getItem('nexus_token') || '';
+                                  const res = await fetch(`${API_BASE_URL}/travelers/${travelerId}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({ priority: opt.value }),
+                                  });
+                                  if (res.ok) {
+                                    setTraveler(prev => prev ? { ...prev, priority: opt.value } : prev);
+                                    toast.success(`Priority changed to ${opt.label}`);
+                                  }
+                                } catch { /* ignore */ }
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm font-semibold ${opt.bg} transition-colors ${
+                                displayTraveler.priority === opt.value ? 'bg-gray-100 dark:bg-slate-700' : ''
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={handleEdit}
-                      className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <PencilIcon className="h-4 md:h-5 w-4 md:w-5" />
+                      <PencilIcon className="h-5 w-5" />
                       <span>Edit</span>
                     </button>
                     <button
@@ -1612,11 +1721,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           }
                         });
                       }}
-                      className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <TrashIcon className="h-4 md:h-5 w-4 md:w-5" />
-                      <span className="hidden sm:inline">Delete</span>
-                      <span className="sm:hidden">Del</span>
+                      <TrashIcon className="h-5 w-5" />
+                      <span>Delete</span>
                     </button>
                   </>
                 )}
@@ -1625,23 +1733,23 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <>
                 <button
                   onClick={handlePrint}
-                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <PrinterIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <PrinterIcon className="h-5 w-5" />
                   <span>Print</span>
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <XMarkIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <XMarkIcon className="h-5 w-5" />
                   <span>Cancel</span>
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center justify-center space-x-1 md:space-x-2 px-3 md:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm md:text-base font-medium whitespace-nowrap shadow-sm"
+                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
-                  <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
+                  <CheckIcon className="h-5 w-5" />
                   <span>Save Changes</span>
                 </button>
               </>
@@ -1649,15 +1757,176 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
         </div>
 
+        {/* Progress Tracking Section - Above Traveler Form */}
+        {!createMode && departmentProgress.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 shadow-lg rounded-xl overflow-hidden no-print">
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-sm text-white tracking-wide">PROGRESS TRACKING</h2>
+              <span className="text-[10px] font-bold text-white bg-white/20 px-2.5 py-0.5 rounded-full">{overallProgress.percent_complete}% Complete</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-white/80 font-medium">
+              <span>{overallProgress.completed_steps} of {overallProgress.total_steps} steps</span>
+            </div>
+          </div>
+          <div className="p-4">
+            {/* Top Section: Overall Circle + Labor Hours */}
+            <div className="flex gap-5 mb-5">
+              {/* Overall Progress - Centered Circle */}
+              <div className="flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 px-6 py-4">
+                <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">Overall Progress</div>
+                <div className="relative w-24 h-24">
+                  <svg className="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.5" fill="none" stroke="#d1fae5" className="dark:stroke-emerald-900/40" strokeWidth="2.5" />
+                    <circle cx="18" cy="18" r="15.5" fill="none"
+                      stroke={overallProgress.percent_complete >= 100 ? '#16a34a' : overallProgress.percent_complete >= 75 ? '#059669' : overallProgress.percent_complete >= 50 ? '#0d9488' : overallProgress.percent_complete >= 25 ? '#f59e0b' : '#ef4444'}
+                      strokeWidth="2.5" strokeLinecap="round"
+                      strokeDasharray={`${overallProgress.percent_complete * 0.9742} 97.42`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-xl font-black text-emerald-700 dark:text-emerald-300 leading-none">{overallProgress.percent_complete}%</span>
+                  </div>
+                </div>
+                <div className="mt-2 text-center">
+                  <span className="text-base font-extrabold text-emerald-800 dark:text-emerald-200">{overallProgress.completed_steps}/{overallProgress.total_steps}</span>
+                  <span className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70 block font-medium">steps completed</span>
+                </div>
+                {overallProgress.percent_complete >= 100 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full mt-1.5 border border-green-200 dark:border-green-700">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                    All Complete
+                  </span>
+                )}
+              </div>
+
+              {/* Labor Hours - Table Format */}
+              <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-slate-700">
+                      <th className="px-3 py-2 text-left text-[10px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">Category</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">Hours</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider w-[40%]">Distribution</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
+                    {(() => {
+                      const grandTotal = Object.values(categoryHours).reduce((sum: number, h: number) => sum + h, 0);
+                      const catBarColors: Record<string, string> = {
+                        'SMT': '#3b82f6', 'Hand': '#f97316', 'TH': '#a855f7',
+                        'AOI': '#06b6d4', 'E-Test': '#eab308', 'Labeling': '#ec4899',
+                      };
+                      const catDotColors: Record<string, string> = {
+                        'SMT': 'bg-blue-500', 'Hand': 'bg-orange-500', 'TH': 'bg-purple-500',
+                        'AOI': 'bg-cyan-500', 'E-Test': 'bg-yellow-500', 'Labeling': 'bg-pink-500',
+                      };
+                      const allCats = [
+                        ...['SMT', 'Hand', 'TH', 'AOI', 'E-Test', 'Labeling'].map(cat => ({ cat, hours: categoryHours[cat] || 0 })),
+                        ...Object.entries(categoryHours).filter(([cat]) => !['SMT', 'Hand', 'TH', 'AOI', 'E-Test', 'Labeling'].includes(cat)).map(([cat, hours]) => ({ cat, hours })),
+                      ];
+                      return allCats.map(({ cat, hours }) => {
+                        const pct = grandTotal > 0 ? (hours / grandTotal) * 100 : 0;
+                        return (
+                          <tr key={cat} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                            <td className="px-3 py-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${catDotColors[cat] || 'bg-gray-400'}`} />
+                                <span className="text-xs font-semibold text-gray-700 dark:text-slate-300">{cat}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              <span className={`text-sm font-bold tabular-nums ${hours > 0 ? 'text-gray-800 dark:text-slate-200' : 'text-gray-300 dark:text-slate-600'}`}>{hours.toFixed(2)}</span>
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                  <div className="h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: catBarColors[cat] || '#6b7280' }} />
+                                </div>
+                                <span className="text-[9px] font-bold text-gray-400 dark:text-slate-500 w-7 text-right tabular-nums">{pct.toFixed(0)}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-t-2 border-emerald-200 dark:border-emerald-700">
+                      <td className="px-3 py-2">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase">Grand Total</span>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="text-base font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{Object.values(categoryHours).reduce((sum: number, h: number) => sum + h, 0).toFixed(2)}h</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex-1 bg-emerald-100 dark:bg-emerald-900/30 rounded-full h-2 overflow-hidden">
+                          <div className="h-2 rounded-full bg-emerald-500" style={{ width: '100%' }} />
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Department Progress Grid */}
+            <div>
+              <div className="text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-2">Department Progress</div>
+              <div className="grid grid-cols-6 gap-2">
+                {departmentProgress.map((dept) => {
+                  const barColor = DEPARTMENT_BAR_COLORS[dept.department] || DEPARTMENT_BAR_COLORS['Other'];
+                  const colors = DEPARTMENT_COLORS[dept.department] || DEPARTMENT_COLORS['Other'];
+                  const isComplete = dept.percent_complete >= 100;
+                  const isNotStarted = dept.completed_steps === 0;
+                  return (
+                    <div key={dept.department} className={`rounded-xl border p-2.5 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${
+                      isComplete ? 'border-green-300 dark:border-green-700 bg-gradient-to-b from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' :
+                      `${colors.border} ${colors.bg}`
+                    }`}>
+                      <div className={`text-[10px] font-bold mb-1.5 truncate ${isComplete ? 'text-green-700 dark:text-green-400' : colors.text}`}>{dept.department}</div>
+                      <div className="relative w-11 h-11 mx-auto">
+                        <svg className="w-11 h-11 -rotate-90" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3"
+                            stroke={isComplete ? '#bbf7d0' : isNotStarted ? '#e5e7eb' : `${barColor}30`}
+                            className={isNotStarted ? 'dark:stroke-slate-700' : ''}
+                          />
+                          <circle cx="18" cy="18" r="15.5" fill="none"
+                            stroke={isComplete ? '#16a34a' : isNotStarted ? '#d1d5db' : barColor}
+                            strokeWidth="3" strokeLinecap="round"
+                            strokeDasharray={`${dept.percent_complete * 0.9742} 97.42`}
+                          />
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-extrabold" style={{ color: isComplete ? '#16a34a' : isNotStarted ? '#9ca3af' : barColor }}>{dept.percent_complete}%</span>
+                      </div>
+                      <div className="mt-1">
+                        <span className={`text-[10px] font-bold ${isComplete ? 'text-green-700 dark:text-green-400' : isNotStarted ? 'text-gray-400 dark:text-slate-500' : colors.text}`}>{dept.completed_steps}/{dept.total_steps}</span>
+                      </div>
+                      <span className={`inline-block mt-1 text-[8px] font-bold px-2 py-0.5 rounded-full ${
+                        isComplete ? 'bg-green-200 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                        isNotStarted ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500' :
+                        'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                      }`}>
+                        {isComplete ? 'Complete' : isNotStarted ? 'Not Started' : 'In Progress'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+        )}
+
         {/* Main Traveler Form */}
-        <div className="bg-white shadow-lg border-2 border-black overflow-x-auto" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
-          <div className="min-w-0">
+        <div className="bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black overflow-hidden text-black dark:text-white print:!text-black" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
+          <div>
           {/* Header Section */}
-          <div className="bg-gray-100 border-b-2 border-black p-2 sm:p-3 md:p-4 print:p-2">
-            {/* Mobile Layout - Barcode First */}
-            <div className="block md:hidden print:hidden mb-4">
+          <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
+            {/* Mobile Layout - Hidden: use desktop layout on all devices */}
+            <div className="hidden print:hidden mb-4">
               <div className="flex flex-col items-center justify-center mb-4">
-                <div className="text-base sm:text-lg font-black mb-2" style={{color: 'black', fontWeight: '900'}}>
+                <div className="text-base sm:text-lg font-black mb-2 text-black dark:text-white" style={{fontWeight: '900'}}>
                   {isEditing ? (
                     <div className="flex items-center gap-1 justify-center flex-wrap">
                       <span className="text-sm sm:text-base">Job:</span>
@@ -1665,15 +1934,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         type="text"
                         value={editData.jobNumber}
                         onChange={(e) => updateField('jobNumber', e.target.value)}
-                        className="w-20 sm:w-24 border border-gray-300 rounded px-1 py-0.5 text-sm sm:text-base font-black"
-                        style={{color: 'black'}}
+                        className="w-20 sm:w-24 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm sm:text-base font-black text-black dark:text-white"
                       />
                     </div>
                   ) : (
                     <span className="text-base sm:text-lg font-bold">Job: {displayTraveler.jobNumber}</span>
                   )}
                 </div>
-                <div className="border-2 border-black p-2 bg-white inline-block rounded">
+                <div className="border-2 border-black dark:border-slate-600 p-2 bg-white inline-block rounded">
                   {headerBarcode ? (
                     <img
                       src={`data:image/png;base64,${headerBarcode}`}
@@ -1686,7 +1954,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     />
                   ) : (
                     <div className="flex items-center justify-center w-32 h-10 sm:w-40 sm:h-12">
-                      <span className="text-xs text-gray-400">{createMode ? 'Barcode generated after save' : 'Loading barcode...'}</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500">{createMode ? 'Barcode generated after save' : 'Loading barcode...'}</span>
                     </div>
                   )}
                 </div>
@@ -1697,8 +1965,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <div className="bg-blue-50 border-l-4 border-blue-600 p-2 rounded">
                   <div className="font-bold text-blue-800 mb-1 text-sm">Customer Information</div>
                   <div className="space-y-1">
-                    <div className="flex justify-between"><span className="font-semibold">Code:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.customerCode} onChange={(e) => updateField('customerCode', e.target.value)} className="w-32 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.customerCode || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Name:</span> <span className="text-right" style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.customerName} onChange={(e) => updateField('customerName', e.target.value)} className="w-40 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.customerName || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Code:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerCode} onChange={(e) => updateField('customerCode', e.target.value)} className="w-32 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.customerCode || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Name:</span> <span className="text-right text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerName} onChange={(e) => updateField('customerName', e.target.value)} className="w-40 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.customerName || '-')}</span></div>
                   </div>
                 </div>
 
@@ -1706,16 +1974,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <div className="bg-green-50 border-l-4 border-green-600 p-2 rounded">
                   <div className="font-bold text-green-800 mb-1 text-sm">Order Information</div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center gap-1" style={{gridColumn: 'span 2'}}><span className="font-semibold" style={{flexShrink: 0}}>WO:</span> <span style={{color: 'black'}}>{isEditing ? (
+                    <div className="flex items-center gap-1" style={{gridColumn: 'span 2'}}><span className="font-semibold" style={{flexShrink: 0}}>WO:</span> <span className="text-black dark:text-white">{isEditing ? (
                       <span className="flex items-center gap-1">
-                        <input type="text" value={workOrderPrefix} readOnly className="border border-gray-300 rounded bg-gray-100 text-center" style={{color: 'black', width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} />
-                        <span className="text-gray-400 font-bold">-</span>
-                        <input type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 rounded text-sm" style={{color: 'black', width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
+                        <input type="text" value={workOrderPrefix} readOnly className="border border-gray-300 dark:border-slate-600 rounded bg-gray-100 dark:bg-slate-800 text-center text-black dark:text-white" style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} />
+                        <span className="text-gray-400 dark:text-slate-500 font-bold">-</span>
+                        <input type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-sm text-black dark:text-white" style={{width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
                       </span>
                     ) : (displayTraveler.workOrder || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">PO:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.poNumber || ''} onChange={(e) => updateField('poNumber', e.target.value)} className="w-20 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.poNumber || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Quantity:</span> <span style={{color: 'black'}}>{isEditing ? <input type="number" value={editData.quantity} onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)} className="w-16 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : displayTraveler.quantity}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Traveler Rev:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.revision || '- -')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">PO:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.poNumber || ''} onChange={(e) => updateField('poNumber', e.target.value)} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.poNumber || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Quantity:</span> <span className="text-black dark:text-white">{isEditing ? <input type="number" value={editData.quantity} onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : displayTraveler.quantity}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Traveler Rev:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.revision || '- -')}</span></div>
                   </div>
                 </div>
 
@@ -1723,9 +1991,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <div className="bg-purple-50 border-l-4 border-purple-600 p-2 rounded">
                   <div className="font-bold text-purple-800 mb-1 text-sm">Part Information</div>
                   <div className="space-y-1">
-                    <div className="flex justify-between"><span className="font-semibold">Part No:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.partNumber} onChange={(e) => updateField('partNumber', e.target.value)} className="w-32 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.partNumber || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Description:</span> <span className="text-right truncate ml-2" style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.description} onChange={(e) => updateField('description', e.target.value)} className="w-40 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.description || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Cust. Rev:</span> <span style={{color: 'black'}}>{isEditing ? <input type="text" value={editData.customerRevision || ''} onChange={(e) => updateField('customerRevision', e.target.value)} className="w-20 border border-gray-300 rounded px-1" style={{color: 'black'}}/> : (displayTraveler.customerRevision || '- -')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Part No:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.partNumber} onChange={(e) => updateField('partNumber', e.target.value)} className="w-32 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.partNumber || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Description:</span> <span className="text-right truncate ml-2 text-black dark:text-white">{isEditing ? <input type="text" value={editData.description} onChange={(e) => updateField('description', e.target.value)} className="w-40 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.description || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Cust. Rev:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerRevision || ''} onChange={(e) => updateField('customerRevision', e.target.value)} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.customerRevision || '- -')}</span></div>
                   </div>
                 </div>
 
@@ -1733,59 +2001,57 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 <div className="bg-orange-50 border-l-4 border-orange-600 p-2 rounded">
                   <div className="font-bold text-orange-800 mb-1 text-sm">Important Dates</div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="flex justify-between"><span className="font-semibold">Start:</span> <span style={{color: 'black'}}>{isEditing ? <><input type="date" value={editData.createdAt} onChange={(e) => updateField('createdAt', e.target.value)} className="w-28 border border-gray-300 rounded px-1 text-[10px] screen-only" style={{color: 'black'}}/><span className="print-only">{formatDateDisplay(editData.createdAt) || '-'}</span></> : (formatDateDisplay(displayTraveler.createdAt) || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Due:</span> <span style={{color: 'black'}}>{isEditing ? <><input type="date" value={editData.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-28 border border-gray-300 rounded px-1 text-[10px] screen-only" style={{color: 'black'}}/><span className="print-only">{formatDateDisplay(editData.dueDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.dueDate) || '-')}</span></div>
-                    <div className="col-span-2 flex justify-between"><span className="font-semibold">Ship Date:</span> <span style={{color: 'black'}}>{isEditing ? <><input type="date" value={editData.shipDate} onChange={(e) => updateField('shipDate', e.target.value)} className="w-28 border border-gray-300 rounded px-1 text-[10px] screen-only" style={{color: 'black'}}/><span className="print-only">{formatDateDisplay(editData.shipDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.shipDate) || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Start:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.createdAt} onChange={(e) => updateField('createdAt', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.createdAt) || '-'}</span></> : (formatDateDisplay(displayTraveler.createdAt) || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Due:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.dueDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.dueDate) || '-')}</span></div>
+                    <div className="col-span-2 flex justify-between"><span className="font-semibold">Ship Date:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.shipDate} onChange={(e) => updateField('shipDate', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.shipDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.shipDate) || '-')}</span></div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Desktop & Print Layout - Original 3 Columns */}
-            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-start lg:items-center overflow-hidden">
+            <div className="grid grid-cols-3 gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-center overflow-hidden">
               {/* Left Column */}
-              <div className="space-y-1 md:space-y-1.5 lg:space-y-0.5 print:space-y-0.5 flex flex-col items-start overflow-hidden">
+              <div className="space-y-0.5 print:space-y-0.5 flex flex-col items-start overflow-hidden">
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-xs md:text-sm min-w-[70px] md:min-w-[85px] lg:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Cust. Code:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Cust. Code:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.customerCode}
                       onChange={(e) => updateField('customerCode', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-sm max-w-full"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.customerCode || '-'}</span>
+                    <span className="flex-1 text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.customerCode || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-xs md:text-sm min-w-[70px] md:min-w-[85px] lg:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Cust. Name:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Cust. Name:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.customerName}
                       onChange={(e) => updateField('customerName', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-sm max-w-full"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-sm md:text-base print:text-[8px] truncate overflow-hidden" style={{color: 'black'}}>{displayTraveler.customerName || '-'}</span>
+                    <span className="flex-1 text-base print:text-[8px] truncate overflow-hidden text-black dark:text-white">{displayTraveler.customerName || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-xs md:text-sm min-w-[70px] md:min-w-[85px] lg:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Work Order:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Work Order:</span>
                   {isEditing ? (
                       <div className="flex items-center gap-1 flex-1 max-w-full">
                         <input
                           type="text"
                           value={workOrderPrefix}
                           readOnly
-                          className="border border-gray-300 rounded bg-gray-100 text-center"
-                          style={{color: 'black', width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px', flexShrink: 0}}
+                          className="border border-gray-300 dark:border-slate-600 rounded bg-gray-100 dark:bg-slate-800 text-center text-black dark:text-white"
+                          style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px', flexShrink: 0}}
                           title="Auto-generated prefix"
                         />
-                        <span className="text-gray-400 text-xs">-</span>
+                        <span className="text-gray-400 dark:text-slate-500 text-xs">-</span>
                         <input
                           type="text"
                           value={workOrderSuffix}
@@ -1794,55 +2060,51 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value;
                             updateField('workOrder', wo);
                           }}
-                          className="w-24 border border-gray-300 rounded px-1 py-0.5 text-xs"
-                          style={{color: 'black'}}
+                          className="w-24 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-black dark:text-white"
                           placeholder="Suffix"
                         />
                       </div>
                   ) : (
-                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.workOrder || '-'}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.workOrder || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-xs md:text-sm min-w-[70px] md:min-w-[85px] lg:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">PO Number:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">PO Number:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.poNumber || ''}
                       onChange={(e) => updateField('poNumber', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-sm text-left max-w-full"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.poNumber || '-'}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.poNumber || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-xs md:text-sm min-w-[70px] md:min-w-[85px] lg:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Quantity:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Quantity:</span>
                   {isEditing ? (
                     <input
                       type="number"
                       value={editData.quantity}
                       onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-sm text-left max-w-full"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>{displayTraveler.quantity}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.quantity}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
-                  <span className="font-bold text-xs md:text-sm min-w-[70px] md:min-w-[85px] lg:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0">Traveler Rev:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Traveler Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.revision}
                       onChange={(e) => updateField('revision', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-sm text-left max-w-full"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-sm md:text-base print:text-[8px] print:leading-tight overflow-hidden" style={{color: 'black'}}>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">
                       {displayTraveler.revision ? displayTraveler.revision : '- -'}
                     </span>
                   )}
@@ -1850,38 +2112,37 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </div>
 
               {/* Center - Barcode with Details */}
-              <div className="flex flex-col items-center justify-center md:justify-self-center">
+              <div className="flex flex-col items-center justify-center justify-self-center">
                 <div className="text-center">
-                  <div className="text-base sm:text-lg md:text-xl font-black mb-2 print:mb-0 print:text-[10px] print:leading-tight" style={{color: 'black', fontWeight: '900'}}>
+                  <div className="text-xl font-black mb-2 print:mb-0 print:text-[10px] print:leading-tight text-black dark:text-white" style={{fontWeight: '900'}}>
                     {isEditing ? (
                       <div className="flex items-center gap-1 justify-center flex-wrap">
-                        <span className="text-sm sm:text-base md:text-lg">Job:</span>
+                        <span className="text-lg">Job:</span>
                         <input
                           type="text"
                           value={editData.jobNumber}
                           onChange={(e) => updateField('jobNumber', e.target.value)}
-                          className="w-20 sm:w-24 md:w-32 border border-gray-300 rounded px-1 py-0.5 text-sm sm:text-base md:text-lg font-black"
-                          style={{color: 'black'}}
+                          className="w-32 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-lg font-black text-black dark:text-white"
                         />
                       </div>
                     ) : (
-                      <span className="text-base sm:text-lg md:text-xl font-bold print:text-[10px]">Job: {displayTraveler.jobNumber}</span>
+                      <span className="text-xl font-bold print:text-[10px]">Job: {displayTraveler.jobNumber}</span>
                     )}
                   </div>
-                  <div className="border-2 border-black p-2 bg-white inline-block rounded print:p-0.5 print:border">
+                  <div className="border-2 border-black dark:border-slate-600 p-2 bg-white inline-block rounded print:p-0.5 print:border">
                     {headerBarcode ? (
                       <img
                         src={`data:image/png;base64,${headerBarcode}`}
                         alt={`Barcode for ${displayTraveler.jobNumber}`}
-                        className="mx-auto w-32 h-10 sm:w-40 sm:h-12 md:w-44 md:h-14 print:w-[100px] print:h-[30px]"
+                        className="mx-auto w-44 h-14 print:w-[100px] print:h-[30px]"
                         style={{ objectFit: 'contain' }}
                         onError={() => {
                           console.error('Failed to load header barcode');
                         }}
                       />
                     ) : (
-                      <div className="flex items-center justify-center w-32 h-10 sm:w-40 sm:h-12 md:w-44 md:h-14">
-                        <span className="text-xs text-gray-400">{createMode ? 'Barcode generated after save' : 'Loading barcode...'}</span>
+                      <div className="flex items-center justify-center w-44 h-14">
+                        <span className="text-xs text-gray-400 dark:text-slate-500">{createMode ? 'Barcode generated after save' : 'Loading barcode...'}</span>
                       </div>
                     )}
                   </div>
@@ -1889,101 +2150,120 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </div>
 
               {/* Right Column */}
-              <div className="space-y-1 sm:space-y-0.5 print:space-y-0.5 flex flex-col items-end">
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
-                  <span className="font-bold text-xs sm:text-sm min-w-[70px] sm:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight">Part No:</span>
+              <div className="space-y-0.5 print:space-y-0.5 flex flex-col items-end">
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Part No:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.partNumber}
                       onChange={(e) => updateField('partNumber', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{displayTraveler.partNumber || '-'}</span>
+                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
-                  <span className="font-bold text-xs sm:text-sm min-w-[70px] sm:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight">Description:</span>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Description:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.description}
                       onChange={(e) => updateField('description', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-right text-xs print:text-[8px] break-words" style={{color: 'black'}}>{displayTraveler.description || '-'}</span>
+                    <span className="flex-1 text-right text-xs print:text-[8px] break-words text-black dark:text-white">{displayTraveler.description || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
-                  <span className="font-bold text-xs sm:text-sm min-w-[70px] sm:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight">Cust. Revision:</span>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Cust. Revision:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.customerRevision || ''}
                       onChange={(e) => updateField('customerRevision', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right"
-                      style={{color: 'black'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right text-black dark:text-white"
                       placeholder="Cust. Revision"
                     />
                   ) : (
-                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>
+                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">
                       {displayTraveler.customerRevision ? displayTraveler.customerRevision : '- -'}
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
-                  <span className="font-bold text-xs sm:text-sm min-w-[70px] sm:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight">Start Date:</span>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Start Date:</span>
                   {isEditing ? (
                     <>
                       <input
                         type="date"
                         value={editData.createdAt}
                         onChange={(e) => updateField('createdAt', e.target.value)}
-                        className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right screen-only"
-                        style={{color: 'black'}}
+                        className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
                       />
-                      <span className="print-only flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(editData.createdAt) || '-'}</span>
+                      <span className="print-only flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.createdAt) || '-'}</span>
                     </>
                   ) : (
-                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
+                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
-                  <span className="font-bold text-xs sm:text-sm min-w-[70px] sm:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight">Due Date:</span>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Due Date:</span>
                   {isEditing ? (
                     <>
                       <input
                         type="date"
                         value={editData.dueDate}
                         onChange={(e) => updateField('dueDate', e.target.value)}
-                        className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right screen-only"
-                        style={{color: 'black'}}
+                        className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
                       />
-                      <span className="print-only flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(editData.dueDate) || '-'}</span>
+                      <span className="print-only flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.dueDate) || '-'}</span>
                     </>
                   ) : (
-                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
+                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 sm:gap-2 print:gap-1 ">
-                  <span className="font-bold text-xs sm:text-sm min-w-[70px] sm:min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight">Ship Date:</span>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Ship Date:</span>
                   {isEditing ? (
                     <>
                       <input
                         type="date"
                         value={editData.shipDate}
                         onChange={(e) => updateField('shipDate', e.target.value)}
-                        className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs text-right screen-only"
-                        style={{color: 'black'}}
+                        className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
                       />
-                      <span className="print-only flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(editData.shipDate) || '-'}</span>
+                      <span className="print-only flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.shipDate) || '-'}</span>
                     </>
                   ) : (
-                    <span className="flex-1 text-right text-xs sm:text-sm print:text-[8px] print:leading-tight" style={{color: 'black'}}>{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
+                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2 print:gap-1">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Priority:</span>
+                  {isEditing ? (
+                    <>
+                      <select
+                        value={editData.priority || 'NORMAL'}
+                        onChange={(e) => updateField('priority', e.target.value)}
+                        className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs font-bold screen-only text-black dark:text-white"
+                      >
+                        <option value="NORMAL">Normal</option>
+                        <option value="PREMIUM">Premium</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="LOW">Low</option>
+                      </select>
+                      <span className="print-only flex-1 text-right text-sm font-bold print:text-[8px] print:leading-tight text-black dark:text-white">{{ 'URGENT': 'Urgent', 'PREMIUM': 'Premium', 'NORMAL': 'Normal', 'LOW': 'Low' }[editData.priority || 'NORMAL'] || editData.priority}</span>
+                    </>
+                  ) : (
+                    <span className={`flex-1 text-right text-sm font-bold print:text-[8px] print:leading-tight ${
+                      (displayTraveler.priority || 'NORMAL') === 'URGENT' ? 'text-red-700' :
+                      (displayTraveler.priority || 'NORMAL') === 'PREMIUM' ? 'text-orange-700' :
+                      (displayTraveler.priority || 'NORMAL') === 'LOW' ? 'text-gray-500 dark:text-slate-400' :
+                      'text-indigo-700'
+                    }`}>{{ 'URGENT': 'Urgent', 'PREMIUM': 'Premium', 'NORMAL': 'Normal', 'LOW': 'Low' }[displayTraveler.priority || 'NORMAL'] || displayTraveler.priority}</span>
                   )}
                 </div>
               </div>
@@ -1991,9 +2271,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
 
           {/* Specifications Section */}
-          <div className="border-b border-black print:break-inside-avoid">
-            <div className="bg-yellow-200 border-b border-black px-2 py-0.5 flex justify-between items-center print:px-1 print:py-0">
-              <h2 className="font-bold text-xs print:text-[9px]">SPECIFICATIONS</h2>
+          <div className="border-b border-black dark:border-slate-600 print:break-inside-avoid">
+            <div className="bg-yellow-200 dark:bg-yellow-900/50 border-b border-black dark:border-slate-600 px-2 py-0.5 flex justify-between items-center print:px-1 print:py-0 print:!bg-yellow-200">
+              <h2 className="font-bold text-xs text-yellow-900 dark:text-yellow-200 print:!text-black print:text-[9px]">SPECIFICATIONS</h2>
               {isEditing && (
                 <button
                   onClick={addSpecification}
@@ -2004,7 +2284,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 </button>
               )}
             </div>
-            <div className="bg-yellow-50 p-0.5 text-xs print:p-0 print:text-[8px]">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-0.5 text-xs print:p-0 print:text-[8px]">
               {isEditing ? (
                 <div className="space-y-2">
                   {editData.specs.map((spec) => (
@@ -2012,17 +2292,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       <textarea
                         value={spec.text}
                         onChange={(e) => updateSpecification(spec.id, 'text', e.target.value)}
-                        className="flex-1 p-1 border border-gray-300 rounded min-h-[40px] text-xs screen-only"
+                        className="flex-1 p-1 border border-gray-300 dark:border-slate-600 rounded min-h-[40px] text-xs screen-only"
                         placeholder="Enter specification..."
                       />
-                      <div className="print-only whitespace-pre-wrap flex-1 text-xs" style={{color: 'black'}}>{spec.text || '-'}</div>
+                      <div className="print-only whitespace-pre-wrap flex-1 text-xs text-black dark:text-white">{spec.text || '-'}</div>
                       <input
                         type="date"
                         value={spec.date}
                         onChange={(e) => updateSpecification(spec.id, 'date', e.target.value)}
-                        className="w-32 border border-gray-300 rounded px-1 py-0.5 text-xs screen-only"
+                        className="w-32 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs screen-only"
                       />
-                      <span className="print-only font-bold text-xs" style={{color: 'black'}}>{formatDateDisplay(spec.date) || '-'}</span>
+                      <span className="print-only font-bold text-xs text-black dark:text-white">{formatDateDisplay(spec.date) || '-'}</span>
                       <button
                         onClick={() => removeSpecification(spec.id)}
                         className="p-0.5 bg-red-600 hover:bg-red-700 text-white rounded no-print"
@@ -2032,19 +2312,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </div>
                   ))}
                   {editData.specs.length === 0 && (
-                    <p className="text-xs text-gray-500">No specifications yet. Click &quot;Add Specification&quot; to create one.</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">No specifications yet. Click &quot;Add Specification&quot; to create one.</p>
                   )}
                 </div>
               ) : (
                 <div className="space-y-0.5">
                   {displayTraveler.specs.map((spec) => (
                     <div key={spec.id} className="flex justify-between pb-0.5">
-                      <div className="whitespace-pre-wrap flex-1 text-xs" style={{color: 'black'}}>{spec.text || '-'}</div>
-                      <div className="font-bold ml-2 text-xs" style={{color: 'black'}}>{spec.date}</div>
+                      <div className="whitespace-pre-wrap flex-1 text-xs text-black dark:text-white">{spec.text || '-'}</div>
+                      <div className="font-bold ml-2 text-xs text-black dark:text-white">{spec.date}</div>
                     </div>
                   ))}
                   {displayTraveler.specs.length === 0 && (
-                    <div className="text-gray-500 text-xs">No specifications</div>
+                    <div className="text-gray-500 dark:text-slate-400 text-xs">No specifications</div>
                   )}
                 </div>
               )}
@@ -2052,9 +2332,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
 
           {/* Routing Section */}
-          <div className="border-b-2 border-black print:break-inside-avoid">
-            <div className="bg-blue-200 border-b border-black px-2 py-0.5 flex justify-between items-center print:px-1 print:py-0">
-              <h2 className="font-bold text-xs print:text-[9px]">ROUTING</h2>
+          <div className="border-b-2 border-black dark:border-slate-600 print:break-inside-avoid">
+            <div className="bg-blue-200 dark:bg-blue-900/50 border-b border-black dark:border-slate-600 px-2 py-0.5 flex justify-between items-center print:px-1 print:py-0 print:!bg-blue-200">
+              <h2 className="font-bold text-xs text-blue-900 dark:text-blue-200 print:!text-black print:text-[9px]">ROUTING</h2>
               {isEditing && (
                 <button
                   onClick={addStep}
@@ -2068,19 +2348,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
             {/* Desktop Table View */}
             <div className="overflow-x-auto">
-            <table className={`routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 min-w-0 lg:min-w-[640px] ${isEditing ? 'editing-mode' : ''}`} style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
+            <table className={`routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 dark:border-slate-500 min-w-[640px] ${isEditing ? 'editing-mode' : ''}`} style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
               <thead>
-                <tr className="bg-gray-200 border-b-2 border-gray-400">
-                  {isEditing && <th className="border-r-2 border-gray-400 px-0.5 py-1 text-center font-bold text-xs no-print" style={{width: '30px'}}></th>}
-                  <th className="border-r-2 border-gray-400 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '200px' : '160px'}}>WORK CENTER</th>
-                  <th className="border-r-2 border-gray-400 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '170px' : '240px'}}>INSTRUCTIONS</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '65px' : '60px'}}>TIME</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>QTY</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>REJ</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>ACC</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '70px' : '65px'}}>SIGN</th>
-                  <th className="border-r-2 border-gray-400 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '55px' : '65px'}}>DATE</th>
+                <tr className="bg-gray-200 dark:bg-slate-700 border-b-2 border-gray-400 dark:border-slate-500">
+                  {isEditing && <th className="border-r-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center font-bold text-xs no-print" style={{width: '30px'}}></th>}
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 w-12 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]">SQ</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '200px' : '160px'}}>WORK CENTER</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 px-1 py-1 text-left font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '170px' : '240px'}}>INSTRUCTIONS</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '65px' : '60px'}}>TIME</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>QTY</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>REJ</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '60px' : '55px'}}>ACC</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '70px' : '65px'}}>SIGN</th>
+                  <th className="border-r-2 border-gray-400 dark:border-slate-500 py-1 text-center font-bold text-sm print:px-1 print:py-1 print:text-[10px]" style={{width: isEditing ? '55px' : '65px'}}>DATE</th>
                 </tr>
               </thead>
               <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -2097,14 +2377,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       stepRowRefs.current[index] = el;
                     }}
                     style={style}
-                    className="border-b border-gray-300 transition-colors duration-300"
+                    className="border-b border-gray-300 dark:border-slate-600 transition-colors duration-300"
                   >
-                        <td className="border-r border-gray-300 px-0.5 py-0 text-center bg-gray-50 no-print">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0 text-center bg-gray-50 dark:bg-slate-900 no-print">
                           <div className="flex flex-col items-center gap-0.5">
                             <button
                               type="button"
                               {...dragHandleProps}
-                              className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 touch-none"
+                              className="cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 touch-none"
                               title="Drag to reorder"
                             >
                               <Bars3Icon className="h-3 w-3" />
@@ -2118,24 +2398,24 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             </button>
                           </div>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0 text-center bg-yellow-50">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0 text-center bg-yellow-50 dark:bg-yellow-900/20">
                           <input
                             type="number"
                             min="1"
                             value={step.seq}
                             onChange={(e) => updateStep(index, 'seq', parseInt(e.target.value) || 0)}
-                            className="w-14 border border-yellow-500 rounded text-center text-sm font-bold bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none screen-only"
+                            className="w-14 border border-yellow-500 rounded text-center text-sm font-bold bg-white dark:bg-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none screen-only"
                             style={{padding: '2px 2px'}}
                           />
                           <span className="print-only font-bold" style={{fontSize: '10px'}}>{step.seq}</span>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <div className="flex flex-row items-center justify-between gap-1">
                             <div className="flex-1">
                               <select
                                 value={step.workCenter}
                                 onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                                className="block w-full border-2 border-blue-400 rounded-lg px-1 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer screen-only"
+                                className="block w-full border-2 border-blue-400 rounded-lg px-1 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-800 cursor-pointer screen-only"
                                 style={{
                                   minHeight: '20px',
                                   fontSize: '12px',
@@ -2160,8 +2440,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                               <img
                                 src={`data:image/png;base64,${stepQRCodes[step.id]}`}
                                 alt={`QR Code for ${step.workCenter}`}
-                                className="border border-gray-200 flex-shrink-0"
-                                style={{ width: '40px', height: '40px' }}
+                                className="border border-gray-200 dark:border-gray-600 flex-shrink-0 rounded bg-white"
+                                style={{ width: '40px', height: '40px', padding: '2px' }}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -2169,39 +2449,39 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             )}
                           </div>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0" style={{minWidth: '120px'}}>
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0" style={{minWidth: '120px'}}>
                           <textarea
                             value={step.instruction}
                             onChange={(e) => updateStep(index, 'instruction', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-xs screen-only"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-xs screen-only"
                             style={{padding: '1px 3px', minHeight: '18px', lineHeight: '1.2', resize: 'vertical'}}
                             placeholder="Enter instructions..."
                             rows={1}
                           />
-                          <span className="print-only" style={{fontSize: '9px'}}>{step.instruction || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}</span>
+                          <span className="print-only" style={{fontSize: '9px'}}>{step.instruction || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}</span>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedTime || ''}
                             onChange={(e) => updateStep(index, 'completedTime', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-xs text-center screen-only"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-xs text-center screen-only"
                             style={{padding: '1px 2px'}}
                             placeholder="Hrs"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.quantity}
                             onChange={(e) => updateStep(index, 'quantity', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-center text-sm font-bold bg-gray-50 screen-only"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-center text-sm font-bold bg-gray-50 dark:bg-slate-900 screen-only"
                             style={{padding: '1px 2px'}}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.rejected}
@@ -2209,9 +2489,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             className="w-full border border-red-400 rounded text-center text-sm font-bold text-red-700 bg-red-50 screen-only"
                             style={{padding: '1px 2px'}}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.accepted}
@@ -2219,9 +2499,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             className="w-full border border-green-400 rounded text-center text-sm font-bold text-green-700 bg-green-50 screen-only"
                             style={{padding: '1px 2px'}}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r border-gray-300 px-0.5 py-0">
+                        <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.sign}
@@ -2230,18 +2510,18 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             style={{padding: '1px 2px'}}
                             placeholder="Sign"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                         <td className="px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedDate}
                             onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
-                            className="w-full border border-gray-300 rounded text-xs text-center screen-only"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-xs text-center screen-only"
                             style={{padding: '1px 1px'}}
                             placeholder="Date"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                   </tr>
                     )}
@@ -2249,54 +2529,54 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   ) : (
                   <tr
                     key={index}
-                    className="border-b border-gray-300 transition-colors duration-300"
+                    className="border-b border-gray-300 dark:border-slate-600 transition-colors duration-300"
                   >
-                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 text-center font-bold text-base print:px-0.5 print:py-0.5 print:text-[10px]">{step.seq}</td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 font-semibold text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]">
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-1 py-1 text-center font-bold text-base print:px-0.5 print:py-0.5 print:text-[10px]">{step.seq}</td>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-1 py-1 font-semibold text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]">
                           <div className="flex flex-row items-center justify-between gap-1 print:gap-0.5">
                             <span className="break-words">{step.workCenter.replace(/_/g, ' ')}</span>
                             {step.id && stepQRCodes[step.id] ? (
                               <img
                                 src={`data:image/png;base64,${stepQRCodes[step.id]}`}
                                 alt={`QR Code for ${step.workCenter}`}
-                                className="border border-gray-200 flex-shrink-0 print:w-[25px] print:h-[25px]"
-                                style={{ width: '40px', height: '40px' }}
+                                className="border border-gray-200 dark:border-slate-600 flex-shrink-0 print:w-[25px] print:h-[25px] bg-white rounded"
+                                style={{ width: '40px', height: '40px', padding: '2px' }}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
                               />
                             ) : step.id ? (
-                              <div className="text-[8px] text-gray-400 flex-shrink-0 print:hidden">QR Loading...</div>
+                              <div className="text-[8px] text-gray-400 dark:text-slate-500 flex-shrink-0 print:hidden">QR Loading...</div>
                             ) : null}
                           </div>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '120px'}}>
-                          {step.instruction ? step.instruction : <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '120px'}}>
+                          {step.instruction ? step.instruction : <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
-                          <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm font-bold text-red-700 print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold text-red-700 print:px-0.5 print:py-0.5 print:text-[10px]">
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm font-bold text-green-700 print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold text-green-700 print:px-0.5 print:py-0.5 print:text-[10px]">
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
-                        <td className="border-r-2 border-b-2 border-gray-400 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
-                          <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>
+                        <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
                         </td>
                   </tr>
                   );
                 })}
                 {displayTraveler.steps.length === 0 && (
                   <tr>
-                    <td colSpan={isEditing ? 10 : 9} className="text-center py-8 text-gray-500 bg-yellow-50">
+                    <td colSpan={isEditing ? 10 : 9} className="text-center py-8 text-gray-500 dark:text-slate-400 bg-yellow-50 dark:bg-yellow-900/20">
                       <div className="text-sm font-bold">⚠️ No work center steps found!</div>
                       {isEditing && (
                         <div className="text-xs mt-2">Click &quot;Add Step&quot; button above to add work center steps.</div>
@@ -2330,14 +2610,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 return isEditing ? (
                 <SortableMobileCard key={mobileStepId} id={mobileStepId}>
                   {({ dragHandleProps, style, ref }) => (
-                <div ref={ref} style={style} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                <div ref={ref} style={style} className="bg-white dark:bg-slate-800 border-2 border-gray-400 dark:border-slate-500 rounded-lg shadow-sm">
                   {/* Card Header */}
-                  <div className="bg-gray-200 border-b-2 border-gray-400 px-3 py-2 flex justify-between items-center">
+                  <div className="bg-gray-200 dark:bg-slate-700 border-b-2 border-gray-400 dark:border-slate-500 px-3 py-2 flex justify-between items-center">
                     <div className="flex items-center space-x-2">
                       <button
                         type="button"
                         {...dragHandleProps}
-                        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-300 text-gray-500 hover:text-gray-700 touch-none"
+                        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 touch-none"
                         title="Drag to reorder"
                       >
                         <Bars3Icon className="h-5 w-5" />
@@ -2370,11 +2650,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     {/* Work Center (edit mode only since it's shown in header) */}
                     {isEditing && (
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Work Center</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Work Center</label>
                         <select
                           value={step.workCenter}
                           onChange={(e) => updateStep(index, 'workCenter', e.target.value)}
-                          className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white cursor-pointer"
+                          className="block w-full border-2 border-blue-400 rounded-lg px-2 font-medium hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-800 cursor-pointer"
                           style={{
                             minHeight: '28px',
                             fontSize: '13px',
@@ -2398,17 +2678,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
                     {/* Instructions */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Instructions</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Instructions</label>
                       {isEditing ? (
                         <textarea
                           value={step.instruction}
                           onChange={(e) => updateStep(index, 'instruction', e.target.value)}
-                          className="w-full border border-gray-300 rounded px-2 py-1.5 min-h-[60px] text-sm"
+                          className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 min-h-[60px] text-sm"
                           placeholder="Enter instructions..."
                         />
                       ) : (
-                        <div className="text-sm bg-gray-50 p-2 rounded min-h-[40px]">
-                          {step.instruction || <span className="text-gray-400">No instructions</span>}
+                        <div className="text-sm bg-gray-50 dark:bg-slate-900 p-2 rounded min-h-[40px]">
+                          {step.instruction || <span className="text-gray-400 dark:text-slate-500">No instructions</span>}
                         </div>
                       )}
                     </div>
@@ -2416,16 +2696,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     {/* Metrics Grid */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Quantity</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Quantity</label>
                         {isEditing ? (
                           <input
                             type="text"
                             value={step.quantity}
                             onChange={(e) => updateStep(index, 'quantity', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-2 py-1.5 text-center text-sm font-bold bg-gray-50"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-center text-sm font-bold bg-gray-50 dark:bg-slate-900"
                           />
                         ) : (
-                          <div className="text-sm font-bold text-center bg-gray-50 p-1.5 rounded">{step.quantity || '-'}</div>
+                          <div className="text-sm font-bold text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.quantity || '-'}</div>
                         )}
                       </div>
                       <div>
@@ -2473,43 +2753,43 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     {/* Time and Date */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Time (Hrs)</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Time (Hrs)</label>
                         {isEditing ? (
                           <input
                             type="text"
                             value={step.completedTime || ''}
                             onChange={(e) => updateStep(index, 'completedTime', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm text-center"
                             placeholder="Hrs"
                           />
                         ) : (
-                          <div className="text-sm text-center bg-gray-50 p-1.5 rounded">{step.completedTime || '-'}</div>
+                          <div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.completedTime || '-'}</div>
                         )}
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Date</label>
                         {isEditing ? (
                           <input
                             type="text"
                             value={step.completedDate}
                             onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-center"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-sm text-center"
                             placeholder="Date"
                           />
                         ) : (
-                          <div className="text-sm text-center bg-gray-50 p-1.5 rounded">{step.completedDate || '-'}</div>
+                          <div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.completedDate || '-'}</div>
                         )}
                       </div>
                     </div>
 
                     {/* QR Code */}
                     {step.id && stepQRCodes[step.id] && (
-                      <div className="flex justify-center pt-2 border-t border-gray-200">
+                      <div className="flex justify-center pt-2 border-t border-gray-200 dark:border-slate-700">
                         <img
                           src={`data:image/png;base64,${stepQRCodes[step.id]}`}
                           alt={`QR Code for ${step.workCenter}`}
-                          className="border border-gray-200"
-                          style={{ width: '60px', height: '60px' }}
+                          className="border border-gray-200 dark:border-gray-600 rounded bg-white"
+                          style={{ width: '60px', height: '60px', padding: '3px' }}
                           onError={() => {
                             console.error('Failed to load QR code for step', step.id);
                           }}
@@ -2521,9 +2801,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </SortableMobileCard>
                 ) : (
-                <div key={index} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                <div key={index} className="bg-white dark:bg-slate-800 border-2 border-gray-400 dark:border-slate-500 rounded-lg shadow-sm">
                   {/* Card Header (view mode) */}
-                  <div className="bg-gray-200 border-b-2 border-gray-400 px-3 py-2 flex justify-between items-center">
+                  <div className="bg-gray-200 dark:bg-slate-700 border-b-2 border-gray-400 dark:border-slate-500 px-3 py-2 flex justify-between items-center">
                     <div className="flex items-center space-x-2">
                       <span className="bg-blue-600 text-white font-bold px-2 py-1 rounded text-sm">
                         SQ {step.seq}
@@ -2534,19 +2814,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <div className="p-3 space-y-3">
                     {step.instruction && (
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Instructions</label>
-                        <div className="text-sm bg-gray-50 p-2 rounded">{step.instruction}</div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Instructions</label>
+                        <div className="text-sm bg-gray-50 dark:bg-slate-900 p-2 rounded">{step.instruction}</div>
                       </div>
                     )}
                     <div className="grid grid-cols-4 gap-2">
-                      <div><label className="block text-xs font-bold text-gray-700 mb-1">QTY</label><div className="text-sm text-center bg-gray-50 p-1.5 rounded">{step.quantity || '-'}</div></div>
+                      <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">QTY</label><div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.quantity || '-'}</div></div>
                       <div><label className="block text-xs font-bold text-red-700 mb-1">REJ</label><div className="text-sm text-center bg-red-50 p-1.5 rounded text-red-700">{step.rejected || '-'}</div></div>
                       <div><label className="block text-xs font-bold text-green-700 mb-1">ACC</label><div className="text-sm text-center bg-green-50 p-1.5 rounded text-green-700">{step.accepted || '-'}</div></div>
-                      <div><label className="block text-xs font-bold text-gray-700 mb-1">SIGN</label><div className="text-sm text-center bg-gray-50 p-1.5 rounded">{step.sign || '-'}</div></div>
+                      <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">SIGN</label><div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.sign || '-'}</div></div>
                     </div>
                     {step.id && stepQRCodes[step.id] && (
-                      <div className="flex justify-center pt-2 border-t border-gray-200">
-                        <img src={`data:image/png;base64,${stepQRCodes[step.id]}`} alt={`QR Code for ${step.workCenter}`} className="border border-gray-200" style={{ width: '60px', height: '60px' }} />
+                      <div className="flex justify-center pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <img src={`data:image/png;base64,${stepQRCodes[step.id]}`} alt={`QR Code for ${step.workCenter}`} className="border border-gray-200 dark:border-gray-600 rounded bg-white" style={{ width: '60px', height: '60px', padding: '3px' }} />
                       </div>
                     )}
                   </div>
@@ -2554,7 +2834,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 );
               })}
               {displayTraveler.steps.length === 0 && (
-                <div className="text-center py-8 text-gray-500 bg-yellow-50 rounded-lg border-2 border-yellow-200">
+                <div className="text-center py-8 text-gray-500 dark:text-slate-400 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border-2 border-yellow-200 dark:border-yellow-800">
                   <div className="text-sm font-bold">⚠️ No work center steps found!</div>
                   {isEditing && (
                     <div className="text-xs mt-2">Click &quot;Add Step&quot; button above to add work center steps.</div>
@@ -2566,56 +2846,56 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </DndContext>
 
             {/* Bottom Info */}
-            <div className="bg-gray-50 px-3 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm border-t border-gray-300 print:px-2 print:py-1 print:gap-2 print:text-[9px]">
-              <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 print:gap-0.5">
-                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px]" style={{color: 'black'}}>From Stock:</span>
+            <div className="bg-gray-50 dark:bg-slate-900 px-3 py-3 grid grid-cols-3 gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px]">
+              <div className="flex flex-row items-baseline gap-1 print:gap-0.5">
+                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">From Stock:</span>
                 {isEditing ? (
                   <>
                     <input
                       type="text"
                       value={editData.fromStock}
                       onChange={(e) => updateField('fromStock', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1 screen-only"
-                      style={{color: 'black', outline: 'none'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded bg-transparent px-2 py-1 screen-only text-black dark:text-white"
+                      style={{outline: 'none'}}
                     />
-                    <span className="print-only flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{editData.fromStock || '-'}</span>
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{editData.fromStock || '-'}</span>
                   </>
                 ) : (
-                  <span className="flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{displayTraveler.fromStock || '-'}</span>
+                  <span className="flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{displayTraveler.fromStock || '-'}</span>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 print:gap-0.5">
-                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px]" style={{color: 'black'}}>To Stock:</span>
+              <div className="flex flex-row items-baseline gap-1 print:gap-0.5">
+                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">To Stock:</span>
                 {isEditing ? (
                   <>
                     <input
                       type="text"
                       value={editData.toStock}
                       onChange={(e) => updateField('toStock', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1 screen-only"
-                      style={{color: 'black', outline: 'none'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded bg-transparent px-2 py-1 screen-only text-black dark:text-white"
+                      style={{outline: 'none'}}
                     />
-                    <span className="print-only flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{editData.toStock || '-'}</span>
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{editData.toStock || '-'}</span>
                   </>
                 ) : (
-                  <span className="flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{displayTraveler.toStock || '-'}</span>
+                  <span className="flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{displayTraveler.toStock || '-'}</span>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
-                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px]" style={{color: 'black'}}>Ship Via:</span>
+              <div className="flex flex-row items-baseline gap-1">
+                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">Ship Via:</span>
                 {isEditing ? (
                   <>
                     <input
                       type="text"
                       value={editData.shipVia}
                       onChange={(e) => updateField('shipVia', e.target.value)}
-                      className="flex-1 border border-gray-300 rounded bg-transparent px-2 py-1 screen-only"
-                      style={{color: 'black', outline: 'none'}}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded bg-transparent px-2 py-1 screen-only text-black dark:text-white"
+                      style={{outline: 'none'}}
                     />
-                    <span className="print-only flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{editData.shipVia || '-'}</span>
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{editData.shipVia || '-'}</span>
                   </>
                 ) : (
-                  <span className="flex-1 px-1 break-words print:text-[9px]" style={{color: 'black'}}>{displayTraveler.shipVia || '-'}</span>
+                  <span className="flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{displayTraveler.shipVia || '-'}</span>
                 )}
               </div>
             </div>
@@ -2623,12 +2903,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
           {/* Labor Hours Toggle - Edit Mode Only - NO PRINT */}
           {isEditing && (
-            <div className="border-b-2 border-black no-print">
-              <div className="bg-blue-200 px-3 py-2">
-                <h2 className="font-bold text-sm">TRAVELER OPTIONS</h2>
+            <div className="border-b-2 border-black dark:border-slate-600 no-print">
+              <div className="bg-blue-200 dark:bg-blue-900/50 print:!bg-blue-200 px-3 py-2">
+                <h2 className="font-bold text-sm text-blue-900 dark:text-blue-200 print:!text-black">TRAVELER OPTIONS</h2>
               </div>
-              <div className="bg-blue-50 p-4">
-                <div className="flex items-center space-x-3 p-3 bg-white rounded border-2 border-blue-300">
+              <div className="bg-blue-50 dark:bg-slate-800 p-4">
+                <div className="flex items-center space-x-3 p-3 bg-white dark:bg-slate-800 rounded border-2 border-blue-300">
                   <input
                     type="checkbox"
                     id="editIncludeLaborHours"
@@ -2642,12 +2922,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         toast.warning('Labor Hours Table will be removed from this traveler! The labor tracking section will NOT appear in the printed document.');
                       }
                     }}
-                    className="w-5 h-5 text-blue-600 border border-gray-300 rounded cursor-pointer"
+                    className="w-5 h-5 text-blue-600 border border-gray-300 dark:border-slate-600 rounded cursor-pointer"
                   />
                   <label htmlFor="editIncludeLaborHours" className="flex-1 cursor-pointer">
                     <div>
-                      <p className="font-semibold text-gray-900">Include Labor Hours Table</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="font-semibold text-gray-900 dark:text-slate-100">Include Labor Hours Table</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">
                         {editData.includeLaborHours ? '✓ Labor tracking enabled - will print on second page' : 'Add labor tracking section to traveler'}
                       </p>
                     </div>
@@ -2658,88 +2938,88 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           )}
 
           {/* Comments Section - First Page Only */}
-          <div className="border-b-2 border-black">
-            <div className="bg-purple-200 px-3 py-2 print:px-1 print:py-0">
-              <h2 className="font-bold text-sm print:text-[9px] print-section-title">COMMENTS & NOTES</h2>
+          <div className="border-b-2 border-black dark:border-slate-600">
+            <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 px-3 py-2 print:px-1 print:py-0">
+              <h2 className="font-bold text-sm text-purple-900 dark:text-purple-200 print:!text-black print:text-[9px] print-section-title">COMMENTS & NOTES</h2>
             </div>
-            <div className="bg-purple-50 p-3 min-h-[60px] text-sm print:p-1 print:min-h-[40px] print:text-[8px]">
+            <div className="bg-purple-50 dark:bg-slate-800 p-3 min-h-[60px] text-sm print:p-1 print:min-h-[40px] print:text-[8px]">
               {isEditing ? (
                 <>
                   <textarea
                     value={editData.comments}
                     onChange={(e) => updateField('comments', e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded min-h-[60px] text-sm screen-only"
+                    className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded min-h-[60px] text-sm screen-only"
                     placeholder="Enter comments..."
                   />
-                  <div className="print-only whitespace-pre-wrap text-sm print:text-[8px]">{editData.comments || <span className="text-gray-400 italic">No comments</span>}</div>
+                  <div className="print-only whitespace-pre-wrap text-sm print:text-[8px]">{editData.comments || <span className="text-gray-400 dark:text-slate-500 italic">No comments</span>}</div>
                 </>
               ) : (
-                <div className="whitespace-pre-wrap text-sm print:text-[8px]">{displayTraveler.comments || <span className="text-gray-400 italic">No comments</span>}</div>
+                <div className="whitespace-pre-wrap text-sm print:text-[8px]">{displayTraveler.comments || <span className="text-gray-400 dark:text-slate-500 italic">No comments</span>}</div>
               )}
             </div>
           </div>
 
           {/* Additional Instructions/Comments Space */}
-          <div className="border-b-2 border-black">
-            <div className="bg-gray-50 p-3 min-h-[120px] print:min-h-[750px] text-sm print:p-1">
-              <div className="text-gray-400 text-xs print:text-[8px]">Additional Instructions/Comments:</div>
+          <div className="border-b-2 border-black dark:border-slate-600">
+            <div className="bg-gray-50 dark:bg-slate-900 p-3 min-h-[120px] print:min-h-[750px] text-sm print:p-1">
+              <div className="text-gray-400 dark:text-slate-500 text-xs print:text-[8px]">Additional Instructions/Comments:</div>
             </div>
           </div>
 
           {/* Labor Hours Section - Second Page (Page Break Before) - Show if includeLaborHours is true */}
           {displayTraveler.includeLaborHours && (
             <div className="print:break-before-page">
-              <div className="bg-purple-200 border-b-4 border-black px-4 py-4">
-                <h2 className="font-bold text-xl md:text-3xl">LABOR HOURS TRACKING</h2>
+              <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 border-b-4 border-black dark:border-slate-600 print:!border-black px-4 py-4">
+                <h2 className="font-bold text-3xl text-purple-900 dark:text-purple-200 print:!text-black">LABOR HOURS TRACKING</h2>
               </div>
               <div className="overflow-x-auto">
-              <table className="labor-table-desktop w-full border-collapse min-w-0 lg:min-w-[640px]">
+              <table className="labor-table-desktop w-full border-collapse min-w-[640px]">
                 <thead>
-                  <tr className="bg-purple-100 border-b-4 border-black">
-                    <th className="border-r-4 border-black px-6 py-5 text-left font-bold text-2xl">WORK CENTER</th>
-                    <th className="border-r-4 border-black px-6 py-5 text-left font-bold text-2xl">OPERATOR NAME</th>
-                    <th className="border-r-4 border-black px-6 py-5 text-center font-bold text-2xl">START TIME</th>
-                    <th className="border-r-4 border-black px-6 py-5 text-center font-bold text-2xl">END TIME</th>
+                  <tr className="bg-purple-100 dark:bg-purple-900/30 border-b-4 border-black dark:border-slate-600">
+                    <th className="border-r-4 border-black dark:border-slate-600 px-6 py-5 text-left font-bold text-2xl">WORK CENTER</th>
+                    <th className="border-r-4 border-black dark:border-slate-600 px-6 py-5 text-left font-bold text-2xl">OPERATOR NAME</th>
+                    <th className="border-r-4 border-black dark:border-slate-600 px-6 py-5 text-center font-bold text-2xl">START TIME</th>
+                    <th className="border-r-4 border-black dark:border-slate-600 px-6 py-5 text-center font-bold text-2xl">END TIME</th>
                     <th className="px-6 py-5 text-center font-bold text-2xl">TOTAL HOURS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {displayTraveler.laborEntries.map((entry) => (
-                    <tr key={entry.id} className="border-b-4 border-gray-600" style={{height: '65px'}}>
+                    <tr key={entry.id} className="border-b-4 border-gray-600 dark:border-slate-500" style={{height: '65px'}}>
                       {isEditing ? (
                         <>
-                          <td className="border-r-4 border-gray-600 px-2 py-2">
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-2 py-2">
                             <input
                               type="text"
                               value={entry.workCenter}
                               onChange={(e) => updateLaborEntry(entry.id, 'workCenter', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-2 py-1 text-lg"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-lg"
                               placeholder="Work center"
                             />
                           </td>
-                          <td className="border-r-4 border-gray-600 px-2 py-2">
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-2 py-2">
                             <input
                               type="text"
                               value={entry.operatorName}
                               onChange={(e) => updateLaborEntry(entry.id, 'operatorName', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-2 py-1 text-lg"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-lg"
                               placeholder="Operator name"
                             />
                           </td>
-                          <td className="border-r-4 border-gray-600 px-2 py-2">
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-2 py-2">
                             <input
                               type="time"
                               value={entry.startTime}
                               onChange={(e) => updateLaborEntry(entry.id, 'startTime', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-2 py-1 text-lg"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-lg"
                             />
                           </td>
-                          <td className="border-r-4 border-gray-600 px-2 py-2">
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-2 py-2">
                             <input
                               type="time"
                               value={entry.endTime}
                               onChange={(e) => updateLaborEntry(entry.id, 'endTime', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-2 py-1 text-lg"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-lg"
                             />
                           </td>
                           <td className="px-2 py-2">
@@ -2747,35 +3027,35 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                               type="text"
                               value={entry.totalHours}
                               onChange={(e) => updateLaborEntry(entry.id, 'totalHours', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-2 py-1 text-lg"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-lg"
                               placeholder="Hours"
                             />
                           </td>
                         </>
                       ) : (
                         <>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl">
-                            {entry.workCenter || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-6 text-xl">
+                            {entry.workCenter || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
                           </td>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl">
-                            {entry.operatorName || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-6 text-xl">
+                            {entry.operatorName || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
                           </td>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl text-center">
-                            {entry.startTime || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-6 text-xl text-center">
+                            {entry.startTime || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
                           </td>
-                          <td className="border-r-4 border-gray-600 px-6 text-xl text-center">
-                            {entry.endTime || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          <td className="border-r-4 border-gray-600 dark:border-slate-500 px-6 text-xl text-center">
+                            {entry.endTime || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
                           </td>
                           <td className="px-6 text-xl text-center">
-                            {entry.totalHours || <span className="inline-block w-full border-b border-gray-400" style={{minHeight: '16px'}}>&nbsp;</span>}
+                            {entry.totalHours || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
                           </td>
                         </>
                       )}
                     </tr>
                   ))}
-                  <tr className="bg-purple-200 border-t-4 border-black" style={{height: '70px'}}>
-                    <td colSpan={3} className="border-r-4 border-black px-6 py-5 text-right font-bold text-2xl">TOTAL HOURS:</td>
-                    <td className="border-r-4 border-black px-6 py-5 text-2xl"></td>
+                  <tr className="bg-purple-200 dark:bg-purple-900/50 border-t-4 border-black dark:border-slate-600" style={{height: '70px'}}>
+                    <td colSpan={3} className="border-r-4 border-black dark:border-slate-600 px-6 py-5 text-right font-bold text-2xl">TOTAL HOURS:</td>
+                    <td className="border-r-4 border-black dark:border-slate-600 px-6 py-5 text-2xl"></td>
                     <td className="px-6 py-5 text-2xl"></td>
                   </tr>
                 </tbody>
@@ -2785,88 +3065,88 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               {/* Mobile Card View for Labor Hours */}
               <div className="labor-cards-mobile space-y-3 p-2">
                 {displayTraveler.laborEntries.map((entry) => (
-                  <div key={entry.id} className="bg-white border-2 border-purple-400 rounded-lg shadow-sm">
-                    <div className="bg-purple-100 border-b-2 border-purple-400 px-3 py-2">
-                      <h3 className="font-bold text-sm">Labor Entry #{entry.id}</h3>
+                  <div key={entry.id} className="bg-white dark:bg-slate-800 border-2 border-purple-400 rounded-lg shadow-sm">
+                    <div className="bg-purple-100 dark:bg-purple-900/30 border-b-2 border-purple-400 dark:border-purple-700 px-3 py-2">
+                      <h3 className="font-bold text-sm text-purple-900 dark:text-purple-200">Labor Entry #{entry.id}</h3>
                     </div>
                     <div className="p-3 space-y-3">
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Work Center</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Work Center</label>
                         {isEditing ? (
                           <input
                             type="text"
                             value={entry.workCenter}
                             onChange={(e) => updateLaborEntry(entry.id, 'workCenter', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-base"
                             placeholder="Work center"
                           />
                         ) : (
-                          <div className="text-base bg-gray-50 p-2 rounded min-h-[40px]">
-                            {entry.workCenter || <span className="text-gray-400">-</span>}
+                          <div className="text-base bg-gray-50 dark:bg-slate-900 p-2 rounded min-h-[40px]">
+                            {entry.workCenter || <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </div>
                         )}
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Operator Name</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Operator Name</label>
                         {isEditing ? (
                           <input
                             type="text"
                             value={entry.operatorName}
                             onChange={(e) => updateLaborEntry(entry.id, 'operatorName', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-base"
                             placeholder="Operator name"
                           />
                         ) : (
-                          <div className="text-base bg-gray-50 p-2 rounded min-h-[40px]">
-                            {entry.operatorName || <span className="text-gray-400">-</span>}
+                          <div className="text-base bg-gray-50 dark:bg-slate-900 p-2 rounded min-h-[40px]">
+                            {entry.operatorName || <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </div>
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
+                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Start Time</label>
                           {isEditing ? (
                             <input
                               type="time"
                               value={entry.startTime}
                               onChange={(e) => updateLaborEntry(entry.id, 'startTime', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-base"
                             />
                           ) : (
-                            <div className="text-base text-center bg-gray-50 p-2 rounded">
-                              {entry.startTime || <span className="text-gray-400">-</span>}
+                            <div className="text-base text-center bg-gray-50 dark:bg-slate-900 p-2 rounded">
+                              {entry.startTime || <span className="text-gray-400 dark:text-slate-500">-</span>}
                             </div>
                           )}
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
+                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">End Time</label>
                           {isEditing ? (
                             <input
                               type="time"
                               value={entry.endTime}
                               onChange={(e) => updateLaborEntry(entry.id, 'endTime', e.target.value)}
-                              className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                              className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-base"
                             />
                           ) : (
-                            <div className="text-base text-center bg-gray-50 p-2 rounded">
-                              {entry.endTime || <span className="text-gray-400">-</span>}
+                            <div className="text-base text-center bg-gray-50 dark:bg-slate-900 p-2 rounded">
+                              {entry.endTime || <span className="text-gray-400 dark:text-slate-500">-</span>}
                             </div>
                           )}
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Total Hours</label>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Total Hours</label>
                         {isEditing ? (
                           <input
                             type="text"
                             value={entry.totalHours}
                             onChange={(e) => updateLaborEntry(entry.id, 'totalHours', e.target.value)}
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                            className="w-full border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-base"
                             placeholder="Hours"
                           />
                         ) : (
-                          <div className="text-base text-center bg-gray-50 p-2 rounded font-bold">
-                            {entry.totalHours || <span className="text-gray-400">-</span>}
+                          <div className="text-base text-center bg-gray-50 dark:bg-slate-900 p-2 rounded font-bold">
+                            {entry.totalHours || <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </div>
                         )}
                       </div>
@@ -2881,14 +3161,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       </div>
       {/* Confirm Modal */}
       {confirmModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
-            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 dark:text-slate-400 mb-6">{confirmModal.message}</p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold"
               >
                 Cancel
               </button>
