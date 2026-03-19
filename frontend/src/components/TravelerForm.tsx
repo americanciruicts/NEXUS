@@ -1056,6 +1056,100 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     }
   };
 
+  // Shared auto-fill function used by both type selection screen and job number field
+  const autoFillFromExisting = (fullData: FullTravelerData) => {
+    // Auto-increment the traveler revision
+    const oldRevision = String(fullData.revision || 'A');
+    const newRevision = incrementRevision(oldRevision);
+
+    // Parse specs
+    let specsText = '';
+    try {
+      const specsData = fullData.specs;
+      if (specsData) {
+        if (typeof specsData === 'string') {
+          const parsed = JSON.parse(specsData);
+          if (Array.isArray(parsed)) {
+            specsText = parsed.map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
+          } else {
+            specsText = specsData;
+          }
+        } else if (Array.isArray(specsData)) {
+          specsText = (specsData as Record<string, unknown>[]).map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
+        }
+      }
+    } catch {
+      specsText = String(fullData.specs || '');
+    }
+
+    // Split work order number into prefix and suffix
+    if (fullData.work_order_number) {
+      const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
+      setWorkOrderPrefix(prefix);
+      setWorkOrderSuffix(suffix);
+    }
+
+    // Auto-populate ALL fields
+    setFormData(prev => ({
+      ...prev,
+      jobNumber: fullData.job_number || prev.jobNumber,
+      workOrderNumber: fullData.work_order_number || prev.workOrderNumber,
+      poNumber: fullData.po_number || '',
+      partNumber: fullData.part_number || '',
+      partDescription: fullData.part_description || '',
+      revision: newRevision,
+      customerRevision: fullData.customer_revision || '',
+      partRevision: fullData.part_revision || '',
+      quantity: fullData.quantity || 0,
+      customerCode: fullData.customer_code || '',
+      customerName: fullData.customer_name || '',
+      priority: (fullData.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
+      specs: specsText,
+      fromStock: fullData.from_stock || '',
+      toStock: fullData.to_stock || '',
+      shipVia: fullData.ship_via || '',
+      dueDate: extractDateOnly(fullData.due_date),
+      shipDate: extractDateOnly(fullData.ship_date),
+      comments: fullData.comments || ''
+    }));
+
+    // Set traveler type and show form
+    if (fullData.traveler_type) {
+      setSelectedType(fullData.traveler_type as TravelerType);
+    }
+
+    // Set flags
+    setIsLeadFree(fullData.is_lead_free || false);
+    setIsITAR(fullData.is_itar || false);
+    setIncludeLaborHours(fullData.include_labor_hours || false);
+
+    // Auto-populate process steps
+    if (fullData.process_steps && fullData.process_steps.length > 0) {
+      const newSteps = fullData.process_steps.map((step: ProcessStepData, index: number) => ({
+        id: `step-${Date.now()}-${index}`,
+        sequence: step.step_number,
+        workCenter: step.operation || step.work_center_code || '',
+        instruction: step.instructions || '',
+        quantity: 0,
+        rejected: 0,
+        accepted: 0,
+        assign: '',
+        date: ''
+      }));
+      setFormSteps(newSteps);
+    }
+
+    // Store revision info for validation
+    setAutoPopulatedRevision(newRevision);
+    setWasAutoPopulated(true);
+
+    // Show the form
+    setShowForm(true);
+
+    toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. Please verify Customer Rev and Traveler Rev.`);
+    setTimeout(() => window.scrollTo(0, 0), 0);
+  };
+
   // If type not selected, show type selection
   if (!showForm) {
     return (
@@ -1076,6 +1170,61 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-1">Select Traveler Type</h1>
               <p className="text-sm text-teal-200/80">Choose the type that matches your manufacturing process</p>
             </div>
+          </div>
+
+          {/* Job Number Lookup */}
+          <div className="mb-4 bg-white dark:bg-slate-800 rounded-xl border-2 border-indigo-200 dark:border-slate-600 p-4 shadow-sm">
+            <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">
+              Have an existing Job Number? Enter it to auto-fill:
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter job number (e.g. test1, 8744 PARTS)"
+                className="flex-1 border-2 border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2.5 text-sm font-bold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    const value = (e.target as HTMLInputElement).value.trim();
+                    if (!value) return;
+                    try {
+                      const token = localStorage.getItem('nexus_token') || 'mock-token';
+                      const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      });
+                      if (response.ok) {
+                        const fullData: FullTravelerData = await response.json();
+                        if (fullData && fullData.job_number) {
+                          autoFillFromExisting(fullData);
+                        } else {
+                          toast.warning('No existing traveler found with that job number. Please select a type to create a new one.');
+                        }
+                      } else {
+                        toast.warning('No existing traveler found. Please select a type below.');
+                      }
+                    } catch {
+                      toast.error('Error looking up job number.');
+                    }
+                  }
+                }}
+                onBlur={async (e) => {
+                  const value = e.target.value.trim();
+                  if (!value || value.length < 2) return;
+                  try {
+                    const token = localStorage.getItem('nexus_token') || 'mock-token';
+                    const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
+                      headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                      const fullData: FullTravelerData = await response.json();
+                      if (fullData && fullData.job_number) {
+                        autoFillFromExisting(fullData);
+                      }
+                    }
+                  } catch { /* silent */ }
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5">Press Enter or tab out to search. Auto-fills all details including work center steps.</p>
           </div>
 
           {/* Cards Grid - 2x2 */}
@@ -1335,104 +1484,17 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   }}
                   onBlur={async (e) => {
                     const value = e.target.value.trim();
-                    // Auto-populate from existing traveler when job number is entered
-                    if (value.length >= 3 && mode === 'create') {
+                    if (value.length >= 2 && mode === 'create') {
                       try {
                         const token = localStorage.getItem('nexus_token') || 'mock-token';
                         const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
                           headers: { 'Authorization': `Bearer ${token}` }
                         });
-
                         if (response.ok) {
                           const fullData: FullTravelerData = await response.json();
-                          if (!fullData) return;
-
-                          // Auto-increment the traveler revision
-                          const oldRevision = String(fullData.revision || 'A');
-                          const newRevision = incrementRevision(oldRevision);
-
-                          // Parse specs
-                          let specsText = '';
-                          try {
-                            const specsData = fullData.specs;
-                            if (specsData) {
-                              if (typeof specsData === 'string') {
-                                const parsed = JSON.parse(specsData);
-                                if (Array.isArray(parsed)) {
-                                  specsText = parsed.map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
-                                } else {
-                                  specsText = specsData;
-                                }
-                              } else if (Array.isArray(specsData)) {
-                                specsText = (specsData as Record<string, unknown>[]).map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
-                              }
-                            }
-                          } catch {
-                            specsText = String(fullData.specs || '');
+                          if (fullData && fullData.job_number) {
+                            autoFillFromExisting(fullData);
                           }
-
-                          // Split work order number into prefix and suffix
-                          if (fullData.work_order_number) {
-                            const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
-                            setWorkOrderPrefix(prefix);
-                            setWorkOrderSuffix(suffix);
-                          }
-
-                          // Auto-populate ALL fields from the existing traveler
-                          setFormData(prev => ({
-                            ...prev,
-                            workOrderNumber: fullData.work_order_number || prev.workOrderNumber,
-                            poNumber: fullData.po_number || prev.poNumber,
-                            partNumber: fullData.part_number || prev.partNumber,
-                            partDescription: fullData.part_description || prev.partDescription,
-                            revision: newRevision,
-                            customerRevision: fullData.customer_revision || '',
-                            partRevision: fullData.part_revision || '',
-                            quantity: fullData.quantity || prev.quantity,
-                            customerCode: fullData.customer_code || prev.customerCode,
-                            customerName: fullData.customer_name || prev.customerName,
-                            priority: (fullData.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
-                            specs: specsText,
-                            fromStock: fullData.from_stock || '',
-                            toStock: fullData.to_stock || '',
-                            shipVia: fullData.ship_via || '',
-                            dueDate: extractDateOnly(fullData.due_date),
-                            shipDate: extractDateOnly(fullData.ship_date),
-                            comments: fullData.comments || ''
-                          }));
-
-                          // Set traveler type
-                          if (fullData.traveler_type) {
-                            setSelectedType(fullData.traveler_type as TravelerType);
-                          }
-
-                          // Set flags
-                          setIsLeadFree(fullData.is_lead_free || false);
-                          setIsITAR(fullData.is_itar || false);
-                          setIncludeLaborHours(fullData.include_labor_hours || false);
-
-                          // Auto-populate process steps
-                          if (fullData.process_steps && fullData.process_steps.length > 0) {
-                            const newSteps = fullData.process_steps.map((step: ProcessStepData, index: number) => ({
-                              id: `step-${Date.now()}-${index}`,
-                              sequence: step.step_number,
-                              workCenter: step.operation || step.work_center_code || '',
-                              instruction: step.instructions || '',
-                              quantity: 0,
-                              rejected: 0,
-                              accepted: 0,
-                              assign: '',
-                              date: ''
-                            }));
-                            setFormSteps(newSteps);
-                          }
-
-                          // Store revision info for validation
-                          setAutoPopulatedRevision(newRevision);
-                          setWasAutoPopulated(true);
-
-                          toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. Please verify Customer Rev and Traveler Rev.`);
-                          setTimeout(() => window.scrollTo(0, 0), 0);
                         }
                       } catch (error) {
                         console.error('Error fetching traveler data:', error);
