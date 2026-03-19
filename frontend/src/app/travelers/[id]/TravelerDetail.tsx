@@ -1015,6 +1015,122 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   };
 
   // ---- Create Mode: Type Selection Screen ----
+  // Auto-fill from existing traveler by job number
+  const autoFillFromExistingJob = async (jobNumber: string) => {
+    if (!jobNumber || jobNumber.length < 2) return;
+    try {
+      const token = localStorage.getItem('nexus_token') || 'mock-token';
+      const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(jobNumber)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        toast.warning('No existing traveler found with that job number. Please select a type to create a new one.');
+        return;
+      }
+      const data = await response.json();
+      if (!data || !data.job_number) {
+        toast.warning('No existing traveler found with that job number. Please select a type to create a new one.');
+        return;
+      }
+
+      const oldRevision = String(data.revision || 'A');
+      const newRevision = incrementRevision(oldRevision);
+      const type = (data.traveler_type || 'PCB_ASSEMBLY') as TravelerType;
+
+      // Parse specs
+      let specsArr: Specification[] = [];
+      try {
+        const specsData = data.specs;
+        if (specsData) {
+          if (typeof specsData === 'string') {
+            const parsed = JSON.parse(specsData);
+            if (Array.isArray(parsed)) {
+              specsArr = parsed.map((s: Record<string, unknown>) => ({ text: String(s.text || ''), date: String(s.date || '') }));
+            }
+          } else if (Array.isArray(specsData)) {
+            specsArr = specsData.map((s: Record<string, unknown>) => ({ text: String(s.text || ''), date: String(s.date || '') }));
+          }
+        }
+      } catch { /* ignore */ }
+
+      // Split work order
+      if (data.work_order_number) {
+        const parts = data.work_order_number.split('-');
+        if (parts.length >= 2) {
+          setWorkOrderPrefix(parts[0]);
+          setWorkOrderSuffix(parts.slice(1).join('-'));
+        } else {
+          setWorkOrderPrefix(data.work_order_number);
+          setWorkOrderSuffix('');
+        }
+      }
+
+      // Build process steps from existing
+      const steps: ProcessStep[] = (data.process_steps || []).map((step: Record<string, unknown>, index: number) => ({
+        seq: Number(step.step_number) || index + 1,
+        workCenter: String(step.operation || step.work_center_code || ''),
+        instruction: String(step.instructions || ''),
+        quantity: '',
+        accepted: '',
+        rejected: '',
+        sign: '',
+        completedDate: '',
+        status: 'PENDING',
+        assignee: ''
+      }));
+
+      const today = new Date().toISOString().split('T')[0];
+      const filledTraveler: Traveler = {
+        id: '',
+        travelerId: 0,
+        jobNumber: data.job_number,
+        workOrder: data.work_order_number || '',
+        poNumber: data.po_number || '',
+        partNumber: data.part_number || '',
+        description: data.part_description || '',
+        revision: newRevision,
+        customerRevision: data.customer_revision || '',
+        partRevision: data.part_revision || '',
+        quantity: data.quantity || 0,
+        customerCode: data.customer_code || '',
+        customerName: data.customer_name || '',
+        status: 'CREATED',
+        createdAt: today,
+        dueDate: data.due_date ? String(data.due_date).split('T')[0] : '',
+        shipDate: data.ship_date ? String(data.ship_date).split('T')[0] : '',
+        specs: specsArr,
+        fromStock: data.from_stock || '',
+        toStock: data.to_stock || '',
+        shipVia: data.ship_via || '',
+        comments: data.comments || '',
+        steps: steps,
+        laborEntries: Array.from({ length: 20 }, (_, i) => ({
+          id: String(i + 1),
+          workCenter: '',
+          operatorName: '',
+          startTime: '',
+          endTime: '',
+          totalHours: ''
+        })),
+        travelerType: type,
+        isActive: true,
+        includeLaborHours: data.include_labor_hours || false,
+        priority: data.priority || 'NORMAL'
+      };
+
+      setSelectedType(type);
+      setEditedTraveler(filledTraveler);
+      setTraveler(filledTraveler);
+      setIncludeLaborHours(data.include_labor_hours || false);
+      setShowForm(true);
+
+      toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. Please verify Customer Rev and Traveler Rev.`);
+    } catch (error) {
+      console.error('Error looking up job number:', error);
+      toast.error('Error looking up job number.');
+    }
+  };
+
   if (createMode && !showForm) {
     return (
       <Layout fullWidth>
@@ -1026,6 +1142,28 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
             <h1 className="text-4xl font-extrabold text-gray-900 dark:text-slate-100 tracking-tight">Create New Traveler</h1>
             <p className="text-gray-500 dark:text-slate-400 mt-2 text-lg">Choose the traveler type to get started</p>
+          </div>
+
+          {/* Job Number Lookup */}
+          <div className="max-w-3xl w-full mb-6 bg-white dark:bg-slate-800 rounded-xl border-2 border-indigo-200 dark:border-slate-600 p-5 shadow-sm">
+            <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">
+              Have an existing Job Number? Enter it to auto-fill everything:
+            </label>
+            <input
+              type="text"
+              placeholder="Enter job number (e.g. test1, 8744 PARTS) and press Enter"
+              className="w-full border-2 border-gray-300 dark:border-slate-600 rounded-lg px-4 py-3 text-sm font-bold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  autoFillFromExistingJob((e.target as HTMLInputElement).value.trim());
+                }
+              }}
+              onBlur={(e) => {
+                const val = e.target.value.trim();
+                if (val.length >= 2) autoFillFromExistingJob(val);
+              }}
+            />
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5">Press Enter or tab out to search. Auto-fills all details, steps, and selects the correct type.</p>
           </div>
 
           {/* Cards Grid */}
