@@ -65,8 +65,7 @@ def _sync_databases():
     SYNC_TABLES = [
         "users", "travelers", "work_centers", "process_steps", "labor_entries",
         "work_orders", "notifications", "approvals", "audit_logs", "parts",
-        "traveler_tracking_logs", "step_scan_events", "sub_steps", "manual_steps",
-        "traveler_time_entries"
+        "traveler_tracking_logs", "step_scan_events", "sub_steps", "manual_steps"
     ]
 
     while True:
@@ -80,6 +79,10 @@ def _sync_databases():
                 fallback.execute(text("SELECT 1"))
 
                 for table in SYNC_TABLES:
+                    if table not in {"users", "travelers", "work_centers", "process_steps", "labor_entries",
+                                     "work_orders", "notifications", "approvals", "audit_logs", "parts",
+                                     "traveler_tracking_logs", "step_scan_events", "sub_steps", "manual_steps"}:
+                        continue
                     try:
                         p_count = primary.execute(text(f"SELECT count(*) FROM {table}")).scalar()
                         f_count = fallback.execute(text(f"SELECT count(*) FROM {table}")).scalar()

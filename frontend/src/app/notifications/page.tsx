@@ -15,12 +15,13 @@ import {
   InformationCircleIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
+import { PageHeaderSkeleton, NotificationSkeleton } from '@/components/ui/LoadingSkeleton';
 
 interface Notification {
   id: number;
   title: string;
   message: string;
-  notification_type: 'TRAVELER_CREATED' | 'TRAVELER_UPDATED' | 'TRAVELER_DELETED' | 'LABOR_ENTRY_CREATED' | 'LABOR_ENTRY_UPDATED' | 'LABOR_ENTRY_DELETED' | 'TRACKING_ENTRY_CREATED' | 'TRACKING_ENTRY_UPDATED' | 'TRACKING_ENTRY_DELETED' | 'USER_LOGIN';
+  notification_type: 'TRAVELER_CREATED' | 'TRAVELER_UPDATED' | 'TRAVELER_DELETED' | 'LABOR_ENTRY_CREATED' | 'LABOR_ENTRY_UPDATED' | 'LABOR_ENTRY_DELETED' | 'USER_LOGIN';
   is_read: boolean;
   created_at: string;
   related_entity_type?: string;
@@ -232,15 +233,15 @@ export default function NotificationsPage() {
     if (type.includes('CREATED')) return <CheckCircleIcon className="h-6 w-6 text-green-600" />;
     if (type.includes('UPDATED')) return <InformationCircleIcon className="h-6 w-6 text-yellow-600" />;
     if (type.includes('DELETED')) return <ExclamationCircleIcon className="h-6 w-6 text-red-600" />;
-    return <BellIcon className="h-6 w-6 text-gray-600" />;
+    return <BellIcon className="h-6 w-6 text-gray-600 dark:text-slate-400" />;
   };
 
   const getNotificationColor = (type: string) => {
-    if (type === 'USER_LOGIN') return 'from-blue-50 to-indigo-50 border-blue-200';
-    if (type.includes('CREATED')) return 'from-green-50 to-emerald-50 border-green-200';
-    if (type.includes('UPDATED')) return 'from-yellow-50 to-amber-50 border-yellow-200';
-    if (type.includes('DELETED')) return 'from-red-50 to-rose-50 border-red-200';
-    return 'from-gray-50 to-slate-50 border-gray-200';
+    if (type === 'USER_LOGIN') return 'from-teal-50 to-emerald-50 dark:from-teal-900/30 dark:to-emerald-900/30 border-blue-200 dark:border-blue-700';
+    if (type.includes('CREATED')) return 'from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border-green-200 dark:border-green-700';
+    if (type.includes('UPDATED')) return 'from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30 border-yellow-200 dark:border-yellow-700';
+    if (type.includes('DELETED')) return 'from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 border-red-200 dark:border-red-700';
+    return 'from-gray-50 to-slate-50 dark:from-slate-800 dark:to-slate-800 border-gray-200 dark:border-slate-600';
   };
 
   const formatDate = (dateString: string) => {
@@ -267,9 +268,10 @@ export default function NotificationsPage() {
   if (loading) {
     return (
       <Layout fullWidth>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 p-6">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-xl text-gray-600">Loading notifications...</div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-3 sm:p-4 md:p-6">
+          <PageHeaderSkeleton />
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <NotificationSkeleton count={6} />
           </div>
         </div>
       </Layout>
@@ -278,9 +280,9 @@ export default function NotificationsPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 p-3 sm:p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-3 sm:p-4 md:p-6">
         {/* Header */}
-        <div className="mb-4 sm:mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+        <div className="mb-4 sm:mb-6 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -292,7 +294,7 @@ export default function NotificationsPage() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Notifications</h1>
-                <p className="text-sm text-blue-200/80 mt-0.5">Manage and track all your notifications</p>
+                <p className="text-sm text-teal-200/80 mt-0.5">Manage and track all your notifications</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -309,7 +311,7 @@ export default function NotificationsPage() {
         </div>
 
         {/* Filters and Actions Bar */}
-        <div className="mb-4 sm:mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-3 sm:p-4">
+        <div className="mb-4 sm:mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-slate-700 p-3 sm:p-4">
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             {/* Search */}
             <div className="flex-1 min-w-0 sm:min-w-[200px]">
@@ -318,7 +320,7 @@ export default function NotificationsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search notifications..."
-                className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm sm:text-base"
+                className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm sm:text-base bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
             </div>
 
@@ -362,15 +364,15 @@ export default function NotificationsPage() {
 
           {/* Filter Options */}
           {showFilters && (
-            <div className="mt-4 pt-4 border-t-2 border-gray-200">
+            <div className="mt-4 pt-4 border-t-2 border-gray-200 dark:border-slate-700">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Type Filter */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Notification Type</label>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Notification Type</label>
                   <select
                     value={selectedType}
                     onChange={(e) => setSelectedType(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   >
                     <option value="all">All Types</option>
                     <option value="USER_LOGIN">User Login</option>
@@ -380,19 +382,16 @@ export default function NotificationsPage() {
                     <option value="LABOR_ENTRY_CREATED">Labor Entry Created</option>
                     <option value="LABOR_ENTRY_UPDATED">Labor Entry Updated</option>
                     <option value="LABOR_ENTRY_DELETED">Labor Entry Deleted</option>
-                    <option value="TRACKING_ENTRY_CREATED">Tracking Entry Created</option>
-                    <option value="TRACKING_ENTRY_UPDATED">Tracking Entry Updated</option>
-                    <option value="TRACKING_ENTRY_DELETED">Tracking Entry Deleted</option>
                   </select>
                 </div>
 
                 {/* Status Filter */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Read Status</label>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Read Status</label>
                   <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                   >
                     <option value="all">All Notifications</option>
                     <option value="unread">Unread Only</option>
@@ -405,9 +404,9 @@ export default function NotificationsPage() {
         </div>
 
         {/* Notifications List */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
           {/* Table Header + Pagination */}
-          <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+          <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -424,12 +423,14 @@ export default function NotificationsPage() {
 
           {filteredNotifications.length === 0 ? (
             <div className="p-12 text-center">
-              <BellIcon className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-xl text-gray-600 font-semibold">No notifications found</p>
-              <p className="text-gray-500 mt-2">Try adjusting your filters or check back later</p>
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                <BellIcon className="h-8 w-8 text-gray-400 dark:text-slate-500" />
+              </div>
+              <p className="text-xl text-gray-700 dark:text-slate-300 font-semibold">No notifications found</p>
+              <p className="text-gray-500 dark:text-slate-400 mt-2">Try adjusting your filters or check back later</p>
             </div>
           ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-slate-700">
             {paginatedNotifications.map((notification) => (
               <div
                 key={notification.id}
@@ -455,7 +456,7 @@ export default function NotificationsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center">
                           {notification.title}
                           {!notification.is_read && (
                             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
@@ -463,13 +464,13 @@ export default function NotificationsPage() {
                             </span>
                           )}
                         </h3>
-                        <p className="text-gray-700 mt-1">{notification.message}</p>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
+                        <p className="text-gray-700 dark:text-slate-300 mt-1">{notification.message}</p>
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600 dark:text-slate-400">
                           <span className="flex items-center">
                             <ClockIcon className="h-4 w-4 mr-1" />
                             {formatDate(notification.created_at)}
                           </span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-200">
                             {notification.notification_type.replaceAll('_', ' ')}
                           </span>
                         </div>
@@ -504,7 +505,7 @@ export default function NotificationsPage() {
 
           {/* Bottom Pagination */}
           {filteredNotifications.length > 0 && (
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+            <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
               <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                 <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -543,14 +544,14 @@ export default function NotificationsPage() {
 
       {/* Confirm Modal */}
       {confirmModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
-            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-slate-700">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 dark:text-slate-400 mb-6">{confirmModal.message}</p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold"
               >
                 Cancel
               </button>

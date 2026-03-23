@@ -541,6 +541,79 @@ async def get_latest_revision_traveler(
     print(f"Returning traveler with {len(result['process_steps'])} process steps")
     return result
 
+@router.get("/by-job-number/{job_number}/all-work-orders")
+async def get_all_work_orders_for_job(
+    job_number: str,
+    db: Session = Depends(get_db)
+):
+    """Get all travelers (work orders) for a given job number.
+    Returns a list of work orders with their details so the user can select one."""
+    from sqlalchemy.orm import joinedload
+
+    travelers = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(
+        Traveler.job_number == job_number
+    ).order_by(Traveler.work_order_number.asc()).all()
+
+    if not travelers:
+        return []
+
+    results = []
+    for traveler in travelers:
+        results.append({
+            "id": traveler.id,
+            "job_number": traveler.job_number,
+            "work_order_number": traveler.work_order_number,
+            "po_number": traveler.po_number,
+            "traveler_type": traveler.traveler_type.value if hasattr(traveler.traveler_type, 'value') else str(traveler.traveler_type),
+            "part_number": traveler.part_number,
+            "part_description": traveler.part_description,
+            "revision": traveler.revision,
+            "customer_revision": traveler.customer_revision,
+            "part_revision": getattr(traveler, 'part_revision', ''),
+            "quantity": traveler.quantity,
+            "customer_code": traveler.customer_code,
+            "customer_name": traveler.customer_name,
+            "priority": traveler.priority.value if hasattr(traveler.priority, 'value') else str(traveler.priority),
+            "work_center": traveler.work_center,
+            "status": traveler.status.value if hasattr(traveler.status, 'value') else str(traveler.status),
+            "is_active": traveler.is_active,
+            "notes": traveler.notes,
+            "specs": traveler.specs,
+            "specs_date": traveler.specs_date,
+            "from_stock": traveler.from_stock,
+            "to_stock": traveler.to_stock,
+            "ship_via": traveler.ship_via,
+            "comments": traveler.comments,
+            "due_date": traveler.due_date,
+            "ship_date": traveler.ship_date,
+            "include_labor_hours": traveler.include_labor_hours,
+            "is_lead_free": getattr(traveler, 'is_lead_free', False),
+            "is_itar": getattr(traveler, 'is_itar', False),
+            "created_at": traveler.created_at.isoformat() if traveler.created_at else None,
+            "process_steps": [
+                {
+                    "id": step.id,
+                    "step_number": step.step_number,
+                    "operation": step.operation,
+                    "work_center_code": step.work_center_code,
+                    "instructions": step.instructions,
+                    "quantity": step.quantity,
+                    "accepted": step.accepted,
+                    "rejected": step.rejected,
+                    "sign": step.sign,
+                    "completed_date": step.completed_date,
+                    "estimated_time": step.estimated_time,
+                    "is_required": step.is_required,
+                    "is_completed": step.is_completed,
+                }
+                for step in sorted(traveler.process_steps, key=lambda s: s.step_number)
+            ]
+        })
+
+    return results
+
 @router.get("/by-job-number/{job_number}")
 async def get_traveler_by_job_number(
     job_number: str,
@@ -615,18 +688,31 @@ async def get_traveler_by_job_number(
 
 @router.get("/dashboard-summary")
 async def get_dashboard_summary(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
-    """Get all active travelers with progress/step data for the dashboard."""
+    """Get active travelers with progress/step data for the dashboard, filtered by due_date/ship_date range."""
     from sqlalchemy.orm import joinedload
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
 
     query = db.query(Traveler).options(
         joinedload(Traveler.process_steps)
     ).filter(
         ~Traveler.status.in_([TravelerStatus.ARCHIVED, TravelerStatus.CANCELLED])
     )
+
+    # Filter by due_date or ship_date falling within the selected range
+    if start_date and end_date:
+        query = query.filter(
+            or_(
+                and_(Traveler.due_date.isnot(None), Traveler.due_date >= start_date, Traveler.due_date <= end_date),
+                and_(Traveler.ship_date.isnot(None), Traveler.ship_date >= start_date, Traveler.ship_date <= end_date),
+                # Also include travelers with no dates set (so they aren't hidden)
+                and_(Traveler.due_date.is_(None), Traveler.ship_date.is_(None))
+            )
+        )
 
     # ITAR filtering for non-privileged users
     is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
@@ -736,6 +822,7 @@ async def get_dashboard_summary(
             "priority": t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
             "work_center": t.work_center,
             "due_date": t.due_date,
+            "ship_date": t.ship_date,
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "total_steps": total_steps,
             "completed_steps": completed_steps,
@@ -1221,14 +1308,13 @@ async def delete_traveler(
 
     # Delete related records first (cascade delete)
     # Import additional models for deletion
-    from models import LaborEntry, TravelerTimeEntry, Approval, StepScanEvent
+    from models import LaborEntry, Approval, StepScanEvent
 
     db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()
     db.query(ManualStep).filter(ManualStep.traveler_id == traveler.id).delete()
     db.query(AuditLog).filter(AuditLog.traveler_id == traveler.id).delete()
     db.query(TravelerTrackingLog).filter(TravelerTrackingLog.traveler_id == traveler.id).delete()
     db.query(LaborEntry).filter(LaborEntry.traveler_id == traveler.id).delete()
-    db.query(TravelerTimeEntry).filter(TravelerTimeEntry.traveler_id == traveler.id).delete()
     db.query(Approval).filter(Approval.traveler_id == traveler.id).delete()
     db.query(StepScanEvent).filter(StepScanEvent.traveler_id == traveler.id).delete()
 

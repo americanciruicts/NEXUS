@@ -10,7 +10,7 @@ interface TrackingEntry {
   id?: number;
   job_number: string;
   work_center: string;
-  operator_name: string;
+  employee_name: string;
   start_time: string;
   end_time: string | null;
   hours_worked: number;
@@ -34,7 +34,7 @@ export default function OperatorDashboard({ username, firstName }: OperatorDashb
 
   const fetchMyActivity = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/tracking/?limit=50`, {
+      const response = await fetch(`${API_BASE_URL}/labor/`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
       });
       if (response.ok) {
@@ -42,7 +42,7 @@ export default function OperatorDashboard({ username, firstName }: OperatorDashb
 
         // Filter to only this operator's entries
         const myEntries = data.filter(e => {
-          const name = e.operator_name.toLowerCase().trim();
+          const name = (e.employee_name || '').toLowerCase().trim();
           const uname = username.toLowerCase().trim();
           const fname = (firstName || '').toLowerCase().trim();
           return name === uname || (fname && name === fname);
@@ -107,7 +107,7 @@ export default function OperatorDashboard({ username, firstName }: OperatorDashb
               </div>
             </div>
             <Link
-              href="/travelers/tracking"
+              href="/labor-tracking"
               className="inline-flex items-center justify-center px-5 py-2.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-sm font-bold rounded-xl border border-white/25 shadow-lg transition-all duration-200 hover:-translate-y-0.5 gap-2"
             >
               <MapPinIcon className="w-5 h-5" />
@@ -119,7 +119,7 @@ export default function OperatorDashboard({ username, firstName }: OperatorDashb
 
       {/* Stats & Quick Actions - unified 3-column grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        <Link href="/travelers/tracking" className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 border border-gray-100 dark:border-slate-700 group hover:shadow-lg transition-all">
+        <Link href="/labor-tracking" className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 border border-gray-100 dark:border-slate-700 group hover:shadow-lg transition-all">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-xs text-gray-500 dark:text-slate-400 uppercase font-semibold">Tracked Today</p>
@@ -196,7 +196,7 @@ export default function OperatorDashboard({ username, firstName }: OperatorDashb
           <div className="text-center py-12">
             <CubeIcon className="w-12 h-12 text-gray-300 dark:text-slate-600 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-slate-400">No tracking activity yet</p>
-            <Link href="/travelers/tracking" className="text-indigo-600 hover:text-indigo-700 font-semibold text-sm mt-2 inline-block">
+            <Link href="/labor-tracking" className="text-indigo-600 hover:text-indigo-700 font-semibold text-sm mt-2 inline-block">
               Start tracking →
             </Link>
           </div>

@@ -19,7 +19,6 @@ export interface DashboardData {
   on_hold_travelers: number;
   overdue_travelers: number;
   active_labor_entries: number;
-  active_tracking_entries: number;
 }
 
 export function useDashboardData(startDate: Date, endDate: Date) {

@@ -1,19 +1,32 @@
 /**
  * API Configuration
  * Centralizes API endpoint configuration
+ *
+ * Local/Docker: uses http://acidashboard.aci.local:100/api (detected by hostname)
+ * Vercel/External: uses /api which is rewritten by vercel.json to the Vercel backend
  */
 
-// Use env var, or detect local network, or default to relative /api for Vercel rewrites
-const getApiBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== 'undefined' && (
-    window.location.hostname.includes('192.168.') ||
-    window.location.hostname.includes('.local') ||
-    window.location.hostname === 'localhost'
-  )) return 'http://acidashboard.aci.local:100/api';
+// Runtime-only detection — no env vars to avoid Next.js build-time inlining issues
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host.includes('192.168.') || host.includes('.local') || host === 'localhost') {
+      return 'http://acidashboard.aci.local:100/api';
+    }
+  }
   return '/api';
 };
 
+// Lazy getter so it evaluates at call time (client-side), not at module load (SSR)
+let _cachedBaseUrl: string | null = null;
+export const getApiUrl = (): string => {
+  if (_cachedBaseUrl === null) {
+    _cachedBaseUrl = getApiBaseUrl();
+  }
+  return _cachedBaseUrl;
+};
+
+// For backwards compat — but on SSR this will be /api, on client it re-evaluates
 export const API_BASE_URL = getApiBaseUrl();
 
 export const API_ENDPOINTS = {
@@ -36,8 +49,6 @@ export const API_ENDPOINTS = {
   LABOR: `${API_BASE_URL}/labor`,
   // Barcodes
   BARCODES: `${API_BASE_URL}/barcodes`,
-  // Tracking
-  TRACKING: `${API_BASE_URL}/tracking`,
   // Notifications
   NOTIFICATIONS: `${API_BASE_URL}/notifications`,
   // Search

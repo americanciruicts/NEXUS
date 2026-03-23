@@ -34,7 +34,7 @@ app.add_middleware(
 
 # Import and include routers
 try:
-    from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, traveler_tracking, notifications, search, dashboard, work_centers
+    from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers
 
     app.include_router(auth.router, prefix="/auth", tags=["authentication"])
     app.include_router(users.router, prefix="/users", tags=["users"])
@@ -43,7 +43,6 @@ try:
     app.include_router(approvals.router, prefix="/approvals", tags=["approvals"])
     app.include_router(labor.router, prefix="/labor", tags=["labor"])
     app.include_router(barcodes.router, prefix="/barcodes", tags=["barcodes"])
-    app.include_router(traveler_tracking.router, prefix="/tracking", tags=["traveler-tracking"])
     app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
     app.include_router(search.router, prefix="/search", tags=["search"])
     app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

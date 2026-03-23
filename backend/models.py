@@ -265,28 +265,6 @@ class TravelerTrackingLog(Base):
     scanned_by = Column(String(100))
     notes = Column(Text)
 
-# Independent Traveler Time Tracking (separate from Labor Entries)
-class TravelerTimeEntry(Base):
-    __tablename__ = "traveler_time_entries"
-
-    id = Column(Integer, primary_key=True, index=True)
-    traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
-    job_number = Column(String(50), nullable=False, index=True)
-    work_center = Column(String(100), nullable=False)
-    operator_name = Column(String(100), nullable=False)
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    pause_time = Column(DateTime(timezone=True))
-    end_time = Column(DateTime(timezone=True))
-    hours_worked = Column(Float, default=0.0)
-    pause_duration = Column(Float, default=0.0)  # in hours
-    is_completed = Column(Boolean, default=False)
-    qty_completed = Column(Integer, nullable=True)  # Quantity completed during this tracking entry
-    created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    traveler = relationship("Traveler")
-    user = relationship("User")
 
 class NotificationType(enum.Enum):
     TRAVELER_CREATED = "TRAVELER_CREATED"
@@ -295,9 +273,6 @@ class NotificationType(enum.Enum):
     LABOR_ENTRY_CREATED = "LABOR_ENTRY_CREATED"
     LABOR_ENTRY_UPDATED = "LABOR_ENTRY_UPDATED"
     LABOR_ENTRY_DELETED = "LABOR_ENTRY_DELETED"
-    TRACKING_ENTRY_CREATED = "TRACKING_ENTRY_CREATED"
-    TRACKING_ENTRY_UPDATED = "TRACKING_ENTRY_UPDATED"
-    TRACKING_ENTRY_DELETED = "TRACKING_ENTRY_DELETED"
     USER_LOGIN = "USER_LOGIN"
 
 class Notification(Base):

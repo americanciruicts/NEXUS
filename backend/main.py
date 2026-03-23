@@ -8,7 +8,7 @@ import re
 
 from database import engine, get_db
 from models import Base
-from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, traveler_tracking, notifications, search, dashboard, work_centers
+from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -307,7 +307,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not auto-migrate department column: {e}")
 
-    # Auto-migrate: add qty_completed column to labor_entries and traveler_time_entries if missing
+    # Auto-migrate: add qty_completed column to labor_entries if missing
     try:
         from sqlalchemy import text, inspect as sa_inspect2
         with engine.connect() as conn:
@@ -317,12 +317,6 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("ALTER TABLE labor_entries ADD COLUMN qty_completed INTEGER"))
                 conn.commit()
                 print("Added 'qty_completed' column to labor_entries table")
-
-            tracking_cols = [c['name'] for c in insp.get_columns('traveler_time_entries')]
-            if 'qty_completed' not in tracking_cols:
-                conn.execute(text("ALTER TABLE traveler_time_entries ADD COLUMN qty_completed INTEGER"))
-                conn.commit()
-                print("Added 'qty_completed' column to traveler_time_entries table")
     except Exception as e:
         print(f"Warning: Could not auto-migrate qty_completed column: {e}")
 
@@ -430,7 +424,6 @@ app.include_router(work_orders.router, prefix="/work-orders", tags=["work-orders
 app.include_router(approvals.router, prefix="/approvals", tags=["approvals"])
 app.include_router(labor.router, prefix="/labor", tags=["labor"])
 app.include_router(barcodes.router, prefix="/barcodes", tags=["barcodes"])
-app.include_router(traveler_tracking.router, prefix="/tracking", tags=["traveler-tracking"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

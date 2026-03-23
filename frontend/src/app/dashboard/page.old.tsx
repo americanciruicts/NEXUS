@@ -95,7 +95,7 @@ export default function Dashboard() {
 
   const fetchLiveUpdates = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/tracking/?limit=20`, {
+      const response = await fetch(`${API_BASE_URL}/labor/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
         }
@@ -106,7 +106,7 @@ export default function Dashboard() {
         const updates: LiveUpdate[] = data.map((entry: {
           job_number: string;
           work_center: string;
-          operator_name: string;
+          employee_name: string;
           start_time: string;
           end_time?: string | null;
           hours_worked: number;
@@ -121,7 +121,7 @@ export default function Dashboard() {
           return {
             job_number: entry.job_number,
             work_center: entry.work_center,
-            operator_name: entry.operator_name,
+            operator_name: entry.employee_name || 'Unknown',
             start_time: startTime.toLocaleTimeString(),
             end_time: entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : 'In Progress',
             time_in_step: `${hours}h ${minutes}m`,
@@ -162,7 +162,7 @@ export default function Dashboard() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 sm:p-6 lg:p-8">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50 p-4 sm:p-6 lg:p-8">
         {/* Dashboard Header */}
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -174,13 +174,13 @@ export default function Dashboard() {
               <p className="text-sm text-gray-600">Real-time operations overview with analytics</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              <Link href="/travelers/new" className="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all">
+              <Link href="/travelers/new" className="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 New Traveler
               </Link>
-              <Link href="/travelers/tracking" className="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all">
+              <Link href="/labor-tracking" className="inline-flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold rounded-lg shadow-md transition-all">
                 <CubeIcon className="w-4 h-4 mr-2" />
                 Track Traveler
               </Link>
@@ -250,7 +250,7 @@ export default function Dashboard() {
               </div>
             </Link>
 
-            <Link href="/travelers/tracking" className="group bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 rounded-lg p-4 transition-all">
+            <Link href="/labor-tracking" className="group bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 rounded-lg p-4 transition-all">
               <div className="flex flex-col items-center text-center space-y-2">
                 <div className="bg-white/20 w-12 h-12 rounded-lg flex items-center justify-center">
                   <CubeIcon className="h-6 w-6 text-white" />
@@ -310,7 +310,7 @@ export default function Dashboard() {
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
+              <thead className="bg-gradient-to-r from-teal-50 to-emerald-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Job Number</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Location</th>
@@ -346,7 +346,7 @@ export default function Dashboard() {
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
+              <thead className="bg-gradient-to-r from-teal-50 to-emerald-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Job Number</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Part Description</th>

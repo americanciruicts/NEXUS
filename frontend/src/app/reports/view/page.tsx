@@ -64,7 +64,7 @@ function ReportViewContent() {
       const token = localStorage.getItem('nexus_token');
 
       if (type === 'single_traveler' || type === 'all_travelers') {
-        const response = await fetch(`${API_BASE_URL}/tracking/?days=365`, {
+        const response = await fetch(`${API_BASE_URL}/labor/`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('API error');
@@ -156,7 +156,7 @@ function ReportViewContent() {
     }
   };
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>;
+  if (loading) return <div className="p-10 text-center text-gray-700 dark:text-slate-300 dark:bg-slate-900 min-h-screen">Loading...</div>;
 
   // Job number and operator name should only appear in tables, not in header
   const displayJobNumber = null;
@@ -170,7 +170,7 @@ function ReportViewContent() {
   const displayQuantity = travelerData[0]?.quantity || 'N/A';
 
   return (
-    <div style={{ backgroundColor: 'white', minHeight: '100vh' }}>
+    <div className="bg-white dark:bg-slate-900 min-h-screen print:bg-white">
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
@@ -184,6 +184,13 @@ function ReportViewContent() {
             margin: 0;
             padding: 0;
             background: white !important;
+            color: black !important;
+          }
+          /* Force light mode colors in print */
+          .print-version,
+          .print-version * {
+            color: #1f2937 !important;
+            background-color: transparent !important;
           }
           .print-version {
             display: block !important;
@@ -197,23 +204,51 @@ function ReportViewContent() {
             box-shadow: none !important;
             border-radius: 0 !important;
             margin: 0 !important;
+            background: white !important;
           }
-          /* Thick borders for print */
+          /* Print table borders - clean thin lines */
           table {
-            border: 3px solid #000000 !important;
+            border: 1px solid #d1d5db !important;
             width: 100% !important;
+            border-collapse: collapse !important;
           }
           th {
-            border: 2px solid #000000 !important;
+            border: 1px solid #d1d5db !important;
+            color: white !important;
           }
           td {
-            border: 2px solid #000000 !important;
+            border: 1px solid #e5e7eb !important;
+            color: #374151 !important;
           }
           thead tr {
-            border: 2px solid #000000 !important;
+            background: linear-gradient(135deg, #2563eb 0%, #4338ca 50%, #6b21a8 100%) !important;
           }
           tbody tr {
-            border: 2px solid #000000 !important;
+            border-bottom: 1px solid #e5e7eb !important;
+          }
+          /* Alternating row colors in print */
+          tbody tr:nth-child(even) {
+            background-color: #f5f3ff !important;
+          }
+          tbody tr:nth-child(odd) {
+            background-color: white !important;
+          }
+          /* Footer row */
+          tfoot tr {
+            background-color: #eef2ff !important;
+          }
+          tfoot td {
+            color: #4338ca !important;
+            font-weight: bold !important;
+          }
+          /* Green hours text */
+          .text-green-600, .text-green-400 {
+            color: #16a34a !important;
+          }
+          /* Info box print styles */
+          .info-box-print {
+            border: 1px solid #4338ca !important;
+            background: white !important;
           }
           /* Print layout - 3 columns x 2 rows grid */
           .info-grid {
@@ -457,8 +492,8 @@ function ReportViewContent() {
       </div>
 
       {/* Digital View - Professional Layout (Also used for printing) */}
-      <div className="print-version" style={{ padding: '12px', backgroundColor: '#f5f5f5', minHeight: 'calc(100vh - 80px)' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+      <div className="print-version bg-gray-100 dark:bg-slate-900 print:!bg-white" style={{ padding: '12px', minHeight: 'calc(100vh - 80px)' }}>
+        <div className="bg-white dark:bg-slate-800 print:!bg-white" style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
 
           {/* Header Section */}
           <div style={{
@@ -497,15 +532,14 @@ function ReportViewContent() {
           </div>
 
           {/* Traveler/Labor Information Box */}
-          <div style={{
-            border: '2px solid #4338ca',
+          <div className="bg-gradient-to-br from-indigo-100 to-white dark:from-indigo-900/30 dark:to-slate-800 print:!bg-white info-box-print" style={{
+            border: '1px solid #4338ca',
             borderRadius: '8px',
             padding: '15px',
             marginBottom: '20px',
-            background: 'linear-gradient(135deg, #e0e7ff 0%, #ffffff 100%)',
             boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
           }}>
-            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '12px', color: '#4338ca', borderBottom: '2px solid #4338ca', paddingBottom: '8px' }}>
+            <div className="text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 print:!text-indigo-700 print:!border-indigo-700" style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '12px', borderBottom: '2px solid', paddingBottom: '8px' }}>
               {type === 'single_traveler' ? 'Traveler Information' :
                type === 'all_travelers' ? 'All Travelers Summary' :
                type === 'single_operator' ? 'Operator Information' :
@@ -517,24 +551,24 @@ function ReportViewContent() {
             </div>
             <div className="info-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: '11px', alignItems: 'center' }}>
               {/* Universal fields for ALL report types */}
-              <div><strong>Job Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.job_number || laborData[0]?.job_number || categoryData[0]?.job_number || jobNumber || 'N/A'}</span></div>
-              <div><strong>Work Order:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.work_order || laborData[0]?.work_order || categoryData[0]?.work_order || workOrder || 'N/A'}</span></div>
-              <div><strong>PO Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.po_number || laborData[0]?.po_number || categoryData[0]?.po_number || 'N/A'}</span></div>
-              <div><strong>Part Number:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.part_number || laborData[0]?.part_number || categoryData[0]?.part_number || 'N/A'}</span></div>
-              <div><strong>Quantity:</strong> <span style={{ color: '#495057' }}>{travelerData[0]?.quantity || laborData[0]?.quantity || categoryData[0]?.quantity || 'N/A'}</span></div>
+              <div><strong>Job Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.job_number || laborData[0]?.job_number || categoryData[0]?.job_number || jobNumber || 'N/A'}</span></div>
+              <div><strong>Work Order:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.work_order || laborData[0]?.work_order || categoryData[0]?.work_order || workOrder || 'N/A'}</span></div>
+              <div><strong>PO Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.po_number || laborData[0]?.po_number || categoryData[0]?.po_number || 'N/A'}</span></div>
+              <div><strong>Part Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.part_number || laborData[0]?.part_number || categoryData[0]?.part_number || 'N/A'}</span></div>
+              <div><strong>Quantity:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.quantity || laborData[0]?.quantity || categoryData[0]?.quantity || 'N/A'}</span></div>
               {/* Additional fields for work center reports */}
               {(type === 'single_work_center' || type === 'all_work_centers') && workCenter && (
-                <div><strong>Work Center Filter:</strong> <span style={{ color: '#495057' }}>{workCenter}</span></div>
+                <div><strong>Work Center Filter:</strong> <span className="text-gray-600 dark:text-slate-300">{workCenter}</span></div>
               )}
               {/* Additional fields for operator reports */}
               {(type === 'single_operator' || type === 'all_operators') && operatorName && (
-                <div><strong>Operator Filter:</strong> <span style={{ color: '#495057' }}>{operatorName}</span></div>
+                <div><strong>Operator Filter:</strong> <span className="text-gray-600 dark:text-slate-300">{operatorName}</span></div>
               )}
               {/* Additional fields for category reports */}
               {(type === 'single_category') && categoryParam && (
-                <div><strong>Category:</strong> <span style={{ color: '#495057' }}>{categoryParam}</span></div>
+                <div><strong>Category:</strong> <span className="text-gray-600 dark:text-slate-300">{categoryParam}</span></div>
               )}
-              <div><strong>Total Hours:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>{totalHours.toFixed(2)}</span></div>
+              <div><strong>Total Hours:</strong> <span className="text-green-600 dark:text-green-400 font-bold">{totalHours.toFixed(2)}</span></div>
             </div>
           </div>
 
@@ -543,24 +577,24 @@ function ReportViewContent() {
             <>
               {/* Desktop Table View */}
               <div className="desktop-table" style={{ overflowX: 'auto', marginBottom: '0', width: '100%', maxWidth: '100%' }}>
-                <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '2px solid #000000', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <thead>
                     <tr style={{ background: 'linear-gradient(135deg, #2563eb 0%, #4338ca 50%, #6b21a8 100%)', color: 'white' }}>
-                      <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>WORK CENTER</th>
-                      <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>OPERATOR</th>
-                      <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>START TIME</th>
-                      <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>END TIME</th>
-                      <th style={{ border: '2px solid #000000', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '10%', wordWrap: 'break-word' }}>HOURS</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>WORK CENTER</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>OPERATOR</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>START TIME</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>END TIME</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '10%', wordWrap: 'break-word' }}>HOURS</th>
                     </tr>
                   </thead>
                   <tbody>
                     {travelerData.map((entry, i) => (
-                      <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#e0e7ff' }}>
-                        <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>{entry.work_center}</td>
-                        <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
-                          {entry.operator_name || 'N/A'}
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white dark:bg-slate-800 print:!bg-white' : 'bg-indigo-50 dark:bg-slate-700/50 print:!bg-indigo-50'}>
+                        <td className="text-gray-600 dark:text-slate-300" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>{entry.work_center}</td>
+                        <td className="text-gray-600 dark:text-slate-300" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
+                          {entry.employee_name || 'N/A'}
                         </td>
-                        <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                        <td className="text-gray-600 dark:text-slate-300" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                           {new Date(entry.start_time).toLocaleString('en-US', {
                             month: '2-digit',
                             day: '2-digit',
@@ -570,7 +604,7 @@ function ReportViewContent() {
                             hour12: true
                           })}
                         </td>
-                        <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                        <td className="text-gray-600 dark:text-slate-300" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                           {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                             month: '2-digit',
                             day: '2-digit',
@@ -580,18 +614,18 @@ function ReportViewContent() {
                             hour12: true
                           }) : '-'}
                         </td>
-                        <td style={{ border: '2px solid #333333', padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', color: '#28a745', wordWrap: 'break-word', overflow: 'hidden' }}>
+                        <td className="text-green-600 dark:text-green-400" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', wordWrap: 'break-word', overflow: 'hidden' }}>
                           {entry.hours_worked.toFixed(2)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ background: 'linear-gradient(135deg, #e0e7ff 0%, #ffffff 100%)' }}>
-                      <td colSpan={4} style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#4338ca' }}>
+                    <tr className="bg-indigo-50 dark:bg-slate-700/50 print:!bg-indigo-50">
+                      <td colSpan={4} className="text-indigo-600 dark:text-indigo-400" style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
                         TOTAL HOURS:
                       </td>
-                      <td style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right', color: '#28a745' }}>
+                      <td className="text-green-600 dark:text-green-400" style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
                         {travelerData.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0).toFixed(2)}
                       </td>
                     </tr>
@@ -602,12 +636,12 @@ function ReportViewContent() {
               {/* Mobile Card View */}
               <div className="mobile-card-view space-y-3 p-2">
                 {travelerData.map((entry, i) => (
-                  <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                  <div key={i} className="bg-white dark:bg-slate-800 border-2 border-gray-400 dark:border-slate-600 rounded-lg shadow-sm">
                     {/* Card Header */}
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 border-b-2 border-gray-400 px-3 py-2">
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 border-b-2 border-gray-400 dark:border-slate-600 px-3 py-2">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-white text-sm">{entry.work_center}</span>
-                        <span className="text-xs text-blue-100">{entry.operator_name || 'N/A'}</span>
+                        <span className="text-xs text-blue-100">{entry.employee_name || 'N/A'}</span>
                       </div>
                     </div>
 
@@ -615,8 +649,8 @@ function ReportViewContent() {
                     <div className="p-3 space-y-3">
                       {/* Date */}
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
-                        <div className="text-sm bg-gray-50 p-2 rounded text-center">
+                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Date</label>
+                        <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center">
                           {new Date(entry.start_time).toLocaleDateString('en-US', {
                             month: '2-digit',
                             day: '2-digit',
@@ -628,8 +662,8 @@ function ReportViewContent() {
                       {/* Time Fields Grid */}
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
-                          <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Start Time</label>
+                          <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                             {new Date(entry.start_time).toLocaleTimeString('en-US', {
                               hour: '2-digit',
                               minute: '2-digit',
@@ -638,8 +672,8 @@ function ReportViewContent() {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
-                          <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">End Time</label>
+                          <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
                               hour: '2-digit',
                               minute: '2-digit',
@@ -648,8 +682,8 @@ function ReportViewContent() {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-green-700 mb-1">Total Hours</label>
-                          <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
+                          <label className="block text-xs font-bold text-green-700 dark:text-green-400 mb-1">Total Hours</label>
+                          <div className="text-sm font-bold bg-green-50 dark:bg-green-900/30 p-2 rounded text-center text-green-700 dark:text-green-400">
                             {entry.hours_worked.toFixed(2)}
                           </div>
                         </div>
@@ -721,7 +755,7 @@ function ReportViewContent() {
                       </div>
 
                       {/* Work Centers for this Traveler */}
-                      <div style={{ border: '2px solid #4338ca', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                      <div style={{ border: '1px solid #4338ca', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
                         {Object.entries(workCenterGroups).map(([workCenter, wcEntries], wcIndex) => {
                           const wcTotal = wcEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
 
@@ -731,13 +765,11 @@ function ReportViewContent() {
                               padding: '16px'
                             }}>
                               {/* Work Center Header */}
-                              <div className="wc-header" style={{
-                                background: '#e0e7ff',
+                              <div className="wc-header bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 print:!bg-indigo-100 print:!text-indigo-700" style={{
                                 padding: '8px 12px',
                                 borderRadius: '6px',
                                 fontWeight: 'bold',
                                 fontSize: '12px',
-                                color: '#4338ca',
                                 marginBottom: '12px',
                                 display: 'flex',
                                 justifyContent: 'space-between',
@@ -751,20 +783,20 @@ function ReportViewContent() {
                               <div className="desktop-table" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
                                 <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                                   <thead>
-                                    <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
+                                    <tr className="bg-gray-50 dark:bg-slate-700 print:!bg-gray-50" style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {wcEntries.map((entry, i) => (
-                                      <tr key={i} style={{ borderBottom: '2px solid #333333' }}>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                      <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
                                         </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {new Date(entry.start_time).toLocaleString('en-US', {
                                             month: '2-digit',
                                             day: '2-digit',
@@ -774,7 +806,7 @@ function ReportViewContent() {
                                             hour12: true
                                           })}
                                         </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                                             month: '2-digit',
                                             day: '2-digit',
@@ -784,7 +816,7 @@ function ReportViewContent() {
                                             hour12: true
                                           }) : '-'}
                                         </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', color: '#28a745', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                        <td className="text-green-600 dark:text-green-400" style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.hours_worked.toFixed(2)}
                                         </td>
                                       </tr>
@@ -796,9 +828,9 @@ function ReportViewContent() {
                               {/* Mobile Card View */}
                               <div className="mobile-card-view space-y-3 p-2">
                                 {wcEntries.map((entry, i) => (
-                                  <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                                  <div key={i} className="bg-white dark:bg-slate-800 border-2 border-gray-400 dark:border-slate-600 rounded-lg shadow-sm">
                                     {/* Card Header */}
-                                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border-b-2 border-gray-400 px-3 py-2">
+                                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border-b-2 border-gray-400 dark:border-slate-600 px-3 py-2">
                                       <div className="font-bold text-white text-sm">
                                         {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
                                       </div>
@@ -808,8 +840,8 @@ function ReportViewContent() {
                                     <div className="p-3 space-y-3">
                                       {/* Date */}
                                       <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
-                                        <div className="text-sm bg-gray-50 p-2 rounded text-center">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Date</label>
+                                        <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center">
                                           {new Date(entry.start_time).toLocaleDateString('en-US', {
                                             month: '2-digit',
                                             day: '2-digit',
@@ -821,8 +853,8 @@ function ReportViewContent() {
                                       {/* Time Fields Grid */}
                                       <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                          <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
-                                          <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Start Time</label>
+                                          <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                                             {new Date(entry.start_time).toLocaleTimeString('en-US', {
                                               hour: '2-digit',
                                               minute: '2-digit',
@@ -831,8 +863,8 @@ function ReportViewContent() {
                                           </div>
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
-                                          <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">End Time</label>
+                                          <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
                                               hour: '2-digit',
                                               minute: '2-digit',
@@ -841,8 +873,8 @@ function ReportViewContent() {
                                           </div>
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-bold text-green-700 mb-1">Total Hours</label>
-                                          <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
+                                          <label className="block text-xs font-bold text-green-700 dark:text-green-400 mb-1">Total Hours</label>
+                                          <div className="text-sm font-bold bg-green-50 dark:bg-green-900/30 p-2 rounded text-center text-green-700 dark:text-green-400">
                                             {entry.hours_worked.toFixed(2)}
                                           </div>
                                         </div>
@@ -939,7 +971,7 @@ function ReportViewContent() {
                       </div>
 
                       {/* Work Centers for this Traveler */}
-                      <div style={{ border: '2px solid #4338ca', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                      <div style={{ border: '1px solid #4338ca', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
                         {Object.entries(workCenterGroups).map(([workCenter, wcEntries], wcIndex) => {
                           const wcTotal = wcEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
 
@@ -949,13 +981,11 @@ function ReportViewContent() {
                               padding: '16px'
                             }}>
                               {/* Work Center Header */}
-                              <div className="wc-header" style={{
-                                background: '#e0e7ff',
+                              <div className="wc-header bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 print:!bg-indigo-100 print:!text-indigo-700" style={{
                                 padding: '8px 12px',
                                 borderRadius: '6px',
                                 fontWeight: 'bold',
                                 fontSize: '12px',
-                                color: '#4338ca',
                                 marginBottom: '12px',
                                 display: 'flex',
                                 justifyContent: 'space-between',
@@ -969,20 +999,20 @@ function ReportViewContent() {
                               <div className="desktop-table" style={{ overflowX: 'auto', width: '100%', maxWidth: '100%' }}>
                                 <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                                   <thead>
-                                    <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', color: '#495057', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
-                                      <th style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', color: '#495057', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
+                                    <tr className="bg-gray-50 dark:bg-slate-700 print:!bg-gray-50" style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {wcEntries.map((entry, i) => (
-                                      <tr key={i} style={{ borderBottom: '2px solid #333333' }}>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                      <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
                                         </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {new Date(entry.start_time).toLocaleString('en-US', {
                                             month: '2-digit',
                                             day: '2-digit',
@@ -992,7 +1022,7 @@ function ReportViewContent() {
                                             hour12: true
                                           })}
                                         </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', color: '#495057', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                                             month: '2-digit',
                                             day: '2-digit',
@@ -1002,7 +1032,7 @@ function ReportViewContent() {
                                             hour12: true
                                           }) : '-'}
                                         </td>
-                                        <td style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', color: '#28a745', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                        <td className="text-green-600 dark:text-green-400" style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.hours_worked.toFixed(2)}
                                         </td>
                                       </tr>
@@ -1014,9 +1044,9 @@ function ReportViewContent() {
                               {/* Mobile Card View */}
                               <div className="mobile-card-view space-y-3 p-2">
                                 {wcEntries.map((entry, i) => (
-                                  <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
+                                  <div key={i} className="bg-white dark:bg-slate-800 border-2 border-gray-400 dark:border-slate-600 rounded-lg shadow-sm">
                                     {/* Card Header */}
-                                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border-b-2 border-gray-400 px-3 py-2">
+                                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border-b-2 border-gray-400 dark:border-slate-600 px-3 py-2">
                                       <div className="font-bold text-white text-sm">
                                         {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
                                       </div>
@@ -1026,8 +1056,8 @@ function ReportViewContent() {
                                     <div className="p-3 space-y-3">
                                       {/* Date */}
                                       <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Date</label>
-                                        <div className="text-sm bg-gray-50 p-2 rounded text-center">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Date</label>
+                                        <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center">
                                           {new Date(entry.start_time).toLocaleDateString('en-US', {
                                             month: '2-digit',
                                             day: '2-digit',
@@ -1039,8 +1069,8 @@ function ReportViewContent() {
                                       {/* Time Fields Grid */}
                                       <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                          <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
-                                          <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Start Time</label>
+                                          <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                                             {new Date(entry.start_time).toLocaleTimeString('en-US', {
                                               hour: '2-digit',
                                               minute: '2-digit',
@@ -1049,8 +1079,8 @@ function ReportViewContent() {
                                           </div>
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
-                                          <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">End Time</label>
+                                          <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', {
                                               hour: '2-digit',
                                               minute: '2-digit',
@@ -1059,8 +1089,8 @@ function ReportViewContent() {
                                           </div>
                                         </div>
                                         <div>
-                                          <label className="block text-xs font-bold text-green-700 mb-1">Total Hours</label>
-                                          <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
+                                          <label className="block text-xs font-bold text-green-700 dark:text-green-400 mb-1">Total Hours</label>
+                                          <div className="text-sm font-bold bg-green-50 dark:bg-green-900/30 p-2 rounded text-center text-green-700 dark:text-green-400">
                                             {entry.hours_worked.toFixed(2)}
                                           </div>
                                         </div>
@@ -1171,26 +1201,26 @@ function ReportViewContent() {
                             </thead>
                             <tbody>
                               {catEntries.map((entry, i) => (
-                                <tr key={i} style={{ borderBottom: '1px solid #dee2e6', backgroundColor: i % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
-                                  <td style={{ padding: '6px', fontSize: '10px', color: '#333', fontWeight: '600' }}>
+                                <tr key={i} className={i % 2 === 0 ? 'bg-white dark:bg-slate-800 print:!bg-white' : 'bg-gray-50 dark:bg-slate-700/50 print:!bg-gray-50'} style={{ borderBottom: '1px solid #dee2e6' }}>
+                                  <td className="text-gray-700 dark:text-slate-200" style={{ padding: '6px', fontSize: '10px', fontWeight: '600' }}>
                                     {entry.work_center || 'N/A'}
                                   </td>
-                                  <td style={{ padding: '6px', fontSize: '10px', color: '#495057' }}>
+                                  <td className="text-gray-600 dark:text-slate-300" style={{ padding: '6px', fontSize: '10px' }}>
                                     {extractOperatorName(entry.description) || entry.employee_name || 'N/A'}
                                   </td>
-                                  <td style={{ padding: '6px', fontSize: '10px', color: '#495057' }}>
+                                  <td className="text-gray-600 dark:text-slate-300" style={{ padding: '6px', fontSize: '10px' }}>
                                     {entry.start_time ? new Date(entry.start_time).toLocaleString('en-US', {
                                       month: '2-digit', day: '2-digit', year: 'numeric',
                                       hour: '2-digit', minute: '2-digit', hour12: true
                                     }) : '-'}
                                   </td>
-                                  <td style={{ padding: '6px', fontSize: '10px', color: '#495057' }}>
+                                  <td className="text-gray-600 dark:text-slate-300" style={{ padding: '6px', fontSize: '10px' }}>
                                     {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                                       month: '2-digit', day: '2-digit', year: 'numeric',
                                       hour: '2-digit', minute: '2-digit', hour12: true
                                     }) : '-'}
                                   </td>
-                                  <td style={{ padding: '6px', fontSize: '10px', textAlign: 'right', fontWeight: 'bold', color: '#28a745' }}>
+                                  <td className="text-green-600 dark:text-green-400" style={{ padding: '6px', fontSize: '10px', textAlign: 'right', fontWeight: 'bold' }}>
                                     {entry.hours_worked.toFixed(2)}
                                   </td>
                                 </tr>
@@ -1211,8 +1241,8 @@ function ReportViewContent() {
                         {/* Mobile Card View */}
                         <div className="mobile-card-view space-y-3 p-2">
                           {catEntries.map((entry, i) => (
-                            <div key={i} className="bg-white border-2 border-gray-400 rounded-lg shadow-sm">
-                              <div style={{ background: colors.bg }} className="border-b-2 border-gray-400 px-3 py-2">
+                            <div key={i} className="bg-white dark:bg-slate-800 border-2 border-gray-400 dark:border-slate-600 rounded-lg shadow-sm">
+                              <div style={{ background: colors.bg }} className="border-b-2 border-gray-400 dark:border-slate-600 px-3 py-2">
                                 <div className="font-bold text-white text-sm">
                                   {entry.work_center || 'N/A'}
                                 </div>
@@ -1223,8 +1253,8 @@ function ReportViewContent() {
                               <div className="p-3 space-y-3">
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
-                                    <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Start Time</label>
+                                    <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                                       {entry.start_time ? new Date(entry.start_time).toLocaleString('en-US', {
                                         month: '2-digit', day: '2-digit', year: 'numeric',
                                         hour: '2-digit', minute: '2-digit', hour12: true
@@ -1232,8 +1262,8 @@ function ReportViewContent() {
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">End Time</label>
-                                    <div className="text-sm bg-blue-50 p-2 rounded text-center font-medium">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">End Time</label>
+                                    <div className="text-sm bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-center font-medium">
                                       {entry.end_time ? new Date(entry.end_time).toLocaleString('en-US', {
                                         month: '2-digit', day: '2-digit', year: 'numeric',
                                         hour: '2-digit', minute: '2-digit', hour12: true
@@ -1242,8 +1272,8 @@ function ReportViewContent() {
                                   </div>
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-bold text-green-700 mb-1">Hours</label>
-                                  <div className="text-sm font-bold bg-green-50 p-2 rounded text-center text-green-700">
+                                  <label className="block text-xs font-bold text-green-700 dark:text-green-400 mb-1">Hours</label>
+                                  <div className="text-sm font-bold bg-green-50 dark:bg-green-900/30 p-2 rounded text-center text-green-700 dark:text-green-400">
                                     {entry.hours_worked.toFixed(2)}
                                   </div>
                                 </div>

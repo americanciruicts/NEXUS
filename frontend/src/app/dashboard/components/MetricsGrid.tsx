@@ -46,7 +46,7 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
       iconColor: 'text-violet-300',
       gradient: 'from-violet-600 via-indigo-700 to-purple-800',
       ring: 'ring-violet-500/20',
-      href: '/travelers/tracking'
+      href: '/labor-tracking'
     },
     {
       title: 'On Hold',

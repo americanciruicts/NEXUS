@@ -35,7 +35,6 @@ class DashboardStats(BaseModel):
 
     # Real-time Operations
     active_labor_entries: int
-    active_tracking_entries: int
 
     class Config:
         from_attributes = True

@@ -71,7 +71,7 @@ interface DashboardTraveler {
 interface RawTrackingEntry {
   job_number: string;
   work_center: string;
-  operator_name: string;
+  employee_name: string;
   start_time: string;
   end_time: string | null;
   hours_worked: number;
@@ -213,7 +213,7 @@ export default function Dashboard() {
 
   const fetchTrackingEntries = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/tracking/?limit=100`, {
+      const response = await fetch(`${API_BASE_URL}/labor/`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
       });
       if (response.ok) {
@@ -231,7 +231,7 @@ export default function Dashboard() {
           return {
             job_number: entry.job_number,
             work_center: entry.work_center,
-            operator_name: entry.operator_name,
+            operator_name: entry.employee_name || 'Unknown',
             start_time: startTime.toLocaleTimeString(),
             end_time: entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : 'In Progress',
             time_in_step: `${hours}h ${minutes}m`,
@@ -337,7 +337,7 @@ export default function Dashboard() {
                   <PlusCircleIcon className="w-4 h-4" />
                   New Traveler
                 </Link>
-                <Link href="/travelers/tracking" className="inline-flex items-center px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-xs font-bold rounded-lg border border-white/25 transition-all gap-1.5">
+                <Link href="/labor-tracking" className="inline-flex items-center px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-xs font-bold rounded-lg border border-white/25 transition-all gap-1.5">
                   <MapPinIcon className="w-4 h-4" />
                   Track
                 </Link>
@@ -580,7 +580,7 @@ export default function Dashboard() {
 
             {/* Live Tracking + Alerts Row */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-              {/* Live Traveler Tracking */}
+              {/* Live Labor Tracking */}
               <div className="bg-white dark:bg-slate-800 shadow-md rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
                 <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-gray-50/80 dark:bg-slate-900/50">
                   <div className="flex items-center gap-1.5">
@@ -590,7 +590,7 @@ export default function Dashboard() {
                       {liveUpdates.filter(u => u.is_active).length} live
                     </span>
                   </div>
-                  <Link href="/travelers/tracking" className="text-blue-600 dark:text-blue-400 text-[9px] font-semibold hover:underline">
+                  <Link href="/labor-tracking" className="text-blue-600 dark:text-blue-400 text-[9px] font-semibold hover:underline">
                     View All
                   </Link>
                 </div>
@@ -641,7 +641,7 @@ export default function Dashboard() {
                       { title: 'Pending', count: dashboardData.pending_approvals || 0, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', href: '/travelers?status=DRAFT' },
                       { title: 'On Hold', count: dashboardData.on_hold_travelers || 0, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/20', href: '/travelers?status=ON_HOLD' },
                       { title: 'Overdue', count: dashboardData.overdue_travelers || 0, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', href: '/travelers?view=active' },
-                      { title: 'Active Labor', count: dashboardData.active_labor_entries || 0, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', href: '/travelers/tracking' },
+                      { title: 'Active Labor', count: dashboardData.active_labor_entries || 0, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', href: '/labor-tracking' },
                     ].map((alert, i) => (
                       <Link key={i} href={alert.href} className={`${alert.bg} rounded-lg p-2 hover:shadow-sm transition-all`}>
                         <p className="text-[9px] font-semibold text-gray-500 dark:text-slate-400 uppercase">{alert.title}</p>

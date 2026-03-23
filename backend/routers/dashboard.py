@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, and_
+from sqlalchemy import func, case, and_, or_
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from database import get_db
 from models import (
-    User, Traveler, LaborEntry, TravelerTimeEntry,
+    User, Traveler, LaborEntry,
     ProcessStep, Approval, TravelerTrackingLog, TravelerStatus, ApprovalStatus
 )
 from routers.auth import get_current_user
@@ -37,13 +37,23 @@ async def get_dashboard_stats(
     else:
         start_dt = end_dt - timedelta(days=7)
 
+    # Date range strings for due_date/ship_date filtering (stored as strings YYYY-MM-DD)
+    start_date_str = start_dt.strftime("%Y-%m-%d")
+    end_date_str = end_dt.strftime("%Y-%m-%d")
+
+    # Filter for travelers whose due_date or ship_date falls in the range (or have no dates set)
+    date_range_filter = or_(
+        and_(Traveler.due_date.isnot(None), Traveler.due_date >= start_date_str, Traveler.due_date <= end_date_str),
+        and_(Traveler.ship_date.isnot(None), Traveler.ship_date >= start_date_str, Traveler.ship_date <= end_date_str),
+        and_(Traveler.due_date.is_(None), Traveler.ship_date.is_(None))
+    )
+
     # Status Distribution
     status_counts = db.query(
         Traveler.status,
         func.count(Traveler.id).label('count')
     ).filter(
-        Traveler.created_at >= start_dt,
-        Traveler.created_at <= end_dt,
+        date_range_filter,
         Traveler.is_active == True
     ).group_by(Traveler.status).all()
 
@@ -105,15 +115,13 @@ async def get_dashboard_stats(
             for week, hours in labor_trend_data
         ]
 
-    # Production Metrics
+    # Production Metrics - filtered by due_date/ship_date
     travelers_created = db.query(func.count(Traveler.id)).filter(
-        Traveler.created_at >= start_dt,
-        Traveler.created_at <= end_dt
+        date_range_filter
     ).scalar() or 0
 
     travelers_completed = db.query(func.count(Traveler.id)).filter(
-        Traveler.created_at >= start_dt,
-        Traveler.created_at <= end_dt,
+        date_range_filter,
         Traveler.status == TravelerStatus.COMPLETED
     ).scalar() or 0
 
@@ -125,8 +133,7 @@ async def get_dashboard_stats(
             func.extract('epoch', Traveler.completed_at - Traveler.created_at) / 3600
         ).label('avg_hours')
     ).filter(
-        Traveler.created_at >= start_dt,
-        Traveler.created_at <= end_dt,
+        date_range_filter,
         Traveler.status == TravelerStatus.COMPLETED,
         Traveler.completed_at.isnot(None)
     ).first()
@@ -181,10 +188,6 @@ async def get_dashboard_stats(
         LaborEntry.is_completed == False
     ).scalar() or 0
 
-    active_tracking_entries = db.query(func.count(TravelerTimeEntry.id)).filter(
-        TravelerTimeEntry.end_time.is_(None)
-    ).scalar() or 0
-
     return DashboardStats(
         start_date=start_dt,
         end_date=end_dt,
@@ -201,6 +204,5 @@ async def get_dashboard_stats(
         pending_approvals=pending_approvals,
         on_hold_travelers=on_hold_travelers,
         overdue_travelers=overdue_travelers,
-        active_labor_entries=active_labor_entries,
-        active_tracking_entries=active_tracking_entries
+        active_labor_entries=active_labor_entries
     )
