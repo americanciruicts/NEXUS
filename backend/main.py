@@ -326,7 +326,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not auto-migrate qty_completed column: {e}")
 
-    # Migration v2: Wipe all PCB_ASSEMBLY work centers and reinsert exact 46 in order
+    # Migration v2: Wipe all PCB_ASSEMBLY work centers and reinsert exact 47 in order
     try:
         from database import SessionLocal
         from models import WorkCenter
@@ -337,7 +337,7 @@ async def lifespan(app: FastAPI):
         db.commit()
         print(f"Deleted {deleted} old PCB_ASSEMBLY work centers")
 
-        # Exact 46 work centers in order: (name, description, department, category)
+        # Exact 47 work centers in order: (name, description, department, category)
         PCB_ASSY = [
             ('ENGINEERING', 'Reverse engineering and design', 'Engineering/Prep', None),
             ('GENERATE CAD', 'Generate CAD design files', 'Engineering/Prep', None),

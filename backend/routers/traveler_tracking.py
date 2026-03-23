@@ -297,6 +297,7 @@ async def get_all_time_entries(
             "hours_worked": entry.hours_worked,
             "pause_duration": entry.pause_duration,
             "is_completed": entry.is_completed,
+            "qty_completed": entry.qty_completed,
             "created_at": entry.created_at,
             "work_order": traveler.work_order_number if traveler else None,
             "po_number": traveler.po_number if traveler else None,

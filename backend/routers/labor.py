@@ -398,7 +398,8 @@ async def get_all_labor_entries(
             "work_order": traveler.work_order_number if traveler else None,
             "po_number": traveler.po_number if traveler else None,
             "part_number": traveler.part_number if traveler else None,
-            "quantity": traveler.quantity if traveler else None
+            "quantity": traveler.quantity if traveler else None,
+            "qty_completed": entry.qty_completed
         }
         result.append(LaborEntryResponse(**entry_dict))
 
@@ -441,6 +442,7 @@ async def get_traveler_labor_entries(
             "is_completed": entry.is_completed,
             "work_center": entry.work_center,
             "sequence_number": entry.sequence_number,
+            "qty_completed": entry.qty_completed,
             "created_at": entry.created_at
         }
         result.append(LaborEntryResponse(**entry_dict))
@@ -495,6 +497,7 @@ async def get_my_labor_entries(
             "is_completed": entry.is_completed,
             "work_center": entry.work_center,
             "sequence_number": entry.sequence_number,
+            "qty_completed": entry.qty_completed,
             "created_at": entry.created_at,
             "work_order": traveler.work_order_number if traveler else None,
             "po_number": traveler.po_number if traveler else None,
