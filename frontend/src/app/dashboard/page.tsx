@@ -160,10 +160,10 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Re-fetch travelers when date range changes
+  // Fetch all travelers on mount
   useEffect(() => {
     fetchDashboardTravelers();
-  }, [startDate, endDate]);
+  }, []);
 
   // Derive overdue jobs from dashboard travelers
   useEffect(() => {
@@ -191,10 +191,7 @@ export default function Dashboard() {
 
   const fetchDashboardTravelers = async (retryCount = 0) => {
     try {
-      const pad = (n: number) => n.toString().padStart(2, '0');
-      const startStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
-      const endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}`;
-      const response = await fetch(`${API_BASE_URL}/travelers/dashboard-summary?start_date=${startStr}&end_date=${endStr}`, {
+      const response = await fetch(`${API_BASE_URL}/travelers/dashboard-summary`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
       });
       if (response.ok) {

@@ -273,6 +273,9 @@ class NotificationType(enum.Enum):
     LABOR_ENTRY_CREATED = "LABOR_ENTRY_CREATED"
     LABOR_ENTRY_UPDATED = "LABOR_ENTRY_UPDATED"
     LABOR_ENTRY_DELETED = "LABOR_ENTRY_DELETED"
+    TRACKING_ENTRY_CREATED = "TRACKING_ENTRY_CREATED"  # Legacy - kept for existing notifications
+    TRACKING_ENTRY_UPDATED = "TRACKING_ENTRY_UPDATED"  # Legacy - kept for existing notifications
+    TRACKING_ENTRY_DELETED = "TRACKING_ENTRY_DELETED"  # Legacy - kept for existing notifications
     USER_LOGIN = "USER_LOGIN"
 
 class Notification(Base):

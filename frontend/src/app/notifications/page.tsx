@@ -21,7 +21,7 @@ interface Notification {
   id: number;
   title: string;
   message: string;
-  notification_type: 'TRAVELER_CREATED' | 'TRAVELER_UPDATED' | 'TRAVELER_DELETED' | 'LABOR_ENTRY_CREATED' | 'LABOR_ENTRY_UPDATED' | 'LABOR_ENTRY_DELETED' | 'USER_LOGIN';
+  notification_type: 'TRAVELER_CREATED' | 'TRAVELER_UPDATED' | 'TRAVELER_DELETED' | 'LABOR_ENTRY_CREATED' | 'LABOR_ENTRY_UPDATED' | 'LABOR_ENTRY_DELETED' | 'TRACKING_ENTRY_CREATED' | 'TRACKING_ENTRY_UPDATED' | 'TRACKING_ENTRY_DELETED' | 'USER_LOGIN';
   is_read: boolean;
   created_at: string;
   related_entity_type?: string;
