@@ -212,14 +212,6 @@ export default function Header() {
                         <span>New Traveler</span>
                       </Link>
                     )}
-                    <Link
-                      href="/labor-tracking"
-                      onClick={() => setShowTravelerMenu(false)}
-                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
-                    >
-                      <MapPinIcon className="h-4 w-4 text-purple-600" />
-                      <span>Labor Tracking</span>
-                    </Link>
                   </div>
                 </div>
               )}
@@ -511,14 +503,6 @@ export default function Header() {
                       <span>New Traveler</span>
                     </Link>
                   )}
-                  <Link
-                    href="/labor-tracking"
-                    onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
-                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
-                  >
-                    <MapPinIcon className="h-4 w-4 text-purple-600" />
-                    <span>Labor Tracking</span>
-                  </Link>
                 </div>
               )}
             </div>
