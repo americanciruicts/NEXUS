@@ -84,36 +84,53 @@ async def get_dashboard_stats(
         for wc, hours in labor_by_wc
     ]
 
-    # Labor trend (daily aggregation) - use start_time for actual work date
+    # Labor trend by work center (daily/weekly aggregation)
     days_diff = (end_dt - start_dt).days
     if days_diff <= 31:
-        # Daily trend for <= 31 days
         labor_trend_data = db.query(
             func.date(LaborEntry.start_time).label('date'),
+            LaborEntry.work_center,
             func.sum(LaborEntry.hours_worked).label('hours')
         ).filter(
             LaborEntry.start_time >= start_dt,
             LaborEntry.start_time <= end_dt
-        ).group_by(func.date(LaborEntry.start_time)).order_by(func.date(LaborEntry.start_time)).all()
+        ).group_by(func.date(LaborEntry.start_time), LaborEntry.work_center).order_by(func.date(LaborEntry.start_time)).all()
 
-        labor_trend = [
-            {"date": date.strftime("%b %d") if date else "", "hours": float(hours)}
-            for date, hours in labor_trend_data
-        ]
+        # Pivot: group by date, each work center becomes a key
+        from collections import OrderedDict
+        date_map = OrderedDict()
+        all_work_centers = set()
+        for date, wc, hours in labor_trend_data:
+            date_str = date.strftime("%b %d") if date else ""
+            wc_name = wc or "Unknown"
+            all_work_centers.add(wc_name)
+            if date_str not in date_map:
+                date_map[date_str] = {"date": date_str}
+            date_map[date_str][wc_name] = round(float(hours), 2)
+
+        labor_trend = list(date_map.values())
     else:
-        # Weekly trend for > 31 days
         labor_trend_data = db.query(
             func.date_trunc('week', LaborEntry.start_time).label('week'),
+            LaborEntry.work_center,
             func.sum(LaborEntry.hours_worked).label('hours')
         ).filter(
             LaborEntry.start_time >= start_dt,
             LaborEntry.start_time <= end_dt
-        ).group_by(func.date_trunc('week', LaborEntry.start_time)).order_by(func.date_trunc('week', LaborEntry.start_time)).all()
+        ).group_by(func.date_trunc('week', LaborEntry.start_time), LaborEntry.work_center).order_by(func.date_trunc('week', LaborEntry.start_time)).all()
 
-        labor_trend = [
-            {"date": week.strftime("%b %d") if week else "", "hours": float(hours)}
-            for week, hours in labor_trend_data
-        ]
+        from collections import OrderedDict
+        date_map = OrderedDict()
+        all_work_centers = set()
+        for week, wc, hours in labor_trend_data:
+            date_str = week.strftime("%b %d") if week else ""
+            wc_name = wc or "Unknown"
+            all_work_centers.add(wc_name)
+            if date_str not in date_map:
+                date_map[date_str] = {"date": date_str}
+            date_map[date_str][wc_name] = round(float(hours), 2)
+
+        labor_trend = list(date_map.values())
 
     # Production Metrics - filtered by due_date/ship_date
     travelers_created = db.query(func.count(Traveler.id)).filter(

@@ -8,7 +8,7 @@ export interface DashboardData {
   status_distribution: { [key: string]: number };
   total_labor_hours: number;
   labor_by_work_center: Array<{ workCenter: string; hours: number }>;
-  labor_trend: Array<{ date: string; hours: number }>;
+  labor_trend: Array<Record<string, any>>;
   travelers_created: number;
   travelers_completed: number;
   completion_rate: number;
