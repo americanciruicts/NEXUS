@@ -10,9 +10,9 @@ interface LayoutProps {
 
 export default function Layout({ children, fullWidth = false }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100 transition-colors duration-200">
       <Header />
-      <main className={fullWidth ? "py-4 px-4 sm:px-6 lg:px-8" : "max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"}>
+      <main className={fullWidth ? "py-4 px-3 sm:px-6 lg:px-8" : "max-w-7xl mx-auto py-4 sm:py-6 px-3 sm:px-6 lg:px-8"}>
         {children}
       </main>
     </div>

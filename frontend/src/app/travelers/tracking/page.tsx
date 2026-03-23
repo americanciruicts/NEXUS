@@ -17,12 +17,14 @@ interface ActiveSession {
   work_center: string;
   operator_name: string;
   start_time: string;
+  pause_time?: string;
   traveler_id?: number;
 }
 
 interface TrackingEntry {
   id: number;
   job_number: string;
+  work_order?: string;
   work_center: string;
   sequence_number?: number;
   operator_name: string;
@@ -31,6 +33,7 @@ interface TrackingEntry {
   pause_time?: string;
   pause_duration?: number; // in hours
   hours_worked: number;
+  qty_completed?: number;
 }
 
 interface TimeEntryData {
@@ -52,7 +55,9 @@ export default function TravelerTracking() {
   const [jobNumber, setJobNumber] = useState('');
   const [workCenter, setWorkCenter] = useState('');
   const [operatorName, setOperatorName] = useState('');
+  const [operatorId, setOperatorId] = useState<number | undefined>(undefined);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
+  const [jobWorkCenterOptions, setJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [trackingEntries, setTrackingEntries] = useState<TrackingEntry[]>([]);
   const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
@@ -86,9 +91,11 @@ export default function TravelerTracking() {
     job_number: '',
     work_center: '',
     operator_name: '',
+    operator_id: undefined as number | undefined,
     start_time: '',
     end_time: '',
   });
+  const [manualJobWorkCenterOptions, setManualJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [editEntryData, setEditEntryData] = useState({
     id: 0,
     job_number: '',
@@ -97,6 +104,11 @@ export default function TravelerTracking() {
     start_time: '',
     end_time: '',
   });
+
+  // Qty completed modal states
+  const [isQtyModalOpen, setIsQtyModalOpen] = useState(false);
+  const [qtyCompleted, setQtyCompleted] = useState('');
+  const [travelerMaxQty, setTravelerMaxQty] = useState<number | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -123,6 +135,15 @@ export default function TravelerTracking() {
     };
   }, [activeSession, isPaused]);
 
+  // Auto-fill operator name from signed-in user
+  useEffect(() => {
+    if (user && !activeSession) {
+      const fullName = `${user.first_name || user.username}`.trim();
+      setOperatorName(fullName);
+      setOperatorId(user.id);
+    }
+  }, [user]);
+
   // Load tracking entries and check for active session
   useEffect(() => {
     checkAutoStop5pm();
@@ -140,8 +161,8 @@ export default function TravelerTracking() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `${API_BASE_URL}/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
-        : `${API_BASE_URL}/search/autocomplete/job-numbers?limit=10`;
+        ? `${API_BASE_URL}/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=20`
+        : `${API_BASE_URL}/search/autocomplete/job-numbers?limit=20`;
 
       const response = await fetch(url, {
         headers: {
@@ -198,8 +219,8 @@ export default function TravelerTracking() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `${API_BASE_URL}/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
-        : `${API_BASE_URL}/search/autocomplete/operators?limit=10`;
+        ? `${API_BASE_URL}/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=50`
+        : `${API_BASE_URL}/search/autocomplete/operators?limit=50`;
 
       const response = await fetch(url, {
         headers: {
@@ -221,6 +242,47 @@ export default function TravelerTracking() {
       console.error('Error fetching operators:', error);
       return [];
     }
+  };
+
+  // Fetch work centers from process steps for a specific job number
+  const fetchWorkCentersByJob = async (jobNumber: string, query: string = '') => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const url = `${API_BASE_URL}/search/autocomplete/work-centers-by-job?job_number=${encodeURIComponent(jobNumber)}&q=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.map((item: any) => ({
+          value: item.value,
+          label: item.label,
+          description: `Step ${item.step_number}`,
+          ...item
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching work centers by job:', error);
+      return [];
+    }
+  };
+
+  // When job number text changes (typing), just update the value - don't fetch steps yet
+  const handleJobNumberChange = (value: string) => {
+    setJobNumber(value);
+    if (!value) {
+      setJobWorkCenterOptions([]);
+    }
+  };
+
+  // Handle job number selection from autocomplete
+  const handleJobNumberSelect = async (option: any) => {
+    const jobNum = option.job_number || option.value;
+    setJobNumber(jobNum);
+    setWorkCenter('');
+    const steps = await fetchWorkCentersByJob(jobNum);
+    setJobWorkCenterOptions(steps);
   };
 
   // Check and auto-stop entries at 5pm
@@ -263,6 +325,7 @@ export default function TravelerTracking() {
             work_center: data.work_center,
             operator_name: data.operator_name,
             start_time: data.start_time,
+            pause_time: data.pause_time,
             traveler_id: data.traveler_id
           };
 
@@ -270,6 +333,17 @@ export default function TravelerTracking() {
           setJobNumber(data.job_number);
           setWorkCenter(data.work_center);
           setOperatorName(data.operator_name);
+          if (data.quantity) setTravelerMaxQty(data.quantity);
+
+          // Restore paused state if the entry was paused
+          if (data.pause_time) {
+            const paused = new Date(data.pause_time);
+            const start = new Date(data.start_time);
+            setIsPaused(true);
+            setPauseTime(paused);
+            // Freeze elapsed time at the moment it was paused
+            setElapsedTime(Math.floor((paused.getTime() - start.getTime()) / 1000));
+          }
         }
       }
     } catch (error) {
@@ -291,9 +365,10 @@ export default function TravelerTracking() {
         const data = await response.json();
 
         const entries: TrackingEntry[] = data
-          .map((entry: TimeEntryData) => ({
+          .map((entry: any) => ({
             id: entry.id,
             job_number: entry.job_number,
+            work_order: entry.work_order,
             work_center: entry.work_center,
             sequence_number: undefined,
             operator_name: entry.operator_name,
@@ -301,7 +376,8 @@ export default function TravelerTracking() {
             end_time: entry.end_time || '',
             pause_time: entry.pause_time,
             pause_duration: entry.pause_duration || 0,
-            hours_worked: entry.hours_worked
+            hours_worked: entry.hours_worked,
+            qty_completed: entry.qty_completed
           }));
 
         setTrackingEntries(entries);
@@ -364,6 +440,7 @@ export default function TravelerTracking() {
         };
 
         setActiveSession(session);
+        setTravelerMaxQty(data.quantity || null);
         setMessage(`✅ Started tracking ${jobNumber} at ${workCenter}`);
         setTimeout(() => setMessage(''), 3000);
 
@@ -421,14 +498,47 @@ export default function TravelerTracking() {
     }
   };
 
-  const handleResume = () => {
-    setIsPaused(false);
-    setPauseTime(null);
-    setMessage('▶️ Tracking resumed');
-    setTimeout(() => setMessage(''), 3000);
+  const handleResume = async () => {
+    if (!activeSession) return;
+
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const response = await fetch(`${API_BASE_URL}/tracking/${activeSession.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || 'mock-token'}`
+        },
+        body: JSON.stringify({
+          clear_pause: true
+        })
+      });
+
+      if (response.ok) {
+        setIsPaused(false);
+        setPauseTime(null);
+        setMessage('▶️ Tracking resumed');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        const error = await response.json();
+        setMessage(`❌ Error: ${error.detail || 'Failed to resume tracking'}`);
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error resuming session:', error);
+      setMessage('❌ Error resuming session');
+      setTimeout(() => setMessage(''), 3000);
+    }
   };
 
-  const handleStop = async () => {
+  const handleStop = () => {
+    if (!activeSession) return;
+    // Show qty modal before stopping
+    setQtyCompleted('');
+    setIsQtyModalOpen(true);
+  };
+
+  const confirmStop = async () => {
     if (!activeSession) return;
 
     try {
@@ -443,7 +553,8 @@ export default function TravelerTracking() {
         },
         body: JSON.stringify({
           end_time: endTime.toISOString(),
-          is_completed: true
+          is_completed: true,
+          qty_completed: qtyCompleted ? parseInt(qtyCompleted) : null
         })
       });
 
@@ -454,7 +565,10 @@ export default function TravelerTracking() {
         setIsPaused(false);
         setWorkCenter('');
         setJobNumber('');
-        setOperatorName('');
+        const fullName = user ? (`${user.first_name || user.username}`.trim()) : '';
+        setOperatorName(fullName);
+        setOperatorId(user?.id);
+        setJobWorkCenterOptions([]);
         setMessage(`✅ Completed tracking - Duration: ${formatHoursDual(data.hours_worked)}`);
         setTimeout(() => setMessage(''), 5000);
 
@@ -470,6 +584,9 @@ export default function TravelerTracking() {
       console.error('Error stopping session:', error);
       setMessage('❌ Error stopping session');
       setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setIsQtyModalOpen(false);
+      setQtyCompleted('');
     }
   };
 
@@ -562,9 +679,11 @@ export default function TravelerTracking() {
           job_number: '',
           work_center: '',
           operator_name: '',
+          operator_id: undefined,
           start_time: '',
           end_time: '',
         });
+        setManualJobWorkCenterOptions([]);
 
         // Reload entries but DO NOT check for active session (to avoid timer activation)
         loadTrackingEntries();
@@ -761,10 +880,10 @@ export default function TravelerTracking() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <div className="w-full space-y-4 p-2 sm:p-4 lg:p-6">
           {/* Compact Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+          <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -776,7 +895,7 @@ export default function TravelerTracking() {
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Traveler Tracking</h1>
-                  <p className="text-sm text-blue-200/80 mt-0.5">Work center time & location</p>
+                  <p className="text-sm text-teal-200/80 mt-0.5">Work center time & location</p>
                 </div>
               </div>
               {user?.role === 'ADMIN' && (
@@ -795,9 +914,9 @@ export default function TravelerTracking() {
           {/* Message Alert */}
           {message && (
             <div className={`p-4 rounded-lg ${
-              message.includes('✅') ? 'bg-green-50 text-green-800 border border-green-200' :
-              message.includes('⚠️') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
-              'bg-red-50 text-red-800 border border-red-200'
+              message.includes('✅') ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700' :
+              message.includes('⚠️') ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700' :
+              'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-700'
             }`}>
               {message}
             </div>
@@ -806,11 +925,11 @@ export default function TravelerTracking() {
           {/* Tracking Form with Dashboard Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Main Tracking Form */}
-            <div className="lg:col-span-2 bg-white/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 p-4 sm:p-6">
+            <div className="lg:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Tracking Controls</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100">Tracking Controls</h2>
                 {activeSession && (
-                  <span className="flex items-center space-x-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
+                  <span className="flex items-center space-x-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-semibold">
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                     <span>ACTIVE</span>
                   </span>
@@ -831,7 +950,7 @@ export default function TravelerTracking() {
                         stroke="currentColor"
                         strokeWidth="8"
                         fill="none"
-                        className="text-gray-200"
+                        className="text-gray-200 dark:text-slate-700"
                       />
                       {/* Animated progress circle */}
                       <circle
@@ -849,36 +968,36 @@ export default function TravelerTracking() {
                     </svg>
                     {/* Center time display */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 font-mono">
+                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 font-mono">
                         {formatTime(elapsedTime)}
                       </span>
-                      <span className="text-xs text-gray-500 mt-1">HH:MM:SS</span>
+                      <span className="text-xs text-gray-500 dark:text-slate-400 mt-1">HH:MM:SS</span>
                     </div>
                   </div>
 
                   {/* Session Details */}
-                  <div className="flex-1 w-full bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-emerald-200">
-                    <p className="text-xs font-bold text-emerald-700 mb-3 uppercase tracking-wide">Session Details</p>
+                  <div className="flex-1 w-full bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-700">
+                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-3 uppercase tracking-wide">Session Details</p>
                     <div className="space-y-2">
                       <div className="flex items-start space-x-2">
-                        <DocumentTextIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <DocumentTextIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-500">Job Number</p>
-                          <p className="text-sm font-bold text-gray-900 truncate">{activeSession.job_number}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Job Number</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{activeSession.job_number}</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
-                        <ClockIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <ClockIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-500">Work Center</p>
-                          <p className="text-sm font-bold text-gray-900 truncate">{activeSession.work_center}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Work Center</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{activeSession.work_center}</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
-                        <UserIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <UserIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-500">Operator</p>
-                          <p className="text-sm font-bold text-gray-900 truncate">{activeSession.operator_name}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Operator</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{activeSession.operator_name}</p>
                         </div>
                       </div>
                       {isPaused && pauseTime && (
@@ -888,7 +1007,7 @@ export default function TravelerTracking() {
                           </svg>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-amber-600 font-semibold">PAUSED</p>
-                            <p className="text-xs text-gray-600">
+                            <p className="text-xs text-gray-600 dark:text-slate-400">
                               Since {new Date(pauseTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}
                             </p>
                           </div>
@@ -902,46 +1021,57 @@ export default function TravelerTracking() {
               {/* Input Form */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Job Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <Autocomplete
                     value={jobNumber}
-                    onChange={(e) => setJobNumber(e.target.value)}
-                    placeholder="Enter job"
+                    onChange={handleJobNumberChange}
+                    onSelect={handleJobNumberSelect}
+                    fetchSuggestions={fetchJobNumbers}
+                    placeholder="Type or scan job #"
                     disabled={!!activeSession}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
+                    minChars={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Work Center <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <Autocomplete
                     value={workCenter}
-                    onChange={(e) => setWorkCenter(e.target.value)}
-                    placeholder="Enter WC"
+                    onChange={(value) => setWorkCenter(value)}
+                    fetchSuggestions={async (query) => {
+                      if (jobNumber) {
+                        const jobSteps = await fetchWorkCentersByJob(jobNumber, query);
+                        if (jobSteps.length > 0) {
+                          const generalWCs = await fetchWorkCenters(query);
+                          const existingValues = new Set(jobSteps.map((f: any) => f.value));
+                          return [...jobSteps, ...generalWCs.filter((wc: any) => !existingValues.has(wc.value))];
+                        }
+                      }
+                      return fetchWorkCenters(query);
+                    }}
+                    placeholder="Type, scan QR, or select"
                     disabled={!!activeSession}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
+                    minChars={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Operator <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={operatorName}
-                    onChange={(e) => setOperatorName(e.target.value)}
-                    placeholder="Enter name"
-                    disabled={!!activeSession}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    disabled
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-gray-100 dark:bg-slate-700 cursor-not-allowed dark:text-white font-bold text-gray-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Date <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -949,7 +1079,7 @@ export default function TravelerTracking() {
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     disabled={!!activeSession}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
               </div>
@@ -980,7 +1110,7 @@ export default function TravelerTracking() {
                     ) : (
                       <button
                         onClick={handleResume}
-                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                       >
                         <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Resume</span>
@@ -1001,11 +1131,11 @@ export default function TravelerTracking() {
 
             {/* Quick Stats Cards - Right Column */}
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-4 border border-indigo-200">
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg p-4 border border-indigo-200 dark:border-indigo-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-indigo-600 uppercase">Entries</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{trackingEntries.length}</p>
+                    <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400 uppercase">Entries</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 mt-1">{trackingEntries.length}</p>
                   </div>
                   <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -1013,11 +1143,11 @@ export default function TravelerTracking() {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-emerald-200">
+              <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-emerald-600 uppercase">Total Hours</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                    <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase">Total Hours</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 mt-1">
                       {trackingEntries.reduce((sum, entry) => sum + entry.hours_worked, 0).toFixed(2)}
                     </p>
                   </div>
@@ -1025,11 +1155,11 @@ export default function TravelerTracking() {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg p-4 border border-pink-200">
+              <div className="bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 rounded-lg p-4 border border-pink-200 dark:border-pink-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-pink-600 uppercase">Active</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                    <p className="text-xs font-medium text-pink-600 dark:text-pink-400 uppercase">Active</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 mt-1">
                       {activeSession ? '1' : '0'}
                     </p>
                   </div>
@@ -1061,50 +1191,28 @@ export default function TravelerTracking() {
             const groups = Object.values(jobWorkCenterGroups);
 
             return groups.length > 0 ? (
-              <div className="bg-white shadow-lg rounded-lg border-2 border-blue-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-blue-200 dark:border-blue-700 p-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2 flex items-center">
+                  <svg className="w-4 h-4 mr-1.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                   Job Summary by Work Center
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                   {groups.map((group, index) => (
                     <div
                       key={index}
-                      className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      className="bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-blue-200 dark:border-blue-700 rounded-lg px-2.5 py-2 hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Job Number</p>
-                          <p className="text-lg font-bold text-gray-900 mt-1">{group.job_number}</p>
-                        </div>
-                        <div className="bg-blue-100 rounded-full p-2">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{group.job_number}</p>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded-full">
-                            {group.work_center}
-                          </span>
-                        </div>
-                        <div className="border-t border-blue-200 pt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Total Hours:</span>
-                            <span className="text-xl font-bold text-emerald-600">
-                              {group.total_hours.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs text-gray-500">Entries:</span>
-                            <span className="text-sm font-semibold text-gray-700">
-                              {group.entry_count}
-                            </span>
-                          </div>
-                        </div>
+                      <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full mb-1">
+                        {group.work_center}
+                      </span>
+                      <div className="border-t border-blue-200/60 dark:border-blue-700/60 pt-1 flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500 dark:text-slate-400">Hours</span>
+                        <span className="text-sm font-bold text-emerald-600">{group.total_hours.toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
@@ -1114,9 +1222,9 @@ export default function TravelerTracking() {
           })()}
 
           {/* Filters */}
-          <div className="bg-white rounded-lg shadow-lg border-2 border-blue-100 p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg border-2 border-blue-100 dark:border-slate-700 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
@@ -1124,7 +1232,7 @@ export default function TravelerTracking() {
               </h2>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all shadow-sm"
+                className="flex items-center px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-lg transition-all shadow-sm"
               >
                 <FunnelIcon className="w-4 h-4 mr-2" />
                 {showFilters ? 'Hide Filters' : 'Show Filters'}
@@ -1134,41 +1242,41 @@ export default function TravelerTracking() {
             {showFilters && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Number</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
                   <input
                     type="text"
                     value={filters.jobNumber}
                     onChange={(e) => setFilters({ ...filters, jobNumber: e.target.value })}
                     placeholder="Filter by job number"
-                    className="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-blue-200 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Work Center</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Work Center</label>
                   <input
                     type="text"
                     value={filters.workCenter}
                     onChange={(e) => setFilters({ ...filters, workCenter: e.target.value })}
                     placeholder="Filter by work center"
-                    className="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-blue-200 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Start Date</label>
                   <input
                     type="datetime-local"
                     value={filters.startDate}
                     onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-blue-200 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">End Date</label>
                   <input
                     type="datetime-local"
                     value={filters.endDate}
                     onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-blue-200 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
               </div>
@@ -1177,7 +1285,7 @@ export default function TravelerTracking() {
 
           {/* Bulk Action Buttons */}
           {user?.role === 'ADMIN' && (
-            <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg border-2 border-gray-200 dark:border-slate-700 p-4">
               <div className="flex flex-wrap items-center gap-2 md:gap-3">
                 <button
                   onClick={selectAll}
@@ -1197,8 +1305,8 @@ export default function TravelerTracking() {
                 </button>
 
                 {selectedEntries.length > 0 && (
-                  <div className="ml-auto px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <span className="text-sm font-semibold text-blue-700">
+                  <div className="ml-auto px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
                       {selectedEntries.length} selected
                     </span>
                   </div>
@@ -1208,9 +1316,9 @@ export default function TravelerTracking() {
           )}
 
           {/* Tracking History */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
             {/* Table Header + Pagination */}
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
               <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                 <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1225,27 +1333,29 @@ export default function TravelerTracking() {
               </div>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block lg:hidden overflow-hidden">
+            {/* Mobile Card View - Hidden: use desktop table on all devices */}
+            <div className="hidden overflow-hidden">
               {isLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading...</div>
+                <div className="p-4"><div className="space-y-3">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-12 w-full" />)}</div></div>
               ) : filteredEntries.length === 0 ? (
                 <div className="text-center py-12 px-4">
-                  <ClockIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No tracking entries yet</p>
-                  <p className="text-sm text-gray-400 mt-1">Start tracking to see your work history</p>
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                    <ClockIcon className="w-7 h-7 text-gray-400 dark:text-slate-500" />
+                  </div>
+                  <p className="text-gray-600 dark:text-slate-300 font-medium">No tracking entries yet</p>
+                  <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">Start tracking to see your work history</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-gray-200 dark:divide-slate-700">
                   {paginatedEntries.map((entry) => (
-                    <div key={entry.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div key={entry.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
                             <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />
-                            <span className="font-bold text-gray-900">{entry.job_number}</span>
+                            <span className="font-bold text-gray-900 dark:text-slate-100">{entry.job_number}</span>
                           </div>
-                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-400">
                             <UserIcon className="w-4 h-4" />
                             <span>{entry.operator_name}</span>
                           </div>
@@ -1257,20 +1367,20 @@ export default function TravelerTracking() {
                                 const btn = document.getElementById(`menu-${entry.id}`);
                                 btn?.classList.toggle('hidden');
                               }}
-                              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                             >
-                              <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-5 h-5 text-gray-600 dark:text-slate-400" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                               </svg>
                             </button>
-                            <div id={`menu-${entry.id}`} className="hidden absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                            <div id={`menu-${entry.id}`} className="hidden absolute right-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-10">
                               <button
                                 onClick={() => {
                                   setSelectedEntry(entry);
                                   setIsModalOpen(true);
                                   document.getElementById(`menu-${entry.id}`)?.classList.add('hidden');
                                 }}
-                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center space-x-2"
                               >
                                 <EyeIcon className="w-4 h-4 text-blue-600" />
                                 <span>View Details</span>
@@ -1280,7 +1390,7 @@ export default function TravelerTracking() {
                                   openEditModal(entry);
                                   document.getElementById(`menu-${entry.id}`)?.classList.add('hidden');
                                 }}
-                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center space-x-2"
                               >
                                 <PencilIcon className="w-4 h-4 text-green-600" />
                                 <span>Edit</span>
@@ -1291,7 +1401,7 @@ export default function TravelerTracking() {
                                   setIsDeleteModalOpen(true);
                                   document.getElementById(`menu-${entry.id}`)?.classList.add('hidden');
                                 }}
-                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2 text-red-600"
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center space-x-2 text-red-600"
                               >
                                 <TrashIcon className="w-4 h-4" />
                                 <span>Delete</span>
@@ -1302,32 +1412,32 @@ export default function TravelerTracking() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="text-xs text-gray-500">Work Center</p>
-                          <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Work Center</p>
+                          <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full">
                             {entry.sequence_number ? `${entry.sequence_number}. ${entry.work_center}` : entry.work_center}
                           </span>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Total Hours</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Total Hours</p>
                           <p className="text-sm font-bold text-emerald-600 mt-1">{formatHoursDualCompact(entry.hours_worked)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Date</p>
-                          <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Date</p>
+                          <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">{new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Start Time</p>
-                          <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Start Time</p>
+                          <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Pause Time</p>
-                          <p className="text-sm text-gray-900 mt-1">
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Pause Time</p>
+                          <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">
                             {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">End Time</p>
-                          <p className="text-sm text-gray-900 mt-1">
+                          <p className="text-xs text-gray-500 dark:text-slate-400">End Time</p>
+                          <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">
                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
                           </p>
                         </div>
@@ -1339,17 +1449,17 @@ export default function TravelerTracking() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden lg:block">
-              <div className="overflow-x-auto">
-              <div className="relative">
+            <div className="block">
+              <div>
+              <div className="relative overflow-x-auto">
               <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden pointer-events-none z-20">
                 <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
                 <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
               </div>
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-[800px] w-full divide-y divide-gray-200 dark:divide-slate-700">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
+                  <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
                     {user?.role === 'ADMIN' && (
                       <th className="px-3 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">
                         <input
@@ -1362,30 +1472,34 @@ export default function TravelerTracking() {
                     )}
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Date</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Job</th>
+                    <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Order</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Operator</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Start</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Pause</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">End</th>
                     <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Total Hours</th>
+                    <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Qty</th>
                     {user?.role === 'ADMIN' && (
                       <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Actions</th>
                     )}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={user?.role === 'ADMIN' ? 10 : 8} className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan={user?.role === 'ADMIN' ? 11 : 9} className="px-6 py-8 text-center text-gray-500 dark:text-slate-400">
                         Loading...
                       </td>
                     </tr>
                   ) : filteredEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={user?.role === 'ADMIN' ? 10 : 8} className="px-6 py-12 text-center">
-                        <ClockIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500">No tracking entries yet</p>
-                        <p className="text-sm text-gray-400 mt-1">Start tracking to see your work history</p>
+                      <td colSpan={user?.role === 'ADMIN' ? 11 : 9} className="px-6 py-12 text-center text-gray-500 dark:text-slate-400">
+                        <div className="flex flex-col items-center space-y-2">
+                          <ClockIcon className="w-8 h-8 text-gray-300 dark:text-slate-600" />
+                          <p className="text-sm font-medium">No tracking entries found</p>
+                          <p className="text-xs text-gray-400 dark:text-slate-500">Start a timer above to create your first entry</p>
+                        </div>
                       </td>
                     </tr>
                   ) : paginatedEntries.map((entry) => {
@@ -1402,8 +1516,8 @@ export default function TravelerTracking() {
                       key={entry.id}
                       className={`transition-colors ${
                         selectedEntries.includes(entry.id)
-                          ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                          : 'hover:bg-indigo-50/30'
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500'
+                          : 'hover:bg-indigo-50/30 dark:hover:bg-slate-700/50'
                       }`}
                     >
                       {user?.role === 'ADMIN' && (
@@ -1416,24 +1530,27 @@ export default function TravelerTracking() {
                           />
                         </td>
                       )}
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                         {new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
                           <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
-                          <span className="font-semibold text-gray-900 text-sm">{entry.job_number}</span>
+                          <span className="font-semibold text-gray-900 dark:text-slate-100 text-sm">{entry.job_number}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 font-medium">
+                        {entry.work_order || '-'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                         {entry.operator_name}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-100 text-indigo-800 rounded-full">
+                        <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full">
                           {entry.sequence_number ? `${entry.sequence_number}. ${entry.work_center}` : entry.work_center}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
                         {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -1442,17 +1559,20 @@ export default function TravelerTracking() {
                             {formatHoursDualCompact(pauseDuration)}
                           </span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-400 dark:text-slate-500">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
                         {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }) : '-'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center space-x-1 text-sm font-bold text-emerald-600">
-                          <ClockIcon className="w-4 h-4 text-gray-400" />
+                          <ClockIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           <span>{formatHoursDualCompact(entry.hours_worked)}</span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center text-sm font-semibold text-gray-700 dark:text-slate-300">
+                        {entry.qty_completed != null ? entry.qty_completed : '-'}
                       </td>
                       {user?.role === 'ADMIN' && (
                         <td className="px-4 py-3 whitespace-nowrap">
@@ -1461,7 +1581,7 @@ export default function TravelerTracking() {
                               onClick={() => {
                                 openEditModal(entry);
                               }}
-                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                               title="Edit"
                             >
                               <PencilIcon className="w-5 h-5" />
@@ -1471,7 +1591,7 @@ export default function TravelerTracking() {
                                 setEntryToDelete(entry);
                                 setIsDeleteModalOpen(true);
                               }}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                               title="Delete"
                             >
                               <TrashIcon className="w-5 h-5" />
@@ -1489,8 +1609,8 @@ export default function TravelerTracking() {
             </div>
 
             {/* Bottom Pagination */}
-            {filteredEntries.length > 0 && (
-              <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+            {(filteredEntries.length > 0 || trackingEntries.length === 0) && (
+              <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
                 <div className="absolute inset-0 opacity-10 pointer-events-none">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                   <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1503,7 +1623,7 @@ export default function TravelerTracking() {
                       <option value={50}>50</option>
                       <option value={100}>100</option>
                     </select>
-                    <span className="text-xs text-white/80">{startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredEntries.length)} of {filteredEntries.length}</span>
+                    <span className="text-xs text-white/80">{filteredEntries.length > 0 ? `${startIndex + 1}-${Math.min(startIndex + itemsPerPage, filteredEntries.length)} of ${filteredEntries.length}` : '1-5 of 5'}</span>
                   </div>
                   <div className="flex items-center gap-0.5">
                     <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">«</button>
@@ -1541,14 +1661,14 @@ export default function TravelerTracking() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold text-gray-600">Job Number</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {selectedEntry.job_number}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-600">Operator</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Operator</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {selectedEntry.operator_name}
                 </p>
               </div>
@@ -1556,36 +1676,36 @@ export default function TravelerTracking() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold text-gray-600">Work Center</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Work Center</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {selectedEntry.sequence_number
                     ? `${selectedEntry.sequence_number}. ${selectedEntry.work_center}`
                     : selectedEntry.work_center}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-600">Total Hours</label>
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Total Hours</label>
                 <p className="text-base font-semibold text-emerald-600 mt-1">
                   {formatHoursDual(selectedEntry.hours_worked)}
                 </p>
               </div>
             </div>
 
-            <div className="border-t border-gray-200 pt-4">
-              <label className="text-sm font-semibold text-gray-600">Start Time</label>
-              <p className="text-base text-gray-900 mt-1">
+            <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
+              <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Start Time</label>
+              <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                 {new Date(selectedEntry.start_time).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })}
               </p>
             </div>
 
             {selectedEntry.pause_time && (
               <div>
-                <label className="text-sm font-semibold text-gray-600">Pause Started</label>
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Pause Started</label>
                 <p className="text-base text-yellow-600 mt-1">
                   {new Date(selectedEntry.pause_time).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })}
                 </p>
                 {selectedEntry.pause_duration && selectedEntry.pause_duration > 0 && (
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                     Duration: <span className="font-semibold text-yellow-600">{selectedEntry.pause_duration.toFixed(2)} hours</span>
                   </p>
                 )}
@@ -1593,8 +1713,8 @@ export default function TravelerTracking() {
             )}
 
             <div>
-              <label className="text-sm font-semibold text-gray-600">End Time</label>
-              <p className="text-base text-gray-900 mt-1">
+              <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">End Time</label>
+              <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                 {new Date(selectedEntry.end_time).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })}
               </p>
             </div>
@@ -1627,23 +1747,23 @@ export default function TravelerTracking() {
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Job Number:</span>
-                <span className="text-sm text-gray-900">{entryToDelete.job_number}</span>
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number:</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">{entryToDelete.job_number}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Operator:</span>
-                <span className="text-sm text-gray-900">{entryToDelete.operator_name}</span>
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Operator:</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">{entryToDelete.operator_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Work Center:</span>
-                <span className="text-sm text-gray-900">
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Work Center:</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">
                   {entryToDelete.sequence_number
                     ? `${entryToDelete.sequence_number}. ${entryToDelete.work_center}`
                     : entryToDelete.work_center}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Hours Worked:</span>
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Hours Worked:</span>
                 <span className="text-sm font-semibold text-emerald-600">
                   {formatHoursDual(entryToDelete.hours_worked)}
                 </span>
@@ -1656,7 +1776,7 @@ export default function TravelerTracking() {
                   setIsDeleteModalOpen(false);
                   setEntryToDelete(null);
                 }}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -1671,6 +1791,69 @@ export default function TravelerTracking() {
         </Modal>
       )}
 
+      {/* Qty Completed Modal */}
+      <Modal
+        isOpen={isQtyModalOpen}
+        onClose={() => {
+          setIsQtyModalOpen(false);
+          setQtyCompleted('');
+        }}
+        title="Quantity Completed"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-slate-400">
+            How many units did you complete during this time?
+            {travelerMaxQty != null && (
+              <span className="block mt-1 font-semibold text-blue-600 dark:text-blue-400">
+                Traveler quantity: {travelerMaxQty}
+              </span>
+            )}
+          </p>
+          <input
+            type="number"
+            min="0"
+            max={travelerMaxQty || undefined}
+            value={qtyCompleted}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val && travelerMaxQty != null && parseInt(val) > travelerMaxQty) {
+                setMessage('⚠️ Quantity cannot exceed traveler quantity (' + travelerMaxQty + ')');
+                setTimeout(() => setMessage(''), 3000);
+                return;
+              }
+              setQtyCompleted(val);
+            }}
+            placeholder={travelerMaxQty != null ? `Max: ${travelerMaxQty}` : 'Enter quantity completed'}
+            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:bg-slate-700 dark:text-white"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') confirmStop();
+            }}
+          />
+          {qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty && (
+            <p className="text-xs text-red-600 font-medium">Quantity cannot exceed {travelerMaxQty}</p>
+          )}
+          <div className="flex justify-end space-x-3 pt-2">
+            <button
+              onClick={() => {
+                setQtyCompleted('');
+                confirmStop();
+              }}
+              className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-lg transition-colors"
+            >
+              Skip
+            </button>
+            <button
+              onClick={confirmStop}
+              disabled={!!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+            >
+              Stop Timer
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Manual Entry Modal (ADMIN only) */}
       <Modal
         isOpen={isManualEntryOpen}
@@ -1680,9 +1863,11 @@ export default function TravelerTracking() {
             job_number: '',
             work_center: '',
             operator_name: '',
+            operator_id: undefined,
             start_time: '',
             end_time: '',
           });
+          setManualJobWorkCenterOptions([]);
         }}
         title="Manual Tracking Entry (Admin Only)"
         footer={
@@ -1694,17 +1879,19 @@ export default function TravelerTracking() {
                   job_number: '',
                   work_center: '',
                   operator_name: '',
+                  operator_id: undefined,
                   start_time: '',
                   end_time: '',
                 });
+                setManualJobWorkCenterOptions([]);
               }}
-              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-all"
+              className="px-6 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-semibold rounded-lg transition-all"
             >
               Cancel
             </button>
             <button
               onClick={handleManualEntry}
-              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all shadow-md"
+              className="px-6 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all shadow-md"
             >
               Create Completed Entry
             </button>
@@ -1723,29 +1910,50 @@ export default function TravelerTracking() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Job Number <span className="text-red-500">*</span>
               </label>
               <Autocomplete
                 value={manualEntryData.job_number}
-                onChange={(value) => setManualEntryData({ ...manualEntryData, job_number: value })}
+                onChange={(value) => {
+                  setManualEntryData({ ...manualEntryData, job_number: value });
+                  if (!value) {
+                    setManualJobWorkCenterOptions([]);
+                  }
+                }}
+                onSelect={async (option) => {
+                  const jobNum = option.job_number || option.value;
+                  setManualEntryData(prev => ({ ...prev, job_number: jobNum, work_center: '' }));
+                  const steps = await fetchWorkCentersByJob(jobNum);
+                  setManualJobWorkCenterOptions(steps);
+                }}
                 fetchSuggestions={fetchJobNumbers}
                 placeholder="Type job number or search..."
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
                 minChars={0}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Work Center <span className="text-red-500">*</span>
               </label>
               <Autocomplete
                 value={manualEntryData.work_center}
                 onChange={(value) => setManualEntryData({ ...manualEntryData, work_center: value })}
-                fetchSuggestions={fetchWorkCenters}
-                placeholder="Type work center or search..."
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                fetchSuggestions={async (query) => {
+                  if (manualEntryData.job_number) {
+                    const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query);
+                    if (jobSteps.length > 0) {
+                      const generalWCs = await fetchWorkCenters(query);
+                      const existingValues = new Set(jobSteps.map((f: any) => f.value));
+                      return [...jobSteps, ...generalWCs.filter((wc: any) => !existingValues.has(wc.value))];
+                    }
+                  }
+                  return fetchWorkCenters(query);
+                }}
+                placeholder="Select from steps or type/scan..."
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
                 minChars={0}
               />
@@ -1753,15 +1961,16 @@ export default function TravelerTracking() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
               Operator Name <span className="text-red-500">*</span>
             </label>
             <Autocomplete
               value={manualEntryData.operator_name}
-              onChange={(value) => setManualEntryData({ ...manualEntryData, operator_name: value })}
+              onChange={(value) => setManualEntryData({ ...manualEntryData, operator_name: value, operator_id: undefined })}
+              onSelect={(option) => setManualEntryData({ ...manualEntryData, operator_name: option.value, operator_id: option.id })}
               fetchSuggestions={fetchOperators}
-              placeholder="Type operator name or search..."
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+              placeholder="Select operator from list..."
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               required
               minChars={0}
             />
@@ -1769,26 +1978,26 @@ export default function TravelerTracking() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Start Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={manualEntryData.start_time}
                 onChange={(e) => setManualEntryData({ ...manualEntryData, start_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 End Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={manualEntryData.end_time}
                 onChange={(e) => setManualEntryData({ ...manualEntryData, end_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
               />
             </div>
@@ -1825,7 +2034,7 @@ export default function TravelerTracking() {
                   end_time: '',
                 });
               }}
-              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-all"
+              className="px-6 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-semibold rounded-lg transition-all"
             >
               Cancel
             </button>
@@ -1845,43 +2054,43 @@ export default function TravelerTracking() {
             </p>
           </div>
 
-          <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+          <div className="space-y-3 bg-gray-50 dark:bg-slate-900 p-4 rounded-lg">
             <div className="flex justify-between">
-              <span className="text-sm font-semibold text-gray-600">Job Number:</span>
-              <span className="text-sm text-gray-900">{editEntryData.job_number}</span>
+              <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number:</span>
+              <span className="text-sm text-gray-900 dark:text-slate-100">{editEntryData.job_number}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm font-semibold text-gray-600">Work Center:</span>
-              <span className="text-sm text-gray-900">{editEntryData.work_center}</span>
+              <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Work Center:</span>
+              <span className="text-sm text-gray-900 dark:text-slate-100">{editEntryData.work_center}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm font-semibold text-gray-600">Operator:</span>
-              <span className="text-sm text-gray-900">{editEntryData.operator_name}</span>
+              <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Operator:</span>
+              <span className="text-sm text-gray-900 dark:text-slate-100">{editEntryData.operator_name}</span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Start Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={convertISOToLocal(editEntryData.start_time)}
                 onChange={(e) => setEditEntryData({ ...editEntryData, start_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 End Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={convertISOToLocal(editEntryData.end_time)}
                 onChange={(e) => setEditEntryData({ ...editEntryData, end_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
             </div>
           </div>
@@ -1889,14 +2098,14 @@ export default function TravelerTracking() {
       </Modal>
       {/* Confirm Modal */}
       {confirmModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
-            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 dark:text-slate-400 mb-6">{confirmModal.message}</p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold"
               >
                 Cancel
               </button>

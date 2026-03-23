@@ -58,19 +58,19 @@ export default function DateRangePicker({ startDate, endDate, onDateChange }: Da
   const presets = ['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'This Month'];
 
   return (
-    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-start sm:items-center bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/15">
-      <div className="flex items-center gap-2 text-sm font-bold text-white/80">
-        <CalendarDaysIcon className="h-4 w-4 text-blue-300" />
-        <span className="hidden sm:inline text-xs uppercase tracking-wider">Date Range</span>
+    <div className="flex flex-row flex-wrap gap-2 items-center bg-white/10 backdrop-blur-sm rounded-lg p-2 border border-white/15">
+      <div className="flex items-center gap-1.5 text-xs font-bold text-white/80">
+        <CalendarDaysIcon className="h-3.5 w-3.5 text-teal-300" />
+        <span className="text-[10px] uppercase tracking-wider">Range</span>
       </div>
 
       {/* Preset buttons */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {presets.map((label) => (
           <button
             key={label}
             onClick={() => handlePreset(label)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 border ${
+            className={`px-2 py-1 text-[10px] font-semibold rounded-lg transition-all duration-200 border ${
               activePreset === label && !showCustom
                 ? 'bg-white/25 text-white border-white/40 shadow-sm'
                 : 'text-white/90 bg-white/10 hover:bg-white/20 border-white/15 hover:border-white/30'
@@ -81,37 +81,35 @@ export default function DateRangePicker({ startDate, endDate, onDateChange }: Da
         ))}
         <button
           onClick={() => { setShowCustom(!showCustom); setActivePreset('Custom Range'); }}
-          className={`px-3 py-1.5 text-xs font-semibold text-white/90 rounded-lg transition-all duration-200 border ${
+          className={`px-2 py-1 text-[10px] font-semibold text-white/90 rounded-lg transition-all duration-200 border ${
             showCustom || activePreset === 'Custom Range'
               ? 'bg-white/25 border-white/40 shadow-sm'
               : 'bg-white/10 hover:bg-white/20 border-white/15 hover:border-white/30'
           }`}
         >
-          Custom Range
+          Custom
         </button>
       </div>
 
       {/* Custom date picker */}
       {showCustom && (
-        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto border-t sm:border-t-0 sm:border-l border-white/15 pt-2 sm:pt-0 sm:pl-3 mt-1 sm:mt-0">
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="px-3 py-1.5 text-sm bg-white/90 border border-white/30 rounded-lg focus:border-white focus:ring-2 focus:ring-white/30 text-gray-900 font-medium"
-            />
-            <span className="hidden sm:inline text-white/60 self-center text-xs font-medium">to</span>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="px-3 py-1.5 text-sm bg-white/90 border border-white/30 rounded-lg focus:border-white focus:ring-2 focus:ring-white/30 text-gray-900 font-medium"
-            />
-          </div>
+        <div className="flex flex-row gap-1.5 items-center border-l border-white/15 pl-2">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            className="px-2 py-1 text-xs bg-white/90 border border-white/30 rounded-lg focus:border-white focus:ring-2 focus:ring-white/30 text-gray-900 font-medium"
+          />
+          <span className="text-white/60 text-[10px] font-medium">to</span>
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            className="px-2 py-1 text-xs bg-white/90 border border-white/30 rounded-lg focus:border-white focus:ring-2 focus:ring-white/30 text-gray-900 font-medium"
+          />
           <button
             onClick={handleCustomApply}
-            className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-lg shadow-lg shadow-emerald-500/20 transition-all duration-200"
+            className="px-2.5 py-1 text-[10px] font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-lg shadow-lg shadow-emerald-500/20 transition-all duration-200"
           >
             Apply
           </button>

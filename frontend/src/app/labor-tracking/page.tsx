@@ -25,8 +25,10 @@ interface LaborEntry {
   created_at: string;
   // Additional fields for display
   job_number?: string;
+  work_order?: string;
   work_center?: string;
   sequence_number?: number;
+  qty_completed?: number;
 }
 
 export default function LaborTrackingPage() {
@@ -47,8 +49,10 @@ export default function LaborTrackingPage() {
     job_number: '',
     work_center: '',
     operator_name: '',
+    operator_id: undefined as number | undefined,
     date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
   });
+  const [jobWorkCenterOptions, setJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -70,9 +74,11 @@ export default function LaborTrackingPage() {
     job_number: '',
     work_center: '',
     operator_name: '',
+    operator_id: undefined as number | undefined,
     start_time: '',
     end_time: '',
   });
+  const [manualJobWorkCenterOptions, setManualJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [editEntryData, setEditEntryData] = useState({
     id: 0,
     job_number: '',
@@ -82,12 +88,26 @@ export default function LaborTrackingPage() {
     end_time: '',
   });
 
+  // Qty completed modal states
+  const [isQtyModalOpen, setIsQtyModalOpen] = useState(false);
+  const [qtyCompleted, setQtyCompleted] = useState('');
+  const [pendingStopEntryId, setPendingStopEntryId] = useState<number | null>(null);
+  const [travelerMaxQty, setTravelerMaxQty] = useState<number | null>(null);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
+
+  // Auto-fill operator name from signed-in user
+  useEffect(() => {
+    if (user && !isTimerRunning) {
+      const fullName = `${user.first_name || user.username}`.trim();
+      setNewEntry(prev => ({ ...prev, operator_name: fullName, operator_id: user.id }));
+    }
+  }, [user]);
 
   useEffect(() => {
     checkAutoStop5pm();
@@ -100,8 +120,8 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `${API_BASE_URL}/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=10`
-        : `${API_BASE_URL}/search/autocomplete/job-numbers?limit=10`;
+        ? `${API_BASE_URL}/search/autocomplete/job-numbers?q=${encodeURIComponent(query)}&limit=20`
+        : `${API_BASE_URL}/search/autocomplete/job-numbers?limit=20`;
 
       const response = await fetch(url, {
         headers: {
@@ -158,8 +178,8 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
       const url = query
-        ? `${API_BASE_URL}/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=10`
-        : `${API_BASE_URL}/search/autocomplete/operators?limit=10`;
+        ? `${API_BASE_URL}/search/autocomplete/operators?q=${encodeURIComponent(query)}&limit=50`
+        : `${API_BASE_URL}/search/autocomplete/operators?limit=50`;
 
       const response = await fetch(url, {
         headers: {
@@ -181,6 +201,46 @@ export default function LaborTrackingPage() {
       console.error('Error fetching operators:', error);
       return [];
     }
+  };
+
+  // Fetch work centers from process steps for a specific job number
+  const fetchWorkCentersByJob = async (jobNumber: string, query: string = '') => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const url = `${API_BASE_URL}/search/autocomplete/work-centers-by-job?job_number=${encodeURIComponent(jobNumber)}&q=${encodeURIComponent(query)}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.map((item: any) => ({
+          value: item.value,
+          label: item.label,
+          description: `Step ${item.step_number}`,
+          ...item
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching work centers by job:', error);
+      return [];
+    }
+  };
+
+  // When job number text changes (typing), just update the value - don't fetch steps yet
+  const handleJobNumberChange = (value: string) => {
+    setNewEntry(prev => ({ ...prev, job_number: value }));
+    if (!value) {
+      setJobWorkCenterOptions([]);
+    }
+  };
+
+  // Handle job number selection from autocomplete dropdown - THIS is when we fetch steps
+  const handleJobNumberSelect = async (option: any) => {
+    const jobNum = option.job_number || option.value;
+    setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '' }));
+    const steps = await fetchWorkCentersByJob(jobNum);
+    setJobWorkCenterOptions(steps);
   };
 
   // Check and auto-stop entries at 5pm
@@ -234,9 +294,8 @@ export default function LaborTrackingPage() {
 
   // Filter labor entries
   const filteredEntries = laborEntries.filter(entry => {
-    const parts = entry.description?.split(' - ') || [];
-    const workCenter = parts[0] || entry.work_center || '';
-    const operatorName = parts[1] || entry.employee_name || '';
+    const workCenter = entry.work_center || entry.description?.split(' - ')?.[0] || '';
+    const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || '';
 
     // Filter by job number
     if (filter.jobNumber && !entry.job_number?.toLowerCase().includes(filter.jobNumber.toLowerCase())) {
@@ -298,6 +357,19 @@ export default function LaborTrackingPage() {
           setStartTime(start);
           setIsTimerRunning(true);
 
+          // Restore paused state if the entry was paused
+          if (data.pause_time) {
+            const paused = new Date(data.pause_time);
+            setIsPaused(true);
+            setPauseTime(paused);
+            // Freeze elapsed time at the moment it was paused
+            const diff = Math.floor((paused.getTime() - start.getTime()) / 1000);
+            setElapsedTime(diff);
+          }
+
+          // Store traveler max qty for validation
+          if (data.quantity) setTravelerMaxQty(data.quantity);
+
           // Extract job number and work center from description
           const parts = data.description.split(' - ');
           if (parts.length >= 2) {
@@ -305,6 +377,7 @@ export default function LaborTrackingPage() {
               job_number: data.job_number || '',
               work_center: parts[0] || '',
               operator_name: parts[1] || '',
+              operator_id: data.employee_id || user?.id,
               date: start.toISOString().slice(0, 10),
             });
           }
@@ -376,11 +449,16 @@ export default function LaborTrackingPage() {
       // Use current system time when Start button is clicked
       const now = new Date();
 
-      const requestBody = {
+      const requestBody: any = {
         traveler_id: traveler.id,
         start_time: now.toISOString(),
         description: description
       };
+
+      // Admin can assign entry to another user
+      if (user?.role === 'ADMIN' && newEntry.operator_id && newEntry.operator_id !== user.id) {
+        requestBody.employee_id = newEntry.operator_id;
+      }
 
       const response = await fetch(`${API_BASE_URL}/labor/`, {
         method: 'POST',
@@ -397,6 +475,7 @@ export default function LaborTrackingPage() {
         setStartTime(now);
         setElapsedTime(0);
         setIsTimerRunning(true);
+        setTravelerMaxQty(traveler.quantity || null);
         toast.success('Timer started!');
 
         // Reload entries to show new entry in table
@@ -449,13 +528,7 @@ export default function LaborTrackingPage() {
     }
   };
 
-  const resumeTimer = () => {
-    setIsPaused(false);
-    setPauseTime(null);
-    toast.info('Timer resumed!');
-  };
-
-  const stopTimer = async () => {
+  const resumeTimer = async () => {
     if (!activeEntryId) {
       toast.error('No active timer found');
       return;
@@ -463,8 +536,6 @@ export default function LaborTrackingPage() {
 
     try {
       const token = localStorage.getItem('nexus_token');
-      const endTime = new Date();
-
       const response = await fetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
         method: 'PUT',
         headers: {
@@ -472,8 +543,52 @@ export default function LaborTrackingPage() {
           'Authorization': `Bearer ${token || 'mock-token'}`
         },
         body: JSON.stringify({
+          clear_pause: true
+        })
+      });
+
+      if (response.ok) {
+        setIsPaused(false);
+        setPauseTime(null);
+        toast.info('Timer resumed!');
+      } else {
+        const error = await response.json();
+        toast.error(`Error: ${error.detail || 'Failed to resume timer'}`);
+      }
+    } catch (error) {
+      console.error('Error resuming timer:', error);
+      toast.error('Error resuming timer');
+    }
+  };
+
+  const stopTimer = () => {
+    if (!activeEntryId) {
+      toast.error('No active timer found');
+      return;
+    }
+    // Show qty modal before stopping
+    setPendingStopEntryId(activeEntryId);
+    setQtyCompleted('');
+    setIsQtyModalOpen(true);
+  };
+
+  const confirmStopTimer = async () => {
+    if (!pendingStopEntryId) return;
+
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const endTime = new Date();
+
+      const response = await fetch(`${API_BASE_URL}/labor/${pendingStopEntryId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || 'mock-token'}`
+        },
+        body: JSON.stringify({
           end_time: endTime.toISOString(),
-          is_completed: true
+          is_completed: true,
+          qty_completed: qtyCompleted ? parseInt(qtyCompleted) : null
         })
       });
 
@@ -484,12 +599,15 @@ export default function LaborTrackingPage() {
         setStartTime(null);
         setPauseTime(null);
         setActiveEntryId(null);
+        const fullName = user ? (`${user.first_name || user.username}`.trim()) : '';
         setNewEntry({
           job_number: '',
           work_center: '',
-          operator_name: '',
+          operator_name: fullName,
+          operator_id: user?.id,
           date: new Date().toISOString().slice(0, 10),
         });
+        setJobWorkCenterOptions([]);
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else {
@@ -499,6 +617,10 @@ export default function LaborTrackingPage() {
     } catch (error) {
       console.error('Error stopping timer:', error);
       toast.error('Error stopping timer');
+    } finally {
+      setIsQtyModalOpen(false);
+      setPendingStopEntryId(null);
+      setQtyCompleted('');
     }
   };
 
@@ -636,7 +758,8 @@ export default function LaborTrackingPage() {
           start_time: startTimeISO,
           end_time: endTimeISO,  // CRITICAL: End time is set, making this a completed entry
           description: `${manualEntryData.work_center} - ${manualEntryData.operator_name}`,
-          is_completed: true     // CRITICAL: Mark as completed to prevent timer activation
+          is_completed: true,     // CRITICAL: Mark as completed to prevent timer activation
+          ...(manualEntryData.operator_id ? { employee_id: manualEntryData.operator_id } : {})
         })
       });
 
@@ -647,9 +770,11 @@ export default function LaborTrackingPage() {
           job_number: '',
           work_center: '',
           operator_name: '',
+          operator_id: undefined,
           start_time: '',
           end_time: '',
         });
+        setManualJobWorkCenterOptions([]);
         // Reload entries but DO NOT check for active entry (to avoid timer activation)
         fetchLaborEntries();
       } else {
@@ -697,12 +822,11 @@ export default function LaborTrackingPage() {
   };
 
   const openEditModal = (entry: LaborEntry) => {
-    const parts = entry.description?.split(' - ') || [];
     setEditEntryData({
       id: entry.id,
       job_number: entry.job_number || '',
-      work_center: parts[0] || entry.work_center || '',
-      operator_name: parts[1] || entry.employee_name || '',
+      work_center: entry.work_center || entry.description?.split(' - ')?.[0] || '',
+      operator_name: entry.employee_name || entry.description?.split(' - ')?.[1] || '',
       start_time: entry.start_time,
       end_time: entry.end_time || new Date().toISOString(),
     });
@@ -795,10 +919,10 @@ export default function LaborTrackingPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <div className="w-full space-y-4 p-2 sm:p-4 lg:p-6">
           {/* Compact Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
+          <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -810,7 +934,7 @@ export default function LaborTrackingPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Labor Tracking</h1>
-                  <p className="text-sm text-blue-200/80 mt-0.5">Real-time production hours</p>
+                  <p className="text-sm text-teal-200/80 mt-0.5">Real-time production hours</p>
                 </div>
               </div>
               {user?.role === 'ADMIN' && (
@@ -829,11 +953,11 @@ export default function LaborTrackingPage() {
           {/* Dashboard Grid - Timer and Stats */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Circular Timer - Takes 2 columns on large screens */}
-            <div className="lg:col-span-2 bg-white/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 p-4 sm:p-6">
+            <div className="lg:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Timer</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100">Timer</h2>
                 {isTimerRunning && (
-                  <span className="flex items-center space-x-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
+                  <span className="flex items-center space-x-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-semibold">
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                     <span>ACTIVE</span>
                   </span>
@@ -854,7 +978,7 @@ export default function LaborTrackingPage() {
                         stroke="currentColor"
                         strokeWidth="8"
                         fill="none"
-                        className="text-gray-200"
+                        className="text-gray-200 dark:text-slate-700"
                       />
                       {/* Animated progress circle */}
                       <circle
@@ -872,36 +996,36 @@ export default function LaborTrackingPage() {
                     </svg>
                     {/* Center time display */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 font-mono">
+                      <span className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 font-mono">
                         {formatTime(elapsedTime)}
                       </span>
-                      <span className="text-xs text-gray-500 mt-1">HH:MM:SS</span>
+                      <span className="text-xs text-gray-500 dark:text-slate-400 mt-1">HH:MM:SS</span>
                     </div>
                   </div>
 
                   {/* Session Details */}
-                  <div className="flex-1 w-full bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-emerald-200">
-                    <p className="text-xs font-bold text-emerald-700 mb-3 uppercase tracking-wide">Session Details</p>
+                  <div className="flex-1 w-full bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-700">
+                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-3 uppercase tracking-wide">Session Details</p>
                     <div className="space-y-2">
                       <div className="flex items-start space-x-2">
-                        <DocumentTextIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <DocumentTextIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-500">Job Number</p>
-                          <p className="text-sm font-bold text-gray-900 truncate">{newEntry.job_number}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Job Number</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{newEntry.job_number}</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
-                        <ClockIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <ClockIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-500">Work Center</p>
-                          <p className="text-sm font-bold text-gray-900 truncate">{newEntry.work_center}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Work Center</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{newEntry.work_center}</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
-                        <UserIcon className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+                        <UserIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-500">Operator</p>
-                          <p className="text-sm font-bold text-gray-900 truncate">{newEntry.operator_name}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Operator</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{newEntry.operator_name}</p>
                         </div>
                       </div>
                       {isPaused && pauseTime && (
@@ -911,7 +1035,7 @@ export default function LaborTrackingPage() {
                           </svg>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-amber-600 font-semibold">PAUSED</p>
-                            <p className="text-xs text-gray-600">
+                            <p className="text-xs text-gray-600 dark:text-slate-400">
                               Since {new Date(pauseTime).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}
                             </p>
                           </div>
@@ -925,46 +1049,62 @@ export default function LaborTrackingPage() {
               {/* Input Form */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Job Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <Autocomplete
                     value={newEntry.job_number}
-                    onChange={(e) => setNewEntry({ ...newEntry, job_number: e.target.value })}
-                    placeholder="Enter job"
+                    onChange={handleJobNumberChange}
+                    onSelect={handleJobNumberSelect}
+                    fetchSuggestions={fetchJobNumbers}
+                    placeholder="Type or scan job #"
                     disabled={isTimerRunning}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
+                    minChars={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Work Center <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <Autocomplete
                     value={newEntry.work_center}
-                    onChange={(e) => setNewEntry({ ...newEntry, work_center: e.target.value })}
-                    placeholder="Enter WC"
+                    onChange={(value) => setNewEntry({ ...newEntry, work_center: value })}
+                    fetchSuggestions={async (query) => {
+                      // If job number is set, fetch work centers from its process steps
+                      if (newEntry.job_number) {
+                        const jobSteps = await fetchWorkCentersByJob(newEntry.job_number, query);
+                        if (jobSteps.length > 0) {
+                          // Also include general work centers as fallback
+                          const generalWCs = await fetchWorkCenters(query);
+                          const existingValues = new Set(jobSteps.map((f: any) => f.value));
+                          return [
+                            ...jobSteps,
+                            ...generalWCs.filter((wc: any) => !existingValues.has(wc.value))
+                          ];
+                        }
+                      }
+                      return fetchWorkCenters(query);
+                    }}
+                    placeholder="Type, scan QR, or select"
                     disabled={isTimerRunning}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
+                    minChars={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Operator <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={newEntry.operator_name}
-                    onChange={(e) => setNewEntry({ ...newEntry, operator_name: e.target.value })}
-                    placeholder="Enter name"
-                    disabled={isTimerRunning}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    disabled
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-gray-100 dark:bg-slate-700 cursor-not-allowed dark:text-white font-bold text-gray-900"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Date <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -972,7 +1112,7 @@ export default function LaborTrackingPage() {
                     value={newEntry.date}
                     onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })}
                     disabled={isTimerRunning}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
               </div>
@@ -1003,7 +1143,7 @@ export default function LaborTrackingPage() {
                     ) : (
                       <button
                         onClick={resumeTimer}
-                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                       >
                         <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Resume</span>
@@ -1025,33 +1165,33 @@ export default function LaborTrackingPage() {
             {/* Quick Stats Cards - Right Column */}
             <div className="space-y-4">
               {/* Total Entries Card */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+              <div className="bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-blue-600 uppercase">Entries</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{laborEntries.length}</p>
+                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase">Entries</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 mt-1">{laborEntries.length}</p>
                   </div>
                   <DocumentTextIcon className="w-8 h-8 text-blue-500" />
                 </div>
               </div>
 
               {/* Total Hours Card */}
-              <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-emerald-200">
+              <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-emerald-600 uppercase">Total Hours</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{getTotalHours()}</p>
+                    <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase">Total Hours</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 mt-1">{getTotalHours()}</p>
                   </div>
                   <ClockIcon className="w-8 h-8 text-emerald-500" />
                 </div>
               </div>
 
               {/* Operators Card */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-purple-600 uppercase">Operators</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase">Operators</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-slate-100 mt-1">
                       {new Set(laborEntries.map(e => e.employee_name)).size}
                     </p>
                   </div>
@@ -1065,8 +1205,7 @@ export default function LaborTrackingPage() {
           {(() => {
             // Group entries by job_number and work_center
             const jobWorkCenterGroups = laborEntries.reduce((acc, entry) => {
-              const parts = entry.description?.split(' - ') || [];
-              const workCenter = parts[0] || entry.work_center || 'N/A';
+              const workCenter = entry.work_center || (entry.description?.split(' - ')?.[0]) || 'N/A';
               const key = `${entry.job_number || `Traveler #${entry.traveler_id}`}|${workCenter}`;
               if (!acc[key]) {
                 acc[key] = {
@@ -1084,50 +1223,28 @@ export default function LaborTrackingPage() {
             const groups = Object.values(jobWorkCenterGroups);
 
             return groups.length > 0 ? (
-              <div className="bg-white/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 p-4 sm:p-6">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-2 flex items-center">
+                  <svg className="w-4 h-4 mr-1.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                   Job Summary
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                   {groups.map((group, index) => (
                     <div
                       key={index}
-                      className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      className="bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-blue-200 dark:border-blue-700 rounded-lg px-2.5 py-2 hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Job Number</p>
-                          <p className="text-lg font-bold text-gray-900 mt-1">{group.job_number}</p>
-                        </div>
-                        <div className="bg-blue-100 rounded-full p-2">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{group.job_number}</p>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <span className="px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded-full">
-                            {group.work_center}
-                          </span>
-                        </div>
-                        <div className="border-t border-blue-200 pt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Total Hours:</span>
-                            <span className="text-xl font-bold text-emerald-600">
-                              {group.total_hours.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs text-gray-500">Entries:</span>
-                            <span className="text-sm font-semibold text-gray-700">
-                              {group.entry_count}
-                            </span>
-                          </div>
-                        </div>
+                      <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full mb-1">
+                        {group.work_center}
+                      </span>
+                      <div className="border-t border-blue-200/60 dark:border-blue-700/60 pt-1 flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500 dark:text-slate-400">Hours</span>
+                        <span className="text-sm font-bold text-emerald-600">{group.total_hours.toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
@@ -1137,9 +1254,9 @@ export default function LaborTrackingPage() {
           })()}
 
           {/* Filters */}
-          <div className="bg-white rounded-lg shadow-lg border-2 border-emerald-100 p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg border-2 border-emerald-100 dark:border-slate-700 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
@@ -1147,7 +1264,7 @@ export default function LaborTrackingPage() {
               </h2>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all shadow-sm"
+                className="flex items-center px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-700 rounded-lg transition-all shadow-sm"
               >
                 <FunnelIcon className="w-4 h-4 mr-2" />
                 {showFilters ? 'Hide Filters' : 'Show Filters'}
@@ -1157,50 +1274,50 @@ export default function LaborTrackingPage() {
             {showFilters && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Number</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
                   <input
                     type="text"
                     value={filter.jobNumber}
                     onChange={(e) => setFilter({ ...filter, jobNumber: e.target.value })}
                     placeholder="Filter by job number"
-                    className="w-full px-3 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Work Center</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Work Center</label>
                   <input
                     type="text"
                     value={filter.workCenter}
                     onChange={(e) => setFilter({ ...filter, workCenter: e.target.value })}
                     placeholder="Filter by work center"
-                    className="w-full px-3 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Operator Name</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Operator Name</label>
                   <input
                     type="text"
                     value={filter.operatorName}
                     onChange={(e) => setFilter({ ...filter, operatorName: e.target.value })}
                     placeholder="Filter by operator"
-                    className="w-full px-3 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all"
+                    className="w-full px-3 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Date Range</label>
                   <div className="flex gap-2">
                     <input
                       type="date"
                       value={filter.startDate}
                       onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
-                      className="w-full px-2 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all text-sm"
+                      className="w-full px-2 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 text-sm"
                       placeholder="Start"
                     />
                     <input
                       type="date"
                       value={filter.endDate}
                       onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
-                      className="w-full px-2 py-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all text-sm"
+                      className="w-full px-2 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 text-sm"
                       placeholder="End"
                     />
                   </div>
@@ -1211,11 +1328,11 @@ export default function LaborTrackingPage() {
 
           {/* Bulk Action Buttons */}
           {user?.role === 'ADMIN' && (
-            <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg border-2 border-gray-200 dark:border-slate-700 p-4">
               <div className="flex flex-wrap items-center gap-2 md:gap-3">
                 <button
                   onClick={selectAll}
-                  className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md text-sm md:text-base"
+                  className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-gray-600 dark:bg-slate-500 hover:bg-gray-700 dark:hover:bg-slate-400 text-white rounded-lg font-semibold shadow-md text-sm md:text-base"
                 >
                   <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
                   <span>{selectedEntries.length === filteredEntries.length && filteredEntries.length > 0 ? 'Deselect All' : 'Select All'}</span>
@@ -1224,15 +1341,15 @@ export default function LaborTrackingPage() {
                 <button
                   onClick={deleteSelected}
                   disabled={selectedEntries.length === 0}
-                  className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
+                  className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 dark:disabled:bg-slate-600 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
                 >
                   <TrashIcon className="h-4 md:h-5 w-4 md:w-5" />
                   <span>Delete ({selectedEntries.length})</span>
                 </button>
 
                 {selectedEntries.length > 0 && (
-                  <div className="ml-auto px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <span className="text-sm font-semibold text-blue-700">
+                  <div className="ml-auto px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
                       {selectedEntries.length} selected
                     </span>
                   </div>
@@ -1242,9 +1359,9 @@ export default function LaborTrackingPage() {
           )}
 
           {/* Labor Entries */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
             {/* Table Header + Pagination */}
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
               <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                 <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1259,39 +1376,40 @@ export default function LaborTrackingPage() {
               </div>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block lg:hidden overflow-hidden">
+            {/* Mobile Card View - Hidden: use desktop table on all devices */}
+            <div className="hidden overflow-hidden">
               {isLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading...</div>
+                <div className="p-4"><div className="space-y-3">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-12 w-full" />)}</div></div>
               ) : filteredEntries.length === 0 ? (
                 <div className="p-12 text-center">
-                  <ClockIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                  <h3 className="text-base font-medium text-gray-900 mb-2">
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                    <ClockIcon className="w-7 h-7 text-gray-400 dark:text-slate-500" />
+                  </div>
+                  <h3 className="text-base font-medium text-gray-900 dark:text-slate-200 mb-2">
                     {laborEntries.length === 0 ? 'No Labor Entries Yet' : 'No Matching Entries'}
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-slate-400">
                     {laborEntries.length === 0
                       ? 'Use the timer above to start tracking labor hours.'
                       : 'Try adjusting your filters to see more entries.'}
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-gray-200 dark:divide-slate-700">
                   {paginatedEntries.map((entry) => {
-                    const parts = entry.description?.split(' - ') || [];
-                    const workCenter = parts[0] || entry.work_center || 'N/A';
-                    const operatorName = parts[1] || entry.employee_name || 'N/A';
+                    const workCenter = entry.work_center || entry.description?.split(' - ')?.[0] || 'N/A';
+                    const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || 'N/A';
                     const sequenceDisplay = entry.sequence_number ? `${entry.sequence_number}. ${workCenter}` : workCenter;
 
                     return (
-                      <div key={entry.id} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div key={entry.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">
                               <DocumentTextIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                              <span className="font-bold text-gray-900">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
+                              <span className="font-bold text-gray-900 dark:text-slate-100">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
                             </div>
-                            <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-400">
                               <UserIcon className="w-4 h-4" />
                               <span>{operatorName}</span>
                             </div>
@@ -1303,20 +1421,20 @@ export default function LaborTrackingPage() {
                                   const btn = document.getElementById(`labor-menu-${entry.id}`);
                                   btn?.classList.toggle('hidden');
                                 }}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                               >
-                                <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-5 h-5 text-gray-600 dark:text-slate-400" fill="currentColor" viewBox="0 0 20 20">
                                   <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
                                 </svg>
                               </button>
-                              <div id={`labor-menu-${entry.id}`} className="hidden absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                              <div id={`labor-menu-${entry.id}`} className="hidden absolute right-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 z-10">
                                 <button
                                   onClick={() => {
                                     setSelectedEntry(entry);
                                     setIsModalOpen(true);
                                     document.getElementById(`labor-menu-${entry.id}`)?.classList.add('hidden');
                                   }}
-                                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center space-x-2"
                                 >
                                   <EyeIcon className="w-4 h-4 text-blue-600" />
                                   <span>View Details</span>
@@ -1326,7 +1444,7 @@ export default function LaborTrackingPage() {
                                     openEditModal(entry);
                                     document.getElementById(`labor-menu-${entry.id}`)?.classList.add('hidden');
                                   }}
-                                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center space-x-2"
                                 >
                                   <PencilIcon className="w-4 h-4 text-green-600" />
                                   <span>Edit</span>
@@ -1337,7 +1455,7 @@ export default function LaborTrackingPage() {
                                     setIsDeleteModalOpen(true);
                                     document.getElementById(`labor-menu-${entry.id}`)?.classList.add('hidden');
                                   }}
-                                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2 text-red-600"
+                                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center space-x-2 text-red-600"
                                 >
                                   <TrashIcon className="w-4 h-4" />
                                   <span>Delete</span>
@@ -1348,32 +1466,32 @@ export default function LaborTrackingPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <p className="text-xs text-gray-500">Work Center</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Work Center</p>
                             <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
                               {sequenceDisplay}
                             </span>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Total Hours</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Total Hours</p>
                             <p className="text-sm font-bold text-emerald-600 mt-1">{formatHoursDualCompact(entry.hours_worked)}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Date</p>
-                            <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Date</p>
+                            <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">{new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York' })}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Start Time</p>
-                            <p className="text-sm text-gray-900 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Start Time</p>
+                            <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">Pause Time</p>
-                            <p className="text-sm text-gray-900 mt-1">
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Pause Time</p>
+                            <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">
                               {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500">End Time</p>
-                            <p className="text-sm text-gray-900 mt-1">
+                            <p className="text-xs text-gray-500 dark:text-slate-400">End Time</p>
+                            <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">
                               {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
                             </p>
                           </div>
@@ -1386,32 +1504,34 @@ export default function LaborTrackingPage() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden lg:block">
-              <div className="overflow-x-auto">
+            <div className="block">
+              <div>
               {isLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading...</div>
+                <div className="p-4"><div className="space-y-3">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-12 w-full" />)}</div></div>
               ) : filteredEntries.length === 0 ? (
                 <div className="p-12 text-center">
-                  <ClockIcon className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                  <h3 className="text-base font-medium text-gray-900 mb-2">
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                    <ClockIcon className="w-7 h-7 text-gray-400 dark:text-slate-500" />
+                  </div>
+                  <h3 className="text-base font-medium text-gray-900 dark:text-slate-200 mb-2">
                     {laborEntries.length === 0 ? 'No Labor Entries Yet' : 'No Matching Entries'}
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-slate-400">
                     {laborEntries.length === 0
                       ? 'Use the timer above to start tracking labor hours.'
                       : 'Try adjusting your filters to see more entries.'}
                   </p>
                 </div>
               ) : (
-                <div className="relative">
+                <div className="relative overflow-x-auto">
                 <div className="absolute top-0 left-0 right-0 h-12 overflow-hidden pointer-events-none z-20">
                   <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                   <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
                   <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
                 </div>
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-[800px] w-full divide-y divide-gray-200 dark:divide-slate-700">
                   <thead className="sticky top-0 z-10">
-                    <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
+                    <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
                       {user?.role === 'ADMIN' && (
                         <th className="px-3 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">
                           <input
@@ -1424,22 +1544,23 @@ export default function LaborTrackingPage() {
                       )}
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Date</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Job</th>
+                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Order</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Operator</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Start</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Pause</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">End</th>
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Total Hours</th>
+                      <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Qty</th>
                       {user?.role === 'ADMIN' && (
                         <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Actions</th>
                       )}
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                     {paginatedEntries.map((entry) => {
-                      const parts = entry.description?.split(' - ') || [];
-                      const workCenter = parts[0] || entry.work_center || 'N/A';
-                      const operatorName = parts[1] || entry.employee_name || 'N/A';
+                      const workCenter = entry.work_center || entry.description?.split(' - ')?.[0] || 'N/A';
+                      const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || 'N/A';
                       const sequenceDisplay = entry.sequence_number ? `${entry.sequence_number}. ${workCenter}` : workCenter;
 
                       // Calculate pause duration if available
@@ -1455,8 +1576,8 @@ export default function LaborTrackingPage() {
                           key={entry.id}
                           className={`transition-colors ${
                             selectedEntries.includes(entry.id)
-                              ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                              : 'hover:bg-blue-50/30'
+                              ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500'
+                              : 'hover:bg-blue-50/30 dark:hover:bg-slate-700/50'
                           }`}
                         >
                           {user?.role === 'ADMIN' && (
@@ -1469,24 +1590,27 @@ export default function LaborTrackingPage() {
                               />
                             </td>
                           )}
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                             {new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center space-x-2">
                               <DocumentTextIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                              <span className="font-semibold text-gray-900 text-sm">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
+                              <span className="font-semibold text-gray-900 dark:text-slate-100 text-sm">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 font-medium">
+                            {entry.work_order || '-'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                             {operatorName}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span className="px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
+                            <span className="px-2.5 py-1 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
                               {sequenceDisplay}
                             </span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
                             {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -1495,17 +1619,20 @@ export default function LaborTrackingPage() {
                                 {formatHoursDualCompact(pauseDuration)}
                               </span>
                             ) : (
-                              <span className="text-gray-400">-</span>
+                              <span className="text-gray-400 dark:text-slate-500">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }) : '-'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center space-x-1 text-sm font-bold text-emerald-600">
-                              <ClockIcon className="w-4 h-4 text-gray-400" />
+                              <ClockIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                               <span>{formatHoursDualCompact(entry.hours_worked)}</span>
                             </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-center text-sm font-semibold text-gray-700 dark:text-slate-300">
+                            {entry.qty_completed != null ? entry.qty_completed : '-'}
                           </td>
                           {user?.role === 'ADMIN' && (
                             <td className="px-4 py-3 whitespace-nowrap">
@@ -1514,7 +1641,7 @@ export default function LaborTrackingPage() {
                                   onClick={() => {
                                     openEditModal(entry);
                                   }}
-                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                                   title="Edit"
                                 >
                                   <PencilIcon className="w-5 h-5" />
@@ -1524,7 +1651,7 @@ export default function LaborTrackingPage() {
                                     setEntryToDelete(entry);
                                     setIsDeleteModalOpen(true);
                                   }}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                   title="Delete"
                                 >
                                   <TrashIcon className="w-5 h-5" />
@@ -1544,7 +1671,7 @@ export default function LaborTrackingPage() {
 
             {/* Bottom Pagination */}
             {filteredEntries.length > 0 && (
-              <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+              <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
                 <div className="absolute inset-0 opacity-10 pointer-events-none">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                   <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1595,14 +1722,14 @@ export default function LaborTrackingPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold text-gray-600">Job Number</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {selectedEntry.job_number || `Traveler #${selectedEntry.traveler_id}`}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-600">Operator</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Operator</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {selectedEntry.description?.split(' - ')[1] || selectedEntry.employee_name}
                 </p>
               </div>
@@ -1610,31 +1737,31 @@ export default function LaborTrackingPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold text-gray-600">Work Center</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Work Center</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {selectedEntry.sequence_number
                     ? `${selectedEntry.sequence_number}. ${selectedEntry.description?.split(' - ')[0] || selectedEntry.work_center}`
                     : selectedEntry.description?.split(' - ')[0] || selectedEntry.work_center || 'N/A'}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-600">Total Hours</label>
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Total Hours</label>
                 <p className="text-base font-semibold text-emerald-600 mt-1">
                   {formatHoursDual(selectedEntry.hours_worked)}
                 </p>
               </div>
             </div>
 
-            <div className="border-t border-gray-200 pt-4">
-              <label className="text-sm font-semibold text-gray-600">Start Time</label>
-              <p className="text-base text-gray-900 mt-1">
+            <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
+              <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Start Time</label>
+              <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                 {new Date(selectedEntry.start_time).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })}
               </p>
             </div>
 
             {selectedEntry.pause_time && (
               <div>
-                <label className="text-sm font-semibold text-gray-600">Pause Started</label>
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Pause Started</label>
                 <p className="text-base text-yellow-600 mt-1">
                   {new Date(selectedEntry.pause_time).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })}
                 </p>
@@ -1643,7 +1770,7 @@ export default function LaborTrackingPage() {
                   const endTime = new Date(selectedEntry.end_time).getTime();
                   const pauseDuration = Math.round((endTime - pauseStart) / 3600000 * 100) / 100;
                   return pauseDuration > 0 ? (
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                       Duration: <span className="font-semibold text-yellow-600">{pauseDuration.toFixed(2)} hours</span>
                     </p>
                   ) : null;
@@ -1653,8 +1780,8 @@ export default function LaborTrackingPage() {
 
             {selectedEntry.end_time && (
               <div>
-                <label className="text-sm font-semibold text-gray-600">End Time</label>
-                <p className="text-base text-gray-900 mt-1">
+                <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">End Time</label>
+                <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
                   {new Date(selectedEntry.end_time).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false })}
                 </p>
               </div>
@@ -1690,25 +1817,25 @@ export default function LaborTrackingPage() {
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Job Number:</span>
-                <span className="text-sm text-gray-900">{entryToDelete.job_number || `Traveler #${entryToDelete.traveler_id}`}</span>
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number:</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">{entryToDelete.job_number || `Traveler #${entryToDelete.traveler_id}`}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Operator:</span>
-                <span className="text-sm text-gray-900">
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Operator:</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">
                   {entryToDelete.description?.split(' - ')[1] || entryToDelete.employee_name}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Work Center:</span>
-                <span className="text-sm text-gray-900">
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Work Center:</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">
                   {entryToDelete.sequence_number
                     ? `${entryToDelete.sequence_number}. ${entryToDelete.description?.split(' - ')[0] || entryToDelete.work_center}`
                     : entryToDelete.description?.split(' - ')[0] || entryToDelete.work_center || 'N/A'}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-gray-600">Hours Worked:</span>
+                <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Hours Worked:</span>
                 <span className="text-sm font-semibold text-emerald-600">
                   {formatHoursDual(entryToDelete.hours_worked)}
                 </span>
@@ -1721,7 +1848,7 @@ export default function LaborTrackingPage() {
                   setIsDeleteModalOpen(false);
                   setEntryToDelete(null);
                 }}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -1736,6 +1863,69 @@ export default function LaborTrackingPage() {
         </Modal>
       )}
 
+      {/* Qty Completed Modal */}
+      <Modal
+        isOpen={isQtyModalOpen}
+        onClose={() => {
+          setIsQtyModalOpen(false);
+          setPendingStopEntryId(null);
+          setQtyCompleted('');
+        }}
+        title="Quantity Completed"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-slate-400">
+            How many units did you complete during this time?
+            {travelerMaxQty != null && (
+              <span className="block mt-1 font-semibold text-blue-600 dark:text-blue-400">
+                Traveler quantity: {travelerMaxQty}
+              </span>
+            )}
+          </p>
+          <input
+            type="number"
+            min="0"
+            max={travelerMaxQty || undefined}
+            value={qtyCompleted}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val && travelerMaxQty != null && parseInt(val) > travelerMaxQty) {
+                toast.error(`Quantity cannot exceed traveler quantity (${travelerMaxQty})`);
+                return;
+              }
+              setQtyCompleted(val);
+            }}
+            placeholder={travelerMaxQty != null ? `Max: ${travelerMaxQty}` : 'Enter quantity completed'}
+            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:bg-slate-700 dark:text-white"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') confirmStopTimer();
+            }}
+          />
+          {qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty && (
+            <p className="text-xs text-red-600 font-medium">Quantity cannot exceed {travelerMaxQty}</p>
+          )}
+          <div className="flex justify-end space-x-3 pt-2">
+            <button
+              onClick={() => {
+                setQtyCompleted('');
+                confirmStopTimer();
+              }}
+              className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-lg transition-colors"
+            >
+              Skip
+            </button>
+            <button
+              onClick={confirmStopTimer}
+              disabled={!!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+            >
+              Stop Timer
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Manual Entry Modal (ADMIN only) */}
       <Modal
         isOpen={isManualEntryOpen}
@@ -1745,9 +1935,11 @@ export default function LaborTrackingPage() {
             job_number: '',
             work_center: '',
             operator_name: '',
+            operator_id: undefined,
             start_time: '',
             end_time: '',
           });
+          setManualJobWorkCenterOptions([]);
         }}
         title="Manual Labor Entry (Admin Only)"
         footer={
@@ -1759,17 +1951,19 @@ export default function LaborTrackingPage() {
                   job_number: '',
                   work_center: '',
                   operator_name: '',
+                  operator_id: undefined,
                   start_time: '',
                   end_time: '',
                 });
+                setManualJobWorkCenterOptions([]);
               }}
-              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-all"
+              className="px-6 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-semibold rounded-lg transition-all"
             >
               Cancel
             </button>
             <button
               onClick={handleManualEntry}
-              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all shadow-md"
+              className="px-6 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all shadow-md"
             >
               Create Completed Entry
             </button>
@@ -1779,29 +1973,50 @@ export default function LaborTrackingPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Job Number <span className="text-red-500">*</span>
               </label>
               <Autocomplete
                 value={manualEntryData.job_number}
-                onChange={(value) => setManualEntryData({ ...manualEntryData, job_number: value })}
+                onChange={(value) => {
+                  setManualEntryData({ ...manualEntryData, job_number: value });
+                  if (!value) {
+                    setManualJobWorkCenterOptions([]);
+                  }
+                }}
+                onSelect={async (option) => {
+                  const jobNum = option.job_number || option.value;
+                  setManualEntryData(prev => ({ ...prev, job_number: jobNum, work_center: '' }));
+                  const steps = await fetchWorkCentersByJob(jobNum);
+                  setManualJobWorkCenterOptions(steps);
+                }}
                 fetchSuggestions={fetchJobNumbers}
                 placeholder="Type job number or search..."
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
                 minChars={0}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Work Center <span className="text-red-500">*</span>
               </label>
               <Autocomplete
                 value={manualEntryData.work_center}
                 onChange={(value) => setManualEntryData({ ...manualEntryData, work_center: value })}
-                fetchSuggestions={fetchWorkCenters}
-                placeholder="Type work center or search..."
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                fetchSuggestions={async (query) => {
+                  if (manualEntryData.job_number) {
+                    const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query);
+                    if (jobSteps.length > 0) {
+                      const generalWCs = await fetchWorkCenters(query);
+                      const existingValues = new Set(jobSteps.map((f: any) => f.value));
+                      return [...jobSteps, ...generalWCs.filter((wc: any) => !existingValues.has(wc.value))];
+                    }
+                  }
+                  return fetchWorkCenters(query);
+                }}
+                placeholder="Select from steps or type/scan..."
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
                 minChars={0}
               />
@@ -1809,15 +2024,16 @@ export default function LaborTrackingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
               Operator Name <span className="text-red-500">*</span>
             </label>
             <Autocomplete
               value={manualEntryData.operator_name}
-              onChange={(value) => setManualEntryData({ ...manualEntryData, operator_name: value })}
+              onChange={(value) => setManualEntryData({ ...manualEntryData, operator_name: value, operator_id: undefined })}
+              onSelect={(option) => setManualEntryData({ ...manualEntryData, operator_name: option.value, operator_id: option.id })}
               fetchSuggestions={fetchOperators}
-              placeholder="Type operator name or search..."
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+              placeholder="Select operator from list..."
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               required
               minChars={0}
             />
@@ -1825,26 +2041,26 @@ export default function LaborTrackingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Start Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={manualEntryData.start_time}
                 onChange={(e) => setManualEntryData({ ...manualEntryData, start_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 End Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={manualEntryData.end_time}
                 onChange={(e) => setManualEntryData({ ...manualEntryData, end_time: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
                 required
               />
             </div>
@@ -1861,7 +2077,7 @@ export default function LaborTrackingPage() {
           <div className="flex justify-end space-x-3">
             <button
               onClick={() => setIsEditModalOpen(false)}
-              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition-all"
+              className="px-6 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-semibold rounded-lg transition-all"
             >
               Cancel
             </button>
@@ -1877,62 +2093,62 @@ export default function LaborTrackingPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Job Number
               </label>
               <input
                 type="text"
                 value={editEntryData.job_number}
                 disabled
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed text-gray-600"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-gray-100 dark:bg-slate-700 cursor-not-allowed text-gray-600 dark:text-slate-400"
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Work Center <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={editEntryData.work_center}
                 onChange={(e) => setEditEntryData({ ...editEntryData, work_center: e.target.value })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
               Operator Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={editEntryData.operator_name}
               onChange={(e) => setEditEntryData({ ...editEntryData, operator_name: e.target.value })}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 Start Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={convertISOToLocal(editEntryData.start_time)}
                 onChange={(e) => setEditEntryData({ ...editEntryData, start_time: convertLocalToISO(e.target.value) })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
                 End Time <span className="text-red-500">*</span>
               </label>
               <input
                 type="datetime-local"
                 value={convertISOToLocal(editEntryData.end_time)}
                 onChange={(e) => setEditEntryData({ ...editEntryData, end_time: convertLocalToISO(e.target.value) })}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+                className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
             </div>
           </div>

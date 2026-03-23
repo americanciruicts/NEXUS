@@ -18,12 +18,15 @@ class LaborEntryCreate(BaseModel):
     end_time: Optional[datetime] = None
     description: str
     is_completed: Optional[bool] = None
+    employee_id: Optional[int] = None  # Admin can specify a different employee
 
 class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
+    clear_pause: Optional[bool] = None  # Set to true to resume (clear pause_time)
     end_time: Optional[datetime] = None
     description: Optional[str] = None
     is_completed: Optional[bool] = None
+    qty_completed: Optional[int] = None
 
 class LaborEntryResponse(BaseModel):
     id: int
@@ -40,6 +43,7 @@ class LaborEntryResponse(BaseModel):
     is_completed: bool
     work_center: Optional[str] = None
     sequence_number: Optional[int] = None
+    qty_completed: Optional[int] = None
     created_at: datetime
     # Traveler information
     work_order: Optional[str] = None
@@ -121,11 +125,30 @@ async def start_labor_entry(
             if not work_center_name:
                 work_center_name = work_center_from_desc
 
+    # Determine effective employee - admin can override
+    effective_employee_id = current_user.id
+    effective_employee = current_user
+    if labor_data.employee_id and labor_data.employee_id != current_user.id:
+        # Only admin can assign labor to another user
+        if current_user.role.value != "ADMIN":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can create labor entries for other users"
+            )
+        target_employee = db.query(User).filter(User.id == labor_data.employee_id).first()
+        if not target_employee:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Specified employee not found"
+            )
+        effective_employee_id = target_employee.id
+        effective_employee = target_employee
+
     # Check if user has an active labor entry
     # BUT: Allow manual entries (which have end_time already set) even if user has active entry
     if not labor_data.end_time:  # Only check for active entry if this is NOT a manual entry
         active_entry = db.query(LaborEntry).filter(
-            (LaborEntry.employee_id == current_user.id) &
+            (LaborEntry.employee_id == effective_employee_id) &
             (LaborEntry.end_time.is_(None)) &
             (LaborEntry.is_completed == False)
         ).first()
@@ -140,7 +163,7 @@ async def start_labor_entry(
     db_labor_entry = LaborEntry(
         traveler_id=labor_data.traveler_id,
         step_id=step_id,
-        employee_id=current_user.id,
+        employee_id=effective_employee_id,
         start_time=labor_data.start_time,
         end_time=labor_data.end_time,  # Support manual entries with end_time
         description=labor_data.description,
@@ -184,16 +207,19 @@ async def start_labor_entry(
     db.refresh(db_labor_entry)
 
     # Add employee name and job number for response
-    db_labor_entry.employee_name = f"{current_user.first_name} {current_user.last_name}"
+    db_labor_entry.employee_name = f"{effective_employee.first_name} {effective_employee.last_name}"
     traveler = db.query(Traveler).filter(Traveler.id == db_labor_entry.traveler_id).first()
     db_labor_entry.job_number = traveler.job_number if traveler else None
 
     # Create notification for all admins
+    created_by_label = current_user.username
+    if effective_employee_id != current_user.id:
+        created_by_label = f"{current_user.username} (for {effective_employee.first_name})"
     create_notification_for_admins(
         db=db,
         notification_type=NotificationType.LABOR_ENTRY_CREATED,
         title="New Labor Entry Started",
-        message=f"{current_user.username} started labor entry for {traveler.job_number if traveler else 'Unknown Job'} - {work_center_name or 'Unknown Work Center'}",
+        message=f"{created_by_label} started labor entry for {traveler.job_number if traveler else 'Unknown Job'} - {work_center_name or 'Unknown Work Center'}",
         reference_id=db_labor_entry.id,
         reference_type="labor_entry",
         created_by_username=current_user.username
@@ -225,8 +251,12 @@ async def update_labor_entry(
             detail="Not authorized to update this labor entry"
         )
 
+    # Handle resume (clear pause_time)
+    if labor_data.clear_pause:
+        labor_entry.pause_time = None
+
     # Update fields
-    update_data = labor_data.model_dump(exclude_unset=True)
+    update_data = labor_data.model_dump(exclude_unset=True, exclude={'clear_pause'})
     for field, value in update_data.items():
         setattr(labor_entry, field, value)
 
@@ -265,7 +295,7 @@ async def update_labor_entry(
 
     # Add employee name and job number for response
     employee = db.query(User).filter(User.id == labor_entry.employee_id).first()
-    labor_entry.employee_name = f"{employee.first_name} {employee.last_name}"
+    labor_entry.employee_name = f"{employee.first_name} {employee.last_name}" if employee else "Unknown"
     traveler = db.query(Traveler).filter(Traveler.id == labor_entry.traveler_id).first()
     labor_entry.job_number = traveler.job_number if traveler else None
 
@@ -401,7 +431,7 @@ async def get_traveler_labor_entries(
             "traveler_id": entry.traveler_id,
             "step_id": entry.step_id,
             "employee_id": entry.employee_id,
-            "employee_name": f"{employee.first_name} {employee.last_name}",
+            "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
             "job_number": traveler.job_number,
             "start_time": entry.start_time,
             "pause_time": entry.pause_time,

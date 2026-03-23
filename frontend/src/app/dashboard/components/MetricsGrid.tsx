@@ -20,10 +20,10 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
       value: data?.status_distribution?.IN_PROGRESS || 0,
       subtitle: 'Active travelers',
       icon: BoltIcon,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-300',
-      gradient: 'from-blue-600 via-blue-700 to-blue-800',
-      ring: 'ring-blue-500/20',
+      iconBg: 'bg-teal-500/20',
+      iconColor: 'text-teal-300',
+      gradient: 'from-teal-600 via-teal-700 to-teal-800',
+      ring: 'ring-teal-500/20',
       href: '/travelers?status=IN_PROGRESS'
     },
     {
@@ -62,33 +62,27 @@ export default function MetricsGrid({ data }: MetricsGridProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {metrics.map((metric, index) => (
         <Link
           key={index}
           href={metric.href}
-          className={`bg-gradient-to-br ${metric.gradient} rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-4 sm:p-5 ring-1 ${metric.ring} relative overflow-hidden group cursor-pointer`}
+          className={`bg-gradient-to-br ${metric.gradient} rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-3 ring-1 ${metric.ring} relative overflow-hidden group cursor-pointer`}
         >
-          {/* Decorative circles */}
-          <div className="absolute inset-0 opacity-10 pointer-events-none">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
-          </div>
-
           <div className="relative flex items-start justify-between">
             <div className="flex-1">
-              <p className="text-white/70 text-[11px] sm:text-xs font-semibold uppercase tracking-wider mb-2">
+              <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wider mb-1">
                 {metric.title}
               </p>
-              <h3 className="text-white text-2xl sm:text-3xl font-extrabold leading-none">
+              <h3 className="text-white text-xl font-extrabold leading-none">
                 {metric.value}
               </h3>
-              <p className="text-white/50 text-[10px] sm:text-xs mt-1.5 font-medium">
+              <p className="text-white/50 text-[9px] mt-1 font-medium">
                 {metric.subtitle}
               </p>
             </div>
-            <div className={`${metric.iconBg} p-2.5 rounded-xl backdrop-blur-sm`}>
-              <metric.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${metric.iconColor}`} />
+            <div className={`${metric.iconBg} p-2 rounded-lg backdrop-blur-sm`}>
+              <metric.icon className={`h-4 w-4 ${metric.iconColor}`} />
             </div>
           </div>
         </Link>

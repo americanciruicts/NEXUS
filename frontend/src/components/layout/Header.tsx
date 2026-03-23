@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon, Bars3Icon, XMarkIcon, HomeIcon, ClipboardDocumentListIcon, ClockIcon, ChartBarSquareIcon, QueueListIcon, PlusCircleIcon, MapPinIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
+import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import GlobalSearch from '@/components/GlobalSearch';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
@@ -22,6 +24,7 @@ interface Notification {
 
 export default function Header() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showTravelerMenu, setShowTravelerMenu] = useState(false);
@@ -41,9 +44,9 @@ export default function Header() {
   const getLinkClasses = (path: string) => {
     const baseClasses = "px-3 py-2 rounded-md text-sm font-medium transition-all duration-200";
     if (isActive(path)) {
-      return `${baseClasses} bg-white/20 text-white shadow-sm border border-white/30`;
+      return `${baseClasses} bg-white/20 dark:bg-white/15 text-white shadow-sm border border-white/30 dark:border-white/20`;
     }
-    return `${baseClasses} text-blue-50 hover:bg-white/10 hover:text-white`;
+    return `${baseClasses} text-teal-50 dark:text-slate-300 hover:bg-white/10 dark:hover:bg-white/10 hover:text-white`;
   };
 
   // Fetch notifications
@@ -151,28 +154,28 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-2xl no-print sticky top-0 z-50 border-b border-white/10">
+    <header className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-2xl no-print sticky top-0 z-50 border-b border-white/10">
       <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
         <div className="absolute top-0 right-0 w-48 h-48 bg-white rounded-full -translate-y-1/2 translate-x-1/4" />
         <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-white rounded-full translate-y-1/2" />
         <div className="absolute top-0 left-2/3 w-24 h-24 bg-white rounded-full -translate-y-1/2" />
       </div>
-      <div className="relative z-10 max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+      <div className="relative z-10 max-w-full mx-auto px-3">
+        <div className="flex justify-between items-center h-14">
           {/* Logo and Title */}
-          <Link href="/dashboard" className="flex items-center group">
+          <Link href="/dashboard" className="flex items-center group flex-shrink-0">
             <Image
               src="/nexus-logo-navbar.svg"
               alt="NEXUS"
-              width={200}
-              height={64}
-              className="h-10 sm:h-12 w-auto group-hover:scale-105 transition-all duration-300"
+              width={140}
+              height={44}
+              className="h-8 w-auto group-hover:scale-105 transition-all duration-300"
             />
           </Link>
 
-          {/* Navigation Links */}
-          <nav className="hidden lg:flex space-x-2 items-center">
-            <Link href="/dashboard" className={`${getLinkClasses('/dashboard')} flex items-center space-x-2`}>
+          {/* Navigation Links - Hidden on mobile */}
+          <nav className="hidden md:flex space-x-2 items-center">
+            <Link href="/dashboard" className={`${getLinkClasses('/dashboard')} flex items-center space-x-1`}>
               <HomeIcon className="h-4 w-4 text-yellow-300" />
               <span>Dashboard</span>
             </Link>
@@ -183,18 +186,18 @@ export default function Header() {
                 onClick={() => setShowTravelerMenu(!showTravelerMenu)}
                 className={`${getLinkClasses('/travelers')} flex items-center space-x-1`}
               >
-                <ClipboardDocumentListIcon className="h-4 w-4 text-blue-300" />
+                <ClipboardDocumentListIcon className="h-4 w-4 text-teal-300" />
                 <span>Travelers</span>
-                <ChevronDownIcon className="h-4 w-4 text-blue-300" />
+                <ChevronDownIcon className="h-3.5 w-3.5 text-teal-300" />
               </button>
 
               {showTravelerMenu && (
-                <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 border border-gray-200">
+                <div className="absolute left-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl dark:shadow-slate-900/50 ring-1 ring-black ring-opacity-5 dark:ring-slate-600 z-50 border border-gray-200 dark:border-slate-700">
                   <div className="py-1">
                     <Link
                       href="/travelers"
                       onClick={() => setShowTravelerMenu(false)}
-                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                     >
                       <QueueListIcon className="h-4 w-4 text-blue-600" />
                       <span>All Travelers</span>
@@ -203,7 +206,7 @@ export default function Header() {
                       <Link
                         href="/travelers/new"
                         onClick={() => setShowTravelerMenu(false)}
-                        className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                       >
                         <PlusCircleIcon className="h-4 w-4 text-green-600" />
                         <span>New Traveler</span>
@@ -212,7 +215,7 @@ export default function Header() {
                     <Link
                       href="/travelers/tracking"
                       onClick={() => setShowTravelerMenu(false)}
-                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                     >
                       <MapPinIcon className="h-4 w-4 text-purple-600" />
                       <span>Traveler Tracking</span>
@@ -221,39 +224,69 @@ export default function Header() {
                 </div>
               )}
             </div>
-            <Link href="/labor-tracking" className={`${getLinkClasses('/labor-tracking')} flex items-center space-x-2`}>
+            <Link href="/labor-tracking" className={`${getLinkClasses('/labor-tracking')} flex items-center space-x-1`}>
               <ClockIcon className="h-4 w-4 text-green-300" />
-              <span>Labor Tracking</span>
+              <span>Labor</span>
             </Link>
             {user?.role !== 'OPERATOR' && (
-              <Link href="/reports" className={`${getLinkClasses('/reports')} flex items-center space-x-2`}>
+              <Link href="/reports" className={`${getLinkClasses('/reports')} flex items-center space-x-1`}>
                 <ChartBarSquareIcon className="h-4 w-4 text-purple-300" />
                 <span>Reports</span>
               </Link>
             )}
           </nav>
 
-          {/* Mobile menu button */}
+          {/* Right side: mobile hamburger + desktop items */}
           <div className="flex items-center space-x-2">
-            <div className="lg:hidden flex items-center space-x-2">
-              <GlobalSearch />
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden p-2 rounded-md text-white hover:bg-white/10 transition-colors"
+              aria-label="Toggle mobile menu"
+            >
+              {showMobileMenu ? (
+                <XMarkIcon className="h-6 w-6" />
+              ) : (
+                <Bars3Icon className="h-6 w-6" />
+              )}
+            </button>
+
+            {/* Mobile-only: theme toggle and user icon */}
+            <div className="flex md:hidden items-center space-x-1">
               <button
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="p-2 rounded-md text-white hover:bg-white/10 transition-colors"
-                aria-label="Toggle mobile menu"
+                onClick={toggleTheme}
+                className="p-2 text-white/80 hover:text-white transition-colors"
+                aria-label="Toggle theme"
               >
-                {showMobileMenu ? (
-                  <XMarkIcon className="h-6 w-6" />
-                ) : (
-                  <Bars3Icon className="h-6 w-6" />
-                )}
+                {theme === 'light' ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5 text-yellow-300" />}
+              </button>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="p-2 text-white/80 hover:text-white transition-colors"
+                aria-label="User menu"
+              >
+                <UserCircleIcon className="h-6 w-6 text-pink-300" />
               </button>
             </div>
 
             {/* Desktop User Menu */}
-            <div className="hidden lg:flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-2">
               {/* Global Search */}
               <GlobalSearch />
+
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 text-white/80 hover:text-white transition-colors"
+                title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+                aria-label="Toggle theme"
+              >
+                {theme === 'light' ? (
+                  <MoonIcon className="h-5 w-5" />
+                ) : (
+                  <SunIcon className="h-5 w-5 text-yellow-300" />
+                )}
+              </button>
 
             {/* Notifications */}
             {user?.role === 'ADMIN' && (
@@ -263,9 +296,9 @@ export default function Header() {
                   className="relative p-2 text-white/80 hover:text-white transition-colors"
                   title="Notifications"
                 >
-                  <BellIcon className="h-6 w-6 text-yellow-300" />
+                  <BellIcon className="h-5 w-5 text-yellow-300" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 flex items-center justify-center h-5 w-5 text-xs font-bold text-white bg-red-500 rounded-full ring-2 ring-blue-600">
+                    <span className="absolute top-0 right-0 flex items-center justify-center h-5 w-5 text-xs font-bold text-white bg-red-500 rounded-full ring-2 ring-teal-600">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
@@ -273,13 +306,13 @@ export default function Header() {
 
                 {/* Notifications Dropdown */}
                 {showNotifications && (
-                  <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 border border-gray-200 max-h-[500px] overflow-hidden flex flex-col">
-                    <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 flex justify-between items-center">
-                      <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
-                      {unreadCount > 0 && (
+                  <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[400px] bg-white dark:bg-slate-800 rounded-lg shadow-xl dark:shadow-slate-900/50 ring-1 ring-black ring-opacity-5 dark:ring-slate-600 z-50 border border-gray-200 dark:border-slate-700 max-h-[500px] overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-slate-700 dark:to-slate-700 flex justify-between items-center">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Notifications</h3>
+                      {notifications.length > 0 && (
                         <button
                           onClick={markAllAsRead}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center space-x-1"
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center space-x-1"
                         >
                           <CheckIcon className="h-3 w-3" />
                           <span>Mark all read</span>
@@ -289,39 +322,46 @@ export default function Header() {
 
                     <div className="overflow-y-auto flex-1">
                       {notifications.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">
-                          <BellIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                        <div className="p-8 text-center text-gray-500 dark:text-slate-400">
+                          <BellIcon className="h-12 w-12 mx-auto mb-2 text-gray-300 dark:text-slate-500" />
                           <p className="text-sm">No notifications yet</p>
                         </div>
                       ) : (
                         notifications.map((notification) => (
                           <div
                             key={notification.id}
-                            className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
-                              !notification.is_read ? 'bg-blue-50' : ''
+                            className={`px-4 py-3 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${
+                              !notification.is_read ? 'bg-blue-50 dark:bg-blue-900/30' : ''
                             }`}
                             onClick={() => !notification.is_read && markAsRead(notification.id)}
                           >
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
-                                <p className={`text-sm font-medium ${!notification.is_read ? 'text-gray-900' : 'text-gray-700'}`}>
+                                <p className={`text-sm font-medium ${!notification.is_read ? 'text-gray-900 dark:text-slate-100' : 'text-gray-700 dark:text-slate-300'}`}>
                                   {notification.title}
                                 </p>
-                                <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                                <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">{notification.message}</p>
                                 <div className="flex items-center space-x-2 mt-2">
-                                  <span className="text-xs text-gray-500">{formatTime(notification.created_at)}</span>
+                                  <span className="text-xs text-gray-500 dark:text-slate-400">{formatTime(notification.created_at)}</span>
                                   {notification.created_by_username && (
                                     <>
-                                      <span className="text-xs text-gray-400">•</span>
-                                      <span className="text-xs text-gray-500">by {notification.created_by_username}</span>
+                                      <span className="text-xs text-gray-400 dark:text-slate-500">•</span>
+                                      <span className="text-xs text-gray-500 dark:text-slate-400">by {notification.created_by_username}</span>
                                     </>
                                   )}
                                 </div>
                               </div>
                               {!notification.is_read && (
-                                <div className="ml-2 flex-shrink-0">
-                                  <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsRead(notification.id);
+                                  }}
+                                  className="ml-2 flex-shrink-0 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
+                                  title="Mark as read"
+                                >
+                                  Done
+                                </button>
                               )}
                             </div>
                           </div>
@@ -330,11 +370,11 @@ export default function Header() {
                     </div>
 
                     {notifications.length > 0 && (
-                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                      <div className="px-4 py-3 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
                         <Link
                           href="/notifications"
                           onClick={() => setShowNotifications(false)}
-                          className="block w-full text-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                          className="block w-full text-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
                         >
                           View All Notifications
                         </Link>
@@ -349,25 +389,25 @@ export default function Header() {
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center space-x-3 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer"
+                className="flex items-center space-x-1.5 hover:bg-white/10 px-2 py-1 rounded-lg transition-all duration-200 cursor-pointer"
                 title="User Menu"
               >
                 <div className="text-right">
                   <p className="text-sm font-medium text-white">{user?.first_name || (user?.username?.includes('@') ? user.username.split('@')[0].charAt(0).toUpperCase() + user.username.split('@')[0].slice(1) : user?.username) || 'Guest'}</p>
-                  <p className="text-xs text-blue-200">{user?.role || 'No Role'}</p>
+                  <p className="text-xs text-teal-200">{user?.role || 'No Role'}</p>
                 </div>
-                <UserCircleIcon className="h-9 w-9 text-pink-300 flex-shrink-0" />
+                <UserCircleIcon className="h-7 w-7 text-pink-300 flex-shrink-0" />
               </button>
 
               {/* User Dropdown Menu */}
               {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 z-50 border border-gray-200">
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl dark:shadow-slate-900/50 ring-1 ring-black ring-opacity-5 dark:ring-slate-600 z-50 border border-gray-200 dark:border-slate-700">
                   <div className="py-1">
-                    <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                      <p className="text-sm font-semibold text-gray-900">{user?.first_name || (user?.username?.includes('@') ? user.username.split('@')[0].charAt(0).toUpperCase() + user.username.split('@')[0].slice(1) : user?.username)}</p>
-                      <p className="text-xs text-gray-600 mt-0.5">{user?.role}</p>
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-slate-700 dark:to-slate-700">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{user?.first_name || (user?.username?.includes('@') ? user.username.split('@')[0].charAt(0).toUpperCase() + user.username.split('@')[0].slice(1) : user?.username)}</p>
+                      <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">{user?.role}</p>
                       {user?.isApprover && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 mt-1.5">
                           Approver
                         </span>
                       )}
@@ -375,7 +415,7 @@ export default function Header() {
                     <Link
                       href="/profile"
                       onClick={() => setShowUserMenu(false)}
-                      className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                     >
                       <UserIcon className="h-4 w-4 mr-3 text-blue-600" />
                       Profile
@@ -385,7 +425,7 @@ export default function Header() {
                         <Link
                           href="/notifications"
                           onClick={() => setShowUserMenu(false)}
-                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                         >
                           <BellIcon className="h-4 w-4 mr-3 text-yellow-600" />
                           Notifications
@@ -393,7 +433,7 @@ export default function Header() {
                         <Link
                           href="/users"
                           onClick={() => setShowUserMenu(false)}
-                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                         >
                           <UsersIcon className="h-4 w-4 mr-3 text-purple-600" />
                           User Management
@@ -401,7 +441,7 @@ export default function Header() {
                         <Link
                           href="/admin/work-centers"
                           onClick={() => setShowUserMenu(false)}
-                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
                         >
                           <WrenchScrewdriverIcon className="h-4 w-4 mr-3 text-yellow-600" />
                           Work Center Management
@@ -413,7 +453,7 @@ export default function Header() {
                         setShowUserMenu(false);
                         logout();
                       }}
-                      className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors border-t border-gray-100"
+                      className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-400 transition-colors border-t border-gray-100 dark:border-slate-700"
                     >
                       <ArrowRightOnRectangleIcon className="h-4 w-4 mr-3 text-red-600" />
                       Sign Out
@@ -429,12 +469,12 @@ export default function Header() {
 
       {/* Mobile Menu */}
       {showMobileMenu && (
-        <div className="lg:hidden bg-white border-t border-gray-200 shadow-lg">
+        <div className="md:hidden bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 shadow-lg dark:shadow-slate-900/50">
           <div className="px-4 pt-2 pb-4 space-y-1">
             <Link
               href="/dashboard"
               onClick={() => setShowMobileMenu(false)}
-              className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+              className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/dashboard') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
             >
               <HomeIcon className="h-5 w-5 mr-3 text-yellow-600" />
               <span>Dashboard</span>
@@ -443,7 +483,7 @@ export default function Header() {
             <div>
               <button
                 onClick={() => setShowTravelerMenu(!showTravelerMenu)}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 <div className="flex items-center">
                   <ClipboardDocumentListIcon className="h-5 w-5 mr-3 text-blue-600" />
@@ -456,7 +496,7 @@ export default function Header() {
                   <Link
                     href="/travelers"
                     onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
-                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <QueueListIcon className="h-4 w-4 text-blue-600" />
                     <span>All Travelers</span>
@@ -465,7 +505,7 @@ export default function Header() {
                     <Link
                       href="/travelers/new"
                       onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
-                      className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+                      className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
                     >
                       <PlusCircleIcon className="h-4 w-4 text-green-600" />
                       <span>New Traveler</span>
@@ -474,7 +514,7 @@ export default function Header() {
                   <Link
                     href="/travelers/tracking"
                     onClick={() => { setShowMobileMenu(false); setShowTravelerMenu(false); }}
-                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+                    className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <MapPinIcon className="h-4 w-4 text-purple-600" />
                     <span>Traveler Tracking</span>
@@ -486,7 +526,7 @@ export default function Header() {
             <Link
               href="/labor-tracking"
               onClick={() => setShowMobileMenu(false)}
-              className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/labor-tracking') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+              className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/labor-tracking') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
             >
               <ClockIcon className="h-5 w-5 mr-3 text-green-600" />
               <span>Labor Tracking</span>
@@ -496,18 +536,18 @@ export default function Header() {
               <Link
                 href="/reports"
                 onClick={() => setShowMobileMenu(false)}
-                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/reports') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/reports') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
               >
                 <ChartBarSquareIcon className="h-5 w-5 mr-3 text-purple-600" />
                 <span>Reports</span>
               </Link>
             )}
 
-            <div className="border-t border-gray-200 mt-4 pt-4">
+            <div className="border-t border-gray-200 dark:border-slate-700 mt-4 pt-4">
               <Link
                 href="/profile"
                 onClick={() => setShowMobileMenu(false)}
-                className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 <UserIcon className="h-5 w-5 mr-3 text-blue-600" />
                 Profile
@@ -518,7 +558,7 @@ export default function Header() {
                   <Link
                     href="/notifications"
                     onClick={() => setShowMobileMenu(false)}
-                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <BellIcon className="h-5 w-5 mr-3 text-yellow-600" />
                     Notifications
@@ -526,7 +566,7 @@ export default function Header() {
                   <Link
                     href="/users"
                     onClick={() => setShowMobileMenu(false)}
-                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <UsersIcon className="h-5 w-5 mr-3 text-purple-600" />
                     User Management
@@ -534,7 +574,7 @@ export default function Header() {
                   <Link
                     href="/admin/work-centers"
                     onClick={() => setShowMobileMenu(false)}
-                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50"
+                    className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     <WrenchScrewdriverIcon className="h-5 w-5 mr-3 text-yellow-600" />
                     Work Center Management
@@ -543,8 +583,20 @@ export default function Header() {
               )}
 
               <button
+                onClick={toggleTheme}
+                className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 mt-2"
+              >
+                {theme === 'light' ? (
+                  <MoonIcon className="h-5 w-5 mr-3 text-gray-600" />
+                ) : (
+                  <SunIcon className="h-5 w-5 mr-3 text-yellow-400" />
+                )}
+                {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+              </button>
+
+              <button
                 onClick={() => { setShowMobileMenu(false); logout(); }}
-                className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50 mt-2"
+                className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 mt-2"
               >
                 <ArrowRightOnRectangleIcon className="h-5 w-5 mr-3 text-red-600" />
                 Sign Out

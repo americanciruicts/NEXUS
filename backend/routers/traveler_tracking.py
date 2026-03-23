@@ -24,8 +24,10 @@ class TimeEntryCreate(BaseModel):
 
 class TimeEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
+    clear_pause: Optional[bool] = None  # Set to true to resume (clear pause_time)
     end_time: Optional[datetime] = None
     is_completed: Optional[bool] = None
+    qty_completed: Optional[int] = None
 
 class TimeEntryResponse(BaseModel):
     id: int
@@ -39,6 +41,7 @@ class TimeEntryResponse(BaseModel):
     hours_worked: float
     pause_duration: float
     is_completed: bool
+    qty_completed: Optional[int] = None
     created_at: datetime
     # Traveler information
     work_order: Optional[str] = None
@@ -145,7 +148,9 @@ async def update_time_entry(
         )
 
     # Update pause time
-    if entry_data.pause_time:
+    if entry_data.clear_pause:
+        entry.pause_time = None
+    elif entry_data.pause_time:
         entry.pause_time = entry_data.pause_time
 
     # Update end time and calculate hours
@@ -188,6 +193,9 @@ async def update_time_entry(
 
     if entry_data.is_completed is not None:
         entry.is_completed = entry_data.is_completed
+
+    if entry_data.qty_completed is not None:
+        entry.qty_completed = entry_data.qty_completed
 
     db.commit()
     db.refresh(entry)

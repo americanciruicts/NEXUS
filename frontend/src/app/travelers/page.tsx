@@ -19,6 +19,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/config/api';
+import { DEPARTMENT_BAR_COLORS } from '@/data/workCenters';
+import { PageHeaderSkeleton, TableSkeleton } from '@/components/ui/LoadingSkeleton';
 
 // Toast notification component
 interface ToastProps {
@@ -65,17 +67,17 @@ interface ConfirmModalProps {
 function ConfirmModal({ isOpen, title, message, confirmText = 'Confirm', onConfirm, onCancel }: ConfirmModalProps) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-slate-700">
         <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-            <ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
+          <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+            <ExclamationTriangleIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100">{title}</h3>
         </div>
-        <p className="text-gray-600 mb-6 whitespace-pre-line">{message}</p>
+        <p className="text-gray-600 dark:text-slate-400 mb-6 whitespace-pre-line">{message}</p>
         <div className="flex justify-end space-x-3">
-          <button onClick={onCancel} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all">Cancel</button>
+          <button onClick={onCancel} className="px-5 py-2.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200 rounded-lg font-semibold transition-all">Cancel</button>
           <button onClick={onConfirm} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all shadow-md">{confirmText}</button>
         </div>
       </div>
@@ -92,6 +94,22 @@ const formatDateDisplay = (dateStr: string): string => {
     return `${month}/${day}/${year}`;
   }
   return dateStr;
+};
+
+type DeptProgress = {
+  department: string;
+  total_steps: number;
+  completed_steps: number;
+  percent_complete: number;
+};
+
+type LaborProgress = {
+  total_hours: number;
+  entries_count: number;
+  active_entries: number;
+  steps_with_labor: number;
+  total_steps: number;
+  percent: number;
 };
 
 type TravelerItem = {
@@ -113,6 +131,8 @@ type TravelerItem = {
   progress: number;
   totalSteps: number;
   completedSteps: number;
+  departmentProgress: DeptProgress[];
+  laborProgress: LaborProgress;
   createdAt: string;
   dueDate: string;
   shipDate: string;
@@ -128,17 +148,17 @@ type TravelerItem = {
 // Traveler type color configuration (no red or pink)
 const getTravelerTypeBadge = (type: string) => {
   const typeConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
-    'PCB_ASSEMBLY': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', label: 'PCB Assembly' },
-    'ASSY': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', label: 'PCB Assembly' },
-    'PCB': { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', label: 'PCB' },
-    'CABLE': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', label: 'Cables' },
-    'CABLES': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', label: 'Cables' },
-    'PURCHASING': { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', label: 'Purchasing' }
+    'PCB_ASSEMBLY': { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-800 dark:text-blue-300', border: 'border-blue-300 dark:border-blue-700', label: 'PCB Assembly' },
+    'ASSY': { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-800 dark:text-blue-300', border: 'border-blue-300 dark:border-blue-700', label: 'PCB Assembly' },
+    'PCB': { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-800 dark:text-green-300', border: 'border-green-300 dark:border-green-700', label: 'PCB' },
+    'CABLE': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-800 dark:text-purple-300', border: 'border-purple-300 dark:border-purple-700', label: 'Cables' },
+    'CABLES': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-800 dark:text-purple-300', border: 'border-purple-300 dark:border-purple-700', label: 'Cables' },
+    'PURCHASING': { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-800 dark:text-orange-300', border: 'border-orange-300 dark:border-orange-700', label: 'Purchasing' }
   };
 
-  const config = typeConfig[type] || { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300', label: type };
+  const config = typeConfig[type] || { bg: 'bg-gray-100 dark:bg-slate-700', text: 'text-gray-800 dark:text-slate-200', border: 'border-gray-300 dark:border-slate-600', label: type };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${config.bg} ${config.text} ${config.border}`}>
+    <span className={`inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-bold border ${config.bg} ${config.text} ${config.border}`}>
       {config.label}
     </span>
   );
@@ -146,7 +166,16 @@ const getTravelerTypeBadge = (type: string) => {
 
 export default function TravelersPageWrapper() {
   return (
-    <Suspense fallback={<Layout fullWidth><div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">Loading...</p></div></Layout>}>
+    <Suspense fallback={
+      <Layout fullWidth>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-3 sm:p-4 md:p-6">
+          <PageHeaderSkeleton />
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <TableSkeleton rows={8} cols={6} />
+          </div>
+        </div>
+      </Layout>
+    }>
       <TravelersPage />
     </Suspense>
   );
@@ -181,11 +210,11 @@ function TravelersPage() {
     fetchTravelers();
   }, []);
 
-  const fetchTravelers = async () => {
+  const fetchTravelers = async (retryCount = 0) => {
     try {
       const response = await fetch(`${API_BASE_URL}/travelers/`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
         }
       });
 
@@ -210,6 +239,8 @@ function TravelersPage() {
           progress: Number(t.percent_complete || 0),
           totalSteps: Number(t.total_steps || 0),
           completedSteps: Number(t.completed_steps || 0),
+          departmentProgress: Array.isArray(t.department_progress) ? t.department_progress as DeptProgress[] : [],
+          laborProgress: (t.labor_progress as LaborProgress) || { total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 },
           createdAt: String(t.created_at || ''),
           dueDate: String(t.due_date || ''),
           shipDate: String(t.ship_date || ''),
@@ -222,27 +253,69 @@ function TravelersPage() {
           includeLaborHours: Boolean(t.include_labor_hours)
         }));
         setTravelers(formattedTravelers);
+      } else {
+        // Non-OK response — retry once without auth header (fallback)
+        console.error('Travelers fetch failed:', response.status, response.statusText);
+        if (retryCount < 1) {
+          fetchTravelers(retryCount + 1);
+        }
       }
     } catch (error) {
       console.error('Error fetching travelers:', error);
+      // Retry once on network error
+      if (retryCount < 1) {
+        setTimeout(() => fetchTravelers(retryCount + 1), 1000);
+      }
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, progress?: number) => {
+    // Determine display label based on status and progress
+    let label = status.replace('_', ' ');
+    let configKey = status;
+
+    if ((status === 'IN_PROGRESS' || status === 'CREATED') && typeof progress === 'number' && progress > 0) {
+      if (progress >= 90) {
+        label = 'Final Inspection';
+        configKey = 'FINAL_INSPECTION';
+      } else if (progress >= 70) {
+        label = 'Testing & QC';
+        configKey = 'TESTING';
+      } else if (progress >= 40) {
+        label = 'In Manufacturing';
+        configKey = 'IN_MANUFACTURING';
+      } else if (progress >= 10) {
+        label = 'Production Started';
+        configKey = 'PRODUCTION_STARTED';
+      } else {
+        label = 'Prep & Kitting';
+        configKey = 'PREP';
+      }
+    } else if (status === 'CREATED') {
+      label = 'Awaiting Start';
+    } else if (status === 'COMPLETED') {
+      label = 'Completed';
+    }
+
     const statusConfig: Record<string, { color: string; bg: string; text: string }> = {
-      'DRAFT': { color: 'border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50', bg: 'bg-amber-100', text: 'text-amber-800' },
-      'CREATED': { color: 'border-blue-300 bg-gradient-to-r from-blue-50 to-indigo-50', bg: 'bg-blue-100', text: 'text-blue-800' },
-      'IN_PROGRESS': { color: 'border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50', bg: 'bg-purple-100', text: 'text-purple-800' },
-      'COMPLETED': { color: 'border-green-300 bg-gradient-to-r from-green-50 to-emerald-50', bg: 'bg-green-100', text: 'text-green-800' },
-      'ON_HOLD': { color: 'border-orange-300 bg-gradient-to-r from-orange-50 to-red-50', bg: 'bg-orange-100', text: 'text-orange-800' },
-      'CANCELLED': { color: 'border-red-300 bg-gradient-to-r from-red-50 to-rose-50', bg: 'bg-red-100', text: 'text-red-800' },
-      'ARCHIVED': { color: 'border-gray-300 bg-gradient-to-r from-gray-50 to-slate-50', bg: 'bg-gray-100', text: 'text-gray-800' }
+      'DRAFT': { color: 'border-amber-300 dark:border-amber-700 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/40 dark:to-yellow-900/40', bg: 'bg-amber-100', text: 'text-amber-800 dark:text-amber-300' },
+      'CREATED': { color: 'border-blue-300 dark:border-blue-700 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/40 dark:to-emerald-900/40', bg: 'bg-blue-100', text: 'text-blue-800 dark:text-blue-300' },
+      'PREP': { color: 'border-cyan-300 dark:border-cyan-700 bg-gradient-to-r from-cyan-50 to-sky-50 dark:from-cyan-900/40 dark:to-sky-900/40', bg: 'bg-cyan-100', text: 'text-cyan-800 dark:text-cyan-300' },
+      'PRODUCTION_STARTED': { color: 'border-indigo-300 dark:border-indigo-700 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/40 dark:to-blue-900/40', bg: 'bg-indigo-100', text: 'text-indigo-800 dark:text-indigo-300' },
+      'IN_MANUFACTURING': { color: 'border-purple-300 dark:border-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/40 dark:to-pink-900/40', bg: 'bg-purple-100', text: 'text-purple-800 dark:text-purple-300' },
+      'TESTING': { color: 'border-violet-300 dark:border-violet-700 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/40 dark:to-purple-900/40', bg: 'bg-violet-100', text: 'text-violet-800 dark:text-violet-300' },
+      'FINAL_INSPECTION': { color: 'border-teal-300 dark:border-teal-700 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/40 dark:to-emerald-900/40', bg: 'bg-teal-100', text: 'text-teal-800 dark:text-teal-300' },
+      'IN_PROGRESS': { color: 'border-purple-300 dark:border-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/40 dark:to-pink-900/40', bg: 'bg-purple-100', text: 'text-purple-800 dark:text-purple-300' },
+      'COMPLETED': { color: 'border-green-300 dark:border-green-700 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40', bg: 'bg-green-100', text: 'text-green-800 dark:text-green-300' },
+      'ON_HOLD': { color: 'border-orange-300 dark:border-orange-700 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40', bg: 'bg-orange-100', text: 'text-orange-800 dark:text-orange-300' },
+      'CANCELLED': { color: 'border-red-300 dark:border-red-700 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/40 dark:to-rose-900/40', bg: 'bg-red-100', text: 'text-red-800 dark:text-red-300' },
+      'ARCHIVED': { color: 'border-gray-300 dark:border-slate-600 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-slate-700 dark:to-slate-700', bg: 'bg-gray-100', text: 'text-gray-800 dark:text-slate-300' }
     };
 
-    const config = statusConfig[status] || statusConfig['CREATED'];
+    const config = statusConfig[configKey] || statusConfig['CREATED'];
     return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border-2 ${config.color} ${config.text} shadow-sm`}>
-        {status.replace('_', ' ')}
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${config.color} ${config.text} whitespace-nowrap`}>
+        {label}
       </span>
     );
   };
@@ -413,60 +486,56 @@ function TravelersPage() {
         onCancel={closeConfirm}
       />
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-6">
         {/* Header with Stats */}
-        <div className="mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
-          </div>
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/15 backdrop-blur-sm p-3 rounded-xl border border-white/20">
-                <svg className="w-7 h-7 text-blue-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+        <div className="mb-4 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-xl p-4 shadow-xl relative overflow-hidden">
+          <div className="relative z-10 flex flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="bg-white/15 backdrop-blur-sm p-2 rounded-lg border border-white/20">
+                <svg className="w-5 h-5 text-blue-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Travelers Management</h1>
-                <p className="text-sm text-blue-200/80 mt-0.5">Manage production travelers and track progress</p>
+                <h1 className="text-xl font-extrabold tracking-tight">Travelers Management</h1>
+                <p className="text-xs text-teal-200/80">Manage production travelers and track progress</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 md:px-4 py-2 md:py-3 border border-white/20 flex-1 md:flex-initial text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{stats.active}</div>
-                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Active</div>
+            <div className="flex items-center gap-2">
+              <div className="bg-white/15 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20 text-center">
+                <div className="text-lg font-extrabold">{stats.active}</div>
+                <div className="text-[9px] text-blue-200/70 uppercase tracking-wider font-semibold">Active</div>
               </div>
-              <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 md:px-4 py-2 md:py-3 border border-white/20 flex-1 md:flex-initial text-center">
-                <div className="text-xl md:text-2xl font-extrabold">{stats.drafts}</div>
-                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Drafts</div>
+              <div className="bg-white/15 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20 text-center">
+                <div className="text-lg font-extrabold">{stats.drafts}</div>
+                <div className="text-[9px] text-blue-200/70 uppercase tracking-wider font-semibold">Drafts</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters and Actions */}
-        <div className="mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4">
-          <div className="flex flex-col gap-4">
+        <div className="mb-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-3">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Search */}
-            <div className="w-full">
+            <div className="flex-1 min-w-[200px]">
               <input
                 type="text"
-                placeholder="Search by job number, part number, description..."
+                placeholder="Search job#, part#, description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm md:text-base"
+                className="w-full px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-200 dark:focus:ring-blue-800 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500"
               />
             </div>
 
             {/* View Filter Tabs */}
-            <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg p-1 overflow-x-auto">
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
               {(['active', 'drafts', 'all'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setViewFilter(view)}
-                  className={`px-3 md:px-4 py-2 rounded-md font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${
                     viewFilter === view
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                      : 'text-gray-700 hover:bg-gray-200'
+                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm'
+                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   {view.charAt(0).toUpperCase() + view.slice(1)}
@@ -475,21 +544,21 @@ function TravelersPage() {
             </div>
 
             {/* Type Filter Tabs */}
-            <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg p-1 overflow-x-auto">
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
               {([
                 { value: 'all', label: 'All Types', color: 'from-gray-600 to-gray-700' },
-                { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', color: 'from-blue-600 to-blue-700' },
+                { value: 'PCB_ASSEMBLY', label: 'PCBA', color: 'from-blue-600 to-blue-700' },
                 { value: 'PCB', label: 'PCB', color: 'from-green-600 to-green-700' },
-                { value: 'CABLE', label: 'Cables', color: 'from-purple-600 to-purple-700' },
-                { value: 'PURCHASING', label: 'Purchasing', color: 'from-orange-600 to-orange-700' }
+                { value: 'CABLE', label: 'Cable', color: 'from-purple-600 to-purple-700' },
+                { value: 'PURCHASING', label: 'Purch', color: 'from-orange-600 to-orange-700' }
               ]).map((type) => (
                 <button
                   key={type.value}
                   onClick={() => setTypeFilter(type.value)}
-                  className={`px-3 md:px-4 py-2 rounded-md font-semibold transition-all text-sm md:text-base whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap ${
                     typeFilter === type.value
-                      ? `bg-gradient-to-r ${type.color} text-white shadow-md`
-                      : 'text-gray-700 hover:bg-gray-200'
+                      ? `bg-gradient-to-r ${type.color} text-white shadow-sm`
+                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   {type.label}
@@ -497,57 +566,61 @@ function TravelersPage() {
               ))}
             </div>
 
-            {/* Create Button */}
-            <Link
-              href="/travelers/new"
-              className="flex items-center justify-center space-x-2 px-4 md:px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold shadow-md transition-all text-sm md:text-base"
-            >
-              <PlusIcon className="h-5 w-5" />
-              <span>New Traveler</span>
-            </Link>
+            {/* Create Button - Admin only */}
+            {user?.role !== 'OPERATOR' && (
+              <Link
+                href="/travelers/new"
+                className="flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-bold shadow-sm transition-all text-xs"
+              >
+                <PlusIcon className="h-4 w-4" />
+                <span>New Traveler</span>
+              </Link>
+            )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="mt-4 pt-4 border-t-2 border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 md:gap-3">
-            <button
-              onClick={selectAll}
-              className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold shadow-md text-sm md:text-base"
-            >
-              <CheckIcon className="h-4 md:h-5 w-4 md:w-5" />
-              <span>{selectedTravelers.length === filteredTravelers.length ? 'Deselect All' : 'Select All'}</span>
-            </button>
+          {/* Action Buttons - Admin only */}
+          {user?.role !== 'OPERATOR' && (
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700 flex flex-wrap items-center gap-2">
+              <button
+                onClick={selectAll}
+                className="flex items-center space-x-1 px-2.5 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs font-semibold"
+              >
+                <CheckIcon className="h-3.5 w-3.5" />
+                <span>{selectedTravelers.length === filteredTravelers.length ? 'Deselect All' : 'Select All'}</span>
+              </button>
 
-            <button
-              onClick={exportSelectedPDFs}
-              disabled={selectedTravelers.length === 0}
-              className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
-            >
-              <DocumentArrowDownIcon className="h-4 md:h-5 w-4 md:w-5" />
-              <span className="whitespace-nowrap">Export PDFs ({selectedTravelers.length})</span>
-            </button>
+              <button
+                onClick={exportSelectedPDFs}
+                disabled={selectedTravelers.length === 0}
+                className="flex items-center space-x-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-slate-600 text-white rounded text-xs font-semibold disabled:cursor-not-allowed"
+              >
+                <DocumentArrowDownIcon className="h-3.5 w-3.5" />
+                <span>Export ({selectedTravelers.length})</span>
+              </button>
 
-            <button
-              onClick={deleteSelected}
-              disabled={selectedTravelers.length === 0}
-              className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-semibold shadow-md disabled:cursor-not-allowed text-sm md:text-base"
-            >
-              <TrashIcon className="h-4 md:h-5 w-4 md:w-5" />
-              <span>Delete ({selectedTravelers.length})</span>
-            </button>
-          </div>
+              <button
+                onClick={deleteSelected}
+                disabled={selectedTravelers.length === 0}
+                className="flex items-center space-x-1 px-2.5 py-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 dark:disabled:bg-slate-600 text-white rounded text-xs font-semibold disabled:cursor-not-allowed"
+              >
+                <TrashIcon className="h-3.5 w-3.5" />
+                <span>Delete ({selectedTravelers.length})</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Travelers Table */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
           {/* Table Header + Pagination */}
-          <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+          <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
             </div>
             <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xs sm:text-sm font-bold text-white">Travelers List</h2>
+                <h2 className="text-sm font-bold text-white">Travelers List</h2>
                 <span className="text-xs font-semibold text-white bg-white/20 px-2 py-0.5 rounded-full">
                   {filteredTravelers.length}
                 </span>
@@ -556,199 +629,264 @@ function TravelersPage() {
           </div>
           {filteredTravelers.length === 0 ? (
             <div className="p-12 text-center">
-              <div className="text-6xl mb-4">📋</div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">No Travelers Found</h3>
-              <p className="text-gray-600">Try adjusting your search or filters</p>
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                <DocumentArrowDownIcon className="h-8 w-8 text-gray-400 dark:text-slate-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 dark:text-slate-200 mb-2">No Travelers Found</h3>
+              <p className="text-gray-600 dark:text-slate-400">Try adjusting your search or filters</p>
             </div>
           ) : (
             <>
 
-            {/* Desktop Table View */}
-            <div className="hidden lg:block w-full overflow-x-auto relative">
-              <div className="absolute top-0 left-0 right-0 h-12 lg:h-14 overflow-hidden pointer-events-none z-20">
+            {/* Desktop Table View - shown on ALL devices */}
+            <div className="block w-full relative overflow-x-auto">
+              <div className="absolute top-0 left-0 right-0 h-14 overflow-hidden pointer-events-none z-20">
                 <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
                 <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
               </div>
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="w-full min-w-[1000px] divide-y divide-gray-200 dark:divide-slate-700" style={{tableLayout: 'fixed'}}>
+                <colgroup>
+                  <col style={{width: '36px'}} />
+                  <col style={{width: '14%'}} />
+                  <col style={{width: '17%'}} />
+                  <col style={{width: '12%'}} />
+                  <col style={{width: '10%'}} />
+                  <col style={{width: '10%'}} />
+                  <col style={{width: '8%'}} />
+                  <col style={{width: '10%'}} />
+                  <col style={{width: '12%'}} />
+                  <col style={{width: '7%'}} />
+                </colgroup>
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
-                    <th className="px-2 lg:px-3 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                  <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
+                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
                       <input
                         type="checkbox"
                         checked={paginatedTravelers.length > 0 && paginatedTravelers.every(t => selectedTravelers.includes(t.dbId))}
                         onChange={selectAll}
-                        className="h-4 lg:h-5 w-4 lg:w-5 text-blue-600 rounded cursor-pointer"
+                        className="h-4 w-4 text-blue-600 rounded cursor-pointer"
                       />
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                    <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
                       Job, WO & PO
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                    <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
                       Part Details
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
-                      Customer Info
+                    <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
+                      Customer
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                    <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
                       Dates
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-left text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                    <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
                       Shipping
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-center text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
-                      Progress
+                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+                      Status
                     </th>
-                    <th className="px-2 lg:px-4 py-3 lg:py-4 text-center text-xs lg:text-sm xl:text-base font-extrabold uppercase tracking-wider text-white">
+                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+                      Steps
+                    </th>
+                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+                      Depts
+                    </th>
+                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                   {paginatedTravelers.map((traveler) => (
                     <tr
                       key={traveler.dbId}
                       className={`transition-colors ${
                         selectedTravelers.includes(traveler.dbId)
-                          ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                          : 'hover:bg-gray-50'
+                          ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-l-blue-500'
+                          : 'hover:bg-gray-50 dark:hover:bg-slate-700'
                       }`}
                     >
-                      <td className="px-2 lg:px-3 py-3 lg:py-4 whitespace-nowrap">
+                      <td className="px-1 py-2 text-center">
                         <input
                           type="checkbox"
                           checked={selectedTravelers.includes(traveler.dbId)}
                           onChange={() => toggleSelectTraveler(traveler.dbId)}
-                          className="h-4 lg:h-5 w-4 lg:w-5 text-blue-600 rounded cursor-pointer"
+                          className="h-4 w-4 text-blue-600 rounded cursor-pointer"
                         />
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="space-y-0.5 lg:space-y-1">
-                          <div className="mb-1 flex items-center gap-1 flex-wrap">
+                      <td className="px-2 py-2">
+                        <div className="space-y-0.5 overflow-hidden">
+                          <div className="mb-0.5 flex items-center gap-1 flex-wrap">
                             {getTravelerTypeBadge(traveler.travelerType)}
                             {traveler.status === 'DRAFT' && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border border-amber-400 bg-amber-100 text-amber-800 animate-pulse">
+                              <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-bold border border-amber-400 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 animate-pulse">
                                 DRAFT
                               </span>
                             )}
                           </div>
-                          <div className="text-sm lg:text-base font-bold text-gray-900">Job# <span className="underline">{traveler.jobNumber}</span></div>
-                          <div className="text-sm lg:text-base font-extrabold text-indigo-700">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
-                          <div className="text-sm lg:text-base font-semibold text-purple-700">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
+                          <div className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">Job# <span className="underline">{traveler.jobNumber}</span></div>
+                          <div className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 truncate">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
+                          <div className="text-xs font-semibold text-purple-700 dark:text-purple-400 truncate">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="space-y-0.5 lg:space-y-1">
-                          <div className="text-sm lg:text-base font-semibold text-gray-900">Part# <span className="underline">{traveler.partNumber}</span></div>
-                          <div className="text-sm lg:text-base text-gray-600 max-w-xs truncate" title={traveler.description}>Desc: {traveler.description || 'N/A'}</div>
-                          <div className="flex flex-wrap gap-2 lg:gap-3 text-sm lg:text-base">
-                            <span className="text-gray-500">Trav Rev: <span className="font-semibold text-gray-900 underline">{traveler.revision || 'N/A'}</span></span>
-                            <span className="text-gray-500">Cust Rev: <span className="font-semibold text-blue-700 underline">{traveler.customerRevision || 'N/A'}</span></span>
-                            <span className="text-gray-500">Qty: <span className="font-bold text-gray-900 underline">{traveler.quantity}</span></span>
+                      <td className="px-2 py-2">
+                        <div className="space-y-0.5 overflow-hidden">
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">Part# <span className="underline">{traveler.partNumber}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={traveler.description}>Desc: {traveler.description || 'N/A'}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 space-y-0">
+                            <div>Trav Rev: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</span> · Cust Rev: <span className="font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</span></div>
+                            <div>Qty: <span className="font-bold text-gray-900 dark:text-slate-100">{traveler.quantity}</span></div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="space-y-0.5 lg:space-y-1">
-                          <div className="text-sm lg:text-base text-gray-600">Code: <span className="font-semibold text-gray-900 underline">{traveler.customerCode || 'N/A'}</span></div>
-                          <div className="text-sm lg:text-base text-gray-600 max-w-xs truncate" title={traveler.customerName}>Name: <span className="font-semibold text-gray-900">{traveler.customerName || 'N/A'}</span></div>
+                      <td className="px-2 py-2">
+                        <div className="space-y-0.5 overflow-hidden">
+                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate">Code: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.customerCode || 'N/A'}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={traveler.customerName}>Name: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.customerName || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="space-y-0.5 lg:space-y-1">
-                          <div className="text-xs lg:text-sm text-gray-600">Start: <span className="font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
-                          <div className="text-xs lg:text-sm text-gray-600">Due: <span className="font-semibold text-gray-900 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
-                          <div className="text-xs lg:text-sm text-gray-600">Ship: <span className="font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
+                      <td className="px-2 py-2">
+                        <div className="space-y-0.5">
+                          <div className="text-[11px] text-gray-600 dark:text-slate-400">Start: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
+                          <div className="text-[11px] text-gray-600 dark:text-slate-400">Due: <span className="font-semibold text-gray-900 dark:text-slate-100 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
+                          <div className="text-[11px] text-gray-600 dark:text-slate-400">Ship: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="space-y-0.5 lg:space-y-1">
-                          <div className="text-sm lg:text-base text-gray-600">Via: <span className="font-semibold text-gray-900">{traveler.shipVia || 'N/A'}</span></div>
-                          <div className="text-sm lg:text-base text-gray-600">From: <span className="font-semibold text-gray-900">{traveler.fromStock || 'N/A'}</span></div>
-                          <div className="text-sm lg:text-base text-gray-600">To: <span className="font-semibold text-gray-900">{traveler.toStock || 'N/A'}</span></div>
+                      <td className="px-2 py-2">
+                        <div className="space-y-0.5 overflow-hidden">
+                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate">Via: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.shipVia || 'N/A'}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate">From: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.fromStock || 'N/A'}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate">To: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.toStock || 'N/A'}</span></div>
                         </div>
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="min-w-[100px]">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-bold" style={{color: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 50 ? '#2563eb' : '#6b7280'}}>
-                              {traveler.progress}%
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {traveler.completedSteps}/{traveler.totalSteps}
-                            </span>
+                      {/* Status Column */}
+                      <td className="px-1 py-2 text-center">
+                        {getStatusBadge(traveler.status, traveler.progress)}
+                      </td>
+                      {/* Step Progress Column */}
+                      <td className="px-1 py-2">
+                        <Link href={`/travelers/${traveler.dbId}`} className="block hover:opacity-80 transition-opacity cursor-pointer">
+                          <div className="flex items-center gap-1.5">
+                            <div className="relative w-9 h-9 flex-shrink-0">
+                              <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
+                                <circle cx="18" cy="18" r="15.5" fill="none"
+                                  stroke={traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444'}
+                                  strokeWidth="2.5" strokeLinecap="round"
+                                  strokeDasharray={`${traveler.progress * 0.9742} 97.42`}
+                                />
+                              </svg>
+                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-extrabold text-gray-700 dark:text-slate-300">{traveler.progress}%</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[10px] font-bold text-gray-800 dark:text-slate-200">{traveler.completedSteps}<span className="text-gray-400 dark:text-slate-500 font-normal">/{traveler.totalSteps}</span></div>
+                              <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1 mt-0.5 overflow-hidden">
+                                <div className="h-1 rounded-full transition-all duration-500"
+                                  style={{ width: `${traveler.progress}%`, backgroundColor: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : '#f97316' }}
+                                />
+                              </div>
+                              {traveler.progress >= 100 && (
+                                <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-1 py-0 rounded-full mt-0.5">
+                                  <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                  Done
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                            <div
-                              className="h-2.5 rounded-full transition-all duration-500"
-                              style={{
-                                width: `${traveler.progress}%`,
-                                backgroundColor: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444',
-                              }}
-                            />
-                          </div>
-                          {traveler.progress >= 100 && (
-                            <div className="text-xs text-green-600 font-semibold mt-0.5 text-center">Complete</div>
+                        </Link>
+                      </td>
+                      {/* Department Progress Column */}
+                      <td className="px-1 py-2">
+                        <Link href={`/travelers/${traveler.dbId}`} className="block hover:opacity-80 transition-opacity cursor-pointer">
+                          {traveler.departmentProgress.length > 0 ? (
+                            <div className="space-y-0.5">
+                              {traveler.departmentProgress.slice(0, 3).map((dept) => {
+                                const isComplete = dept.percent_complete >= 100;
+                                const isNotStarted = dept.completed_steps === 0;
+                                return (
+                                  <div key={dept.department} className="flex items-center gap-0.5">
+                                    <span className={`w-1 h-1 rounded-full flex-shrink-0 ${isComplete ? 'bg-green-500' : isNotStarted ? 'bg-gray-300 dark:bg-slate-600' : 'bg-blue-500 animate-pulse'}`} />
+                                    <span className="text-[8px] font-semibold w-10 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }} title={dept.department}>{dept.department}</span>
+                                    <div className="flex-1 bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                                      <div className="h-1.5 rounded-full transition-all duration-500"
+                                        style={{ width: `${dept.percent_complete}%`, backgroundColor: isComplete ? '#16a34a' : (DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280') }}
+                                      />
+                                    </div>
+                                    <span className="text-[8px] font-bold text-gray-500 dark:text-slate-400 w-6 text-right">{dept.percent_complete}%</span>
+                                  </div>
+                                );
+                              })}
+                              {traveler.departmentProgress.length > 3 && (
+                                <div className="text-[8px] text-blue-500 font-medium text-center">+{traveler.departmentProgress.length - 3} more</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-[9px] text-gray-400 dark:text-slate-500 text-center">—</div>
                           )}
-                        </div>
+                        </Link>
                       </td>
-                      <td className="px-2 lg:px-4 py-3 lg:py-4">
-                        <div className="grid grid-cols-2 gap-1">
+                      <td className="px-1 py-2">
+                        <div className={`grid ${user?.role !== 'OPERATOR' ? 'grid-cols-2' : 'grid-cols-1'} gap-0.5`}>
                           <Link
                             href={`/travelers/${traveler.dbId}`}
-                            className="p-1.5 lg:p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center"
+                            className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors flex items-center justify-center"
                             title="View"
                           >
-                            <EyeIcon className="h-4 lg:h-5 w-4 lg:w-5" />
+                            <EyeIcon className="h-4 w-4" />
                           </Link>
-                          <Link
-                            href={`/travelers/${traveler.dbId}?edit=true`}
-                            className="p-1.5 lg:p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
-                            title="Edit"
-                          >
-                            <PencilIcon className="h-4 lg:h-5 w-4 lg:w-5" />
-                          </Link>
-                          <button
-                            onClick={() => {
-                              showConfirm(
-                                'Delete Traveler',
-                                `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
-                                async () => {
-                                  try {
-                                    const token = localStorage.getItem('nexus_token');
-                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                      method: 'DELETE',
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`
+                          {user?.role !== 'OPERATOR' && (
+                            <>
+                              <Link
+                                href={`/travelers/${traveler.dbId}?edit=true`}
+                                className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors flex items-center justify-center"
+                                title="Edit"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </Link>
+                              <button
+                                onClick={() => {
+                                  showConfirm(
+                                    'Delete Traveler',
+                                    `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
+                                    async () => {
+                                      try {
+                                        const token = localStorage.getItem('nexus_token');
+                                        const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                          method: 'DELETE',
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`
+                                          }
+                                        });
+                                        if (response.ok) {
+                                          showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
+                                          fetchTravelers();
+                                        } else {
+                                          showToast('Failed to delete traveler', 'error');
+                                        }
+                                      } catch (error) {
+                                        console.error('Error:', error);
+                                        showToast('Failed to delete traveler', 'error');
                                       }
-                                    });
-                                    if (response.ok) {
-                                      showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
-                                      fetchTravelers();
-                                    } else {
-                                      showToast('Failed to delete traveler', 'error');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error:', error);
-                                    showToast('Failed to delete traveler', 'error');
-                                  }
-                                  closeConfirm();
-                                },
-                                'Delete'
-                              );
-                            }}
-                            className="p-1.5 lg:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
-                            title="Delete"
-                          >
-                            <TrashIcon className="h-4 lg:h-5 w-4 lg:w-5" />
-                          </button>
-                          <button
-                            onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
-                            className="p-1.5 lg:p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center"
-                            title="Print"
-                          >
-                            <PrinterIcon className="h-4 lg:h-5 w-4 lg:w-5" />
-                          </button>
+                                      closeConfirm();
+                                    },
+                                    'Delete'
+                                  );
+                                }}
+                                className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors flex items-center justify-center"
+                                title="Delete"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
+                                className="p-1 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded transition-colors flex items-center justify-center"
+                                title="Print"
+                              >
+                                <PrinterIcon className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -757,17 +895,17 @@ function TravelersPage() {
               </table>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block lg:hidden w-full">
+            {/* Mobile Card View - Hidden: use desktop table on all devices */}
+            <div className="hidden w-full">
               <div className="p-3 space-y-4">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
                     selectedTravelers.includes(traveler.dbId)
-                      ? 'bg-blue-50 border-blue-500'
-                      : 'bg-white border-gray-200'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500'
+                      : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700'
                   }`}>
                     {/* Card Header */}
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-2 rounded-t-lg flex items-center justify-between">
+                    <div className="bg-gradient-to-r from-teal-600 to-emerald-600 text-white px-3 py-2 rounded-t-lg flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -795,55 +933,55 @@ function TravelersPage() {
                     <div className="p-3 space-y-2">
                       {/* Part Details */}
                       <div>
-                        <div className="text-xs text-gray-500 font-semibold">Part Number</div>
-                        <div className="text-sm font-bold text-gray-900">{traveler.partNumber}</div>
+                        <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Part Number</div>
+                        <div className="text-sm font-bold text-gray-900 dark:text-slate-100">{traveler.partNumber}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-gray-500 font-semibold">Description</div>
-                        <div className="text-sm text-gray-700">{traveler.description || 'N/A'}</div>
+                        <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Description</div>
+                        <div className="text-sm text-gray-700 dark:text-slate-300">{traveler.description || 'N/A'}</div>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Traveler Rev</div>
-                          <div className="text-sm text-gray-900">{traveler.revision || 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Traveler Rev</div>
+                          <div className="text-sm text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Customer Rev</div>
-                          <div className="text-sm text-blue-700">{traveler.customerRevision || 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Customer Rev</div>
+                          <div className="text-sm text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Quantity</div>
-                          <div className="text-sm text-gray-900">{traveler.quantity}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Quantity</div>
+                          <div className="text-sm text-gray-900 dark:text-slate-100">{traveler.quantity}</div>
                         </div>
                       </div>
 
                       {/* Customer & Dates Grid */}
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Customer Code</div>
-                          <div className="text-sm font-semibold text-gray-900">{traveler.customerCode || 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Customer Code</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.customerCode || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Customer Name</div>
-                          <div className="text-sm font-semibold text-gray-900 truncate" title={traveler.customerName}>{traveler.customerName || 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Customer Name</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.customerName}>{traveler.customerName || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Start Date</div>
-                          <div className="text-sm font-semibold text-gray-900">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Start Date</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Due Date</div>
-                          <div className="text-sm font-semibold text-gray-900">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Due Date</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 font-semibold">Ship Date</div>
-                          <div className="text-sm font-semibold text-gray-900">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Ship Date</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</div>
                         </div>
                       </div>
 
                       {/* Shipping Info */}
-                      <div className="pt-2 border-t border-gray-200">
-                        <div className="text-xs text-gray-500 font-semibold mb-1">Shipping</div>
+                      <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold mb-1">Shipping</div>
                         <div className="grid grid-cols-2 gap-1 text-xs">
                           <div>Ship Via: <span className="font-semibold">{traveler.shipVia || 'N/A'}</span></div>
                           <div>From: <span className="font-semibold">{traveler.fromStock || 'N/A'}</span></div>
@@ -852,67 +990,71 @@ function TravelersPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="pt-2 border-t border-gray-200">
-                        <div className="grid grid-cols-2 gap-2">
+                      <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <div className={`grid ${user?.role !== 'OPERATOR' ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                           <Link
                             href={`/travelers/${traveler.dbId}`}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex flex-col items-center justify-center"
+                            className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors flex flex-col items-center justify-center"
                             title="View"
                           >
                             <EyeIcon className="h-5 w-5" />
                             <span className="text-xs mt-1">View</span>
                           </Link>
-                          <Link
-                            href={`/travelers/${traveler.dbId}?edit=true`}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex flex-col items-center justify-center"
-                            title="Edit"
-                          >
-                            <PencilIcon className="h-5 w-5" />
-                            <span className="text-xs mt-1">Edit</span>
-                          </Link>
-                          <button
-                            onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
-                            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors flex flex-col items-center justify-center"
-                            title="Print"
-                          >
-                            <PrinterIcon className="h-5 w-5" />
-                            <span className="text-xs mt-1">Print</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              showConfirm(
-                                'Delete Traveler',
-                                `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
-                                async () => {
-                                  try {
-                                    const token = localStorage.getItem('nexus_token');
-                                    const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                      method: 'DELETE',
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`
+                          {user?.role !== 'OPERATOR' && (
+                            <>
+                              <Link
+                                href={`/travelers/${traveler.dbId}?edit=true`}
+                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors flex flex-col items-center justify-center"
+                                title="Edit"
+                              >
+                                <PencilIcon className="h-5 w-5" />
+                                <span className="text-xs mt-1">Edit</span>
+                              </Link>
+                              <button
+                                onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
+                                className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors flex flex-col items-center justify-center"
+                                title="Print"
+                              >
+                                <PrinterIcon className="h-5 w-5" />
+                                <span className="text-xs mt-1">Print</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  showConfirm(
+                                    'Delete Traveler',
+                                    `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
+                                    async () => {
+                                      try {
+                                        const token = localStorage.getItem('nexus_token');
+                                        const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
+                                          method: 'DELETE',
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`
+                                          }
+                                        });
+                                        if (response.ok) {
+                                          showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
+                                          fetchTravelers();
+                                        } else {
+                                          showToast('Failed to delete traveler', 'error');
+                                        }
+                                      } catch (error) {
+                                        console.error('Error:', error);
+                                        showToast('Failed to delete traveler', 'error');
                                       }
-                                    });
-                                    if (response.ok) {
-                                      showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
-                                      fetchTravelers();
-                                    } else {
-                                      showToast('Failed to delete traveler', 'error');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error:', error);
-                                    showToast('Failed to delete traveler', 'error');
-                                  }
-                                  closeConfirm();
-                                },
-                                'Delete'
-                              );
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex flex-col items-center justify-center"
-                            title="Delete"
-                          >
-                            <TrashIcon className="h-5 w-5" />
-                            <span className="text-xs mt-1">Delete</span>
-                          </button>
+                                      closeConfirm();
+                                    },
+                                    'Delete'
+                                  );
+                                }}
+                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors flex flex-col items-center justify-center"
+                                title="Delete"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                                <span className="text-xs mt-1">Delete</span>
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -923,7 +1065,7 @@ function TravelersPage() {
 
               {/* Bottom Pagination Controls */}
               {filteredTravelers.length > 0 && (
-                <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+                <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
                   <div className="absolute inset-0 opacity-10 pointer-events-none">
                     <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                     <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />

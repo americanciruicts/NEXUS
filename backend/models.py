@@ -28,6 +28,7 @@ class TravelerStatus(enum.Enum):
 class Priority(enum.Enum):
     LOW = "LOW"
     NORMAL = "NORMAL"
+    PREMIUM = "PREMIUM"
     HIGH = "HIGH"
     URGENT = "URGENT"
 
@@ -66,6 +67,7 @@ class WorkCenter(Base):
     description = Column(Text)
     traveler_type = Column(String(20), nullable=True)  # PCB_ASSEMBLY, PCB, CABLE, PURCHASING
     category = Column(String(100), nullable=True)  # e.g. SMT hrs. Actual, HAND hrs. Actual
+    department = Column(String(100), nullable=True)  # e.g. SMT, Soldering, TH, Quality, Shipping
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -206,6 +208,7 @@ class LaborEntry(Base):
     hours_worked = Column(Float, default=0.0)
     description = Column(Text)
     is_completed = Column(Boolean, default=False)
+    qty_completed = Column(Integer, nullable=True)  # Quantity completed during this labor entry
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -277,6 +280,7 @@ class TravelerTimeEntry(Base):
     hours_worked = Column(Float, default=0.0)
     pause_duration = Column(Float, default=0.0)  # in hours
     is_completed = Column(Boolean, default=False)
+    qty_completed = Column(Integer, nullable=True)  # Quantity completed during this tracking entry
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
