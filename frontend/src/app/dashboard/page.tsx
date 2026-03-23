@@ -678,8 +678,8 @@ export default function Dashboard() {
                   {(() => {
                     const events: { type: string; job: string; wc: string; op: string; time: Date }[] = [];
                     trackingEntries.forEach((entry) => {
-                      if (entry.start_time) events.push({ type: 'start', job: entry.job_number, wc: entry.work_center, op: entry.operator_name, time: new Date(entry.start_time) });
-                      if (entry.end_time) events.push({ type: 'done', job: entry.job_number, wc: entry.work_center, op: entry.operator_name, time: new Date(entry.end_time) });
+                      if (entry.start_time) events.push({ type: 'start', job: entry.job_number, wc: entry.work_center, op: entry.employee_name || 'Unknown', time: new Date(entry.start_time) });
+                      if (entry.end_time) events.push({ type: 'done', job: entry.job_number, wc: entry.work_center, op: entry.employee_name || 'Unknown', time: new Date(entry.end_time) });
                     });
                     events.sort((a, b) => b.time.getTime() - a.time.getTime());
                     const recent = events.slice(0, 8);
