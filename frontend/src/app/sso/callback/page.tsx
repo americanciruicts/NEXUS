@@ -19,8 +19,8 @@ function SSOCallbackContent() {
 
     const validateSSO = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
-        const response = await fetch(`${apiBase}/api/auth/sso/callback`, {
+        const { API_BASE_URL } = await import('@/config/api');
+        const response = await fetch(`${API_BASE_URL}/auth/sso/callback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),

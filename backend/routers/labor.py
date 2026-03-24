@@ -5,11 +5,44 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 
 from database import get_db
-from models import User, LaborEntry, Traveler, ProcessStep, NotificationType, WorkCenter
+from models import User, LaborEntry, Traveler, ProcessStep, NotificationType, WorkCenter, TravelerStatus, UserRole
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
 
 router = APIRouter()
+
+
+def update_step_and_traveler_progress(db: Session, labor_entry: LaborEntry):
+    """When a labor entry is completed, mark its linked process step as completed
+    and update the traveler's status accordingly."""
+    if not labor_entry.step_id:
+        return
+
+    step = db.query(ProcessStep).filter(ProcessStep.id == labor_entry.step_id).first()
+    if not step or step.is_completed:
+        return
+
+    # Mark the step as completed
+    step.is_completed = True
+    step.completed_at = labor_entry.end_time or datetime.now()
+    step.completed_by = labor_entry.employee_id
+
+    # Update traveler status
+    traveler = db.query(Traveler).filter(Traveler.id == labor_entry.traveler_id).first()
+    if not traveler:
+        return
+
+    # Move to IN_PROGRESS if still in CREATED or DRAFT
+    if traveler.status in (TravelerStatus.CREATED, TravelerStatus.DRAFT):
+        traveler.status = TravelerStatus.IN_PROGRESS
+
+    # Check if ALL steps are now complete → mark traveler COMPLETED
+    all_steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).all()
+    if all_steps and all(s.is_completed for s in all_steps):
+        traveler.status = TravelerStatus.COMPLETED
+        traveler.completed_at = datetime.now()
+
+    db.flush()
 
 class LaborEntryCreate(BaseModel):
     traveler_id: int
@@ -19,6 +52,7 @@ class LaborEntryCreate(BaseModel):
     description: str
     is_completed: Optional[bool] = None
     employee_id: Optional[int] = None  # Admin can specify a different employee
+    comment: Optional[str] = None
 
 class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
@@ -27,6 +61,7 @@ class LaborEntryUpdate(BaseModel):
     description: Optional[str] = None
     is_completed: Optional[bool] = None
     qty_completed: Optional[int] = None
+    comment: Optional[str] = None
 
 class LaborEntryResponse(BaseModel):
     id: int
@@ -44,6 +79,7 @@ class LaborEntryResponse(BaseModel):
     work_center: Optional[str] = None
     sequence_number: Optional[int] = None
     qty_completed: Optional[int] = None
+    comment: Optional[str] = None
     created_at: datetime
     # Traveler information
     work_order: Optional[str] = None
@@ -97,9 +133,18 @@ async def start_labor_entry(
             ).all()
 
             # Try to find matching step with fuzzy matching
+            import re
+            def strip_numeric_prefix(s):
+                """Strip leading numeric prefix like '18 WASH' → 'WASH', '5. SMT TOP' → 'SMT TOP'"""
+                return re.sub(r'^\d+[\.\s]+', '', s).strip()
+
             for ps in process_steps:
                 ps_operation_upper = ps.operation.upper() if ps.operation else ""
                 wc_upper = work_center_from_desc.upper()
+
+                # Also compare with numeric prefixes stripped
+                ps_stripped = strip_numeric_prefix(ps_operation_upper)
+                wc_stripped = strip_numeric_prefix(wc_upper)
 
                 # Check various matching patterns
                 if (
@@ -107,13 +152,21 @@ async def start_labor_entry(
                     ps_operation_upper == wc_upper or
                     ps_operation_upper.replace('_', ' ') == wc_upper.replace('_', ' ') or
                     ps_operation_upper.replace(' ', '_') == wc_upper.replace(' ', '_') or
+                    # Match with numeric prefix stripped (e.g., "18 WASH" matches "WASH")
+                    ps_stripped == wc_stripped or
+                    ps_operation_upper == wc_stripped or
+                    ps_stripped == wc_upper or
+                    ps_stripped.replace('_', ' ') == wc_stripped.replace('_', ' ') or
+                    # One contains the other (e.g., "18 WASH" contains "WASH")
+                    (len(ps_operation_upper) >= 3 and ps_operation_upper in wc_upper) or
+                    (len(wc_upper) >= 3 and wc_upper in ps_operation_upper) or
                     # Handle common variations
-                    (wc_upper == 'AUTO_INSERTION' and ps_operation_upper == 'AUTO INSERT') or
-                    (wc_upper == 'AUTO INSERT' and ps_operation_upper == 'AUTO_INSERTION') or
-                    (wc_upper == 'E-TEST' and ps_operation_upper == 'ETEST') or
-                    (wc_upper == 'ETEST' and ps_operation_upper == 'E-TEST') or
-                    (wc_upper == 'MAKE_BOM' and ps_operation_upper == 'MAKE BOM') or
-                    (wc_upper == 'MAKE BOM' and ps_operation_upper == 'MAKE_BOM')
+                    (wc_stripped == 'AUTO_INSERTION' and ps_stripped == 'AUTO INSERT') or
+                    (wc_stripped == 'AUTO INSERT' and ps_stripped == 'AUTO_INSERTION') or
+                    (wc_stripped == 'E-TEST' and ps_stripped == 'ETEST') or
+                    (wc_stripped == 'ETEST' and ps_stripped == 'E-TEST') or
+                    (wc_stripped == 'MAKE_BOM' and ps_stripped == 'MAKE BOM') or
+                    (wc_stripped == 'MAKE BOM' and ps_stripped == 'MAKE_BOM')
                 ):
                     # Found matching step
                     step_id = ps.id
@@ -130,7 +183,7 @@ async def start_labor_entry(
     effective_employee = current_user
     if labor_data.employee_id and labor_data.employee_id != current_user.id:
         # Only admin can assign labor to another user
-        if current_user.role.value != "ADMIN":
+        if current_user.role != UserRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only administrators can create labor entries for other users"
@@ -167,6 +220,7 @@ async def start_labor_entry(
         start_time=labor_data.start_time,
         end_time=labor_data.end_time,  # Support manual entries with end_time
         description=labor_data.description,
+        comment=labor_data.comment,
         is_completed=labor_data.is_completed if labor_data.is_completed is not None else False,
         work_center=work_center_name,
         sequence_number=sequence_num
@@ -203,6 +257,12 @@ async def start_labor_entry(
         db_labor_entry.hours_worked = hours_worked
 
     db.add(db_labor_entry)
+    db.flush()
+
+    # For manual entries (created with end_time), update step and traveler progress
+    if labor_data.end_time and db_labor_entry.is_completed:
+        update_step_and_traveler_progress(db, db_labor_entry)
+
     db.commit()
     db.refresh(db_labor_entry)
 
@@ -245,7 +305,7 @@ async def update_labor_entry(
 
     # Check if user owns this labor entry or is admin
     if (labor_entry.employee_id != current_user.id and
-        current_user.role.value != "ADMIN"):
+        current_user.role != UserRole.ADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this labor entry"
@@ -290,6 +350,10 @@ async def update_labor_entry(
 
         labor_entry.hours_worked = hours_worked
 
+    # When labor entry is completed, update linked step and traveler progress
+    if labor_data.end_time and labor_entry.is_completed:
+        update_step_and_traveler_progress(db, labor_entry)
+
     db.commit()
     db.refresh(labor_entry)
 
@@ -322,11 +386,10 @@ async def delete_labor_entry(
     """Delete a labor entry (Admin only)"""
 
     # Check if user is admin
-    from models import UserRole
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Only administrators can delete labor entries. Your role: {current_user.role.value if hasattr(current_user.role, 'value') else current_user.role}"
+            detail=f"Only administrators can delete labor entries. Your role: {current_user.role}"
         )
 
     labor_entry = db.query(LaborEntry).filter(LaborEntry.id == labor_id).first()
@@ -399,7 +462,8 @@ async def get_all_labor_entries(
             "po_number": traveler.po_number if traveler else None,
             "part_number": traveler.part_number if traveler else None,
             "quantity": traveler.quantity if traveler else None,
-            "qty_completed": entry.qty_completed
+            "qty_completed": entry.qty_completed,
+            "comment": entry.comment
         }
         result.append(LaborEntryResponse(**entry_dict))
 
@@ -443,6 +507,7 @@ async def get_traveler_labor_entries(
             "work_center": entry.work_center,
             "sequence_number": entry.sequence_number,
             "qty_completed": entry.qty_completed,
+            "comment": entry.comment,
             "created_at": entry.created_at
         }
         result.append(LaborEntryResponse(**entry_dict))
@@ -460,7 +525,7 @@ async def get_my_labor_entries(
     start_date = datetime.now() - timedelta(days=days)
 
     # Admin can see all entries, others see only their own
-    if current_user.role.value == "ADMIN":
+    if current_user.role == UserRole.ADMIN:
         labor_entries = db.query(LaborEntry).filter(
             LaborEntry.created_at >= start_date
         ).order_by(LaborEntry.created_at.desc()).all()
@@ -498,6 +563,7 @@ async def get_my_labor_entries(
             "work_center": entry.work_center,
             "sequence_number": entry.sequence_number,
             "qty_completed": entry.qty_completed,
+            "comment": entry.comment,
             "created_at": entry.created_at,
             "work_order": traveler.work_order_number if traveler else None,
             "po_number": traveler.po_number if traveler else None,
@@ -538,6 +604,7 @@ async def get_active_labor_entry(
         "is_completed": active_entry.is_completed,
         "work_center": active_entry.work_center,
         "sequence_number": active_entry.sequence_number,
+        "comment": active_entry.comment,
         "created_at": active_entry.created_at
     }
 
@@ -552,7 +619,7 @@ async def auto_stop_entries_at_5pm(
     This can be called by a scheduled task or manually by admin"""
 
     # Only admin can trigger this
-    if current_user.role.value != "ADMIN":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can trigger auto-stop"
@@ -577,6 +644,7 @@ async def auto_stop_entries_at_5pm(
             # Calculate hours worked
             time_diff = end_time_5pm - entry.start_time
             entry.hours_worked = round(time_diff.total_seconds() / 3600, 2)
+            update_step_and_traveler_progress(db, entry)
             completed_count += 1
 
     db.commit()
@@ -622,6 +690,7 @@ async def check_and_auto_stop(
         # Calculate hours worked
         time_diff = five_pm - entry.start_time
         entry.hours_worked = round(time_diff.total_seconds() / 3600, 2)
+        update_step_and_traveler_progress(db, entry)
         completed_count += 1
 
     if completed_count > 0:
@@ -650,7 +719,7 @@ async def get_labor_summary(
     )
 
     # For non-admin users, filter to their own entries
-    if current_user.role.value != "ADMIN":
+    if current_user.role != UserRole.ADMIN:
         labor_entries = labor_entries.filter(LaborEntry.employee_id == current_user.id)
 
     labor_entries = labor_entries.all()

@@ -99,8 +99,7 @@ def delete_notification(
         raise HTTPException(status_code=403, detail="Only admins can delete notifications")
 
     notification = db.query(Notification).filter(
-        Notification.id == notification_id,
-        Notification.user_id == current_user.id
+        Notification.id == notification_id
     ).first()
 
     if not notification:

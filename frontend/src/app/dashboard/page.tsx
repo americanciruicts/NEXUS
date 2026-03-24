@@ -19,10 +19,11 @@ import {
 // Dashboard components
 import DateRangePicker from './components/DateRangePicker';
 import MetricsGrid from './components/MetricsGrid';
-import StatusDistributionChart from './components/StatusDistributionChart';
 import LaborTrendsChart from './components/LaborTrendsChart';
 import WorkCenterUtilizationChart from './components/WorkCenterUtilizationChart';
 import WorkCenterStatusCard from './components/WorkCenterStatusCard';
+import StuckTravelersCard from './components/StuckTravelersCard';
+import ForecastCard from './components/ForecastCard';
 
 import OperatorDashboard from './components/OperatorDashboard';
 import { API_BASE_URL } from '@/config/api';
@@ -160,9 +161,13 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch all travelers on mount
+  // Fetch all travelers on mount + auto-refresh every 30s for live progress updates
   useEffect(() => {
     fetchDashboardTravelers();
+    const interval = setInterval(() => {
+      fetchDashboardTravelers();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Derive overdue jobs from dashboard travelers
@@ -191,8 +196,10 @@ export default function Dashboard() {
 
   const fetchDashboardTravelers = async (retryCount = 0) => {
     try {
+      const token = localStorage.getItem('nexus_token');
+      if (!token) return;
       const response = await fetch(`${API_BASE_URL}/travelers/dashboard-summary`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
@@ -210,8 +217,10 @@ export default function Dashboard() {
 
   const fetchTrackingEntries = async () => {
     try {
+      const token = localStorage.getItem('nexus_token');
+      if (!token) return;
       const response = await fetch(`${API_BASE_URL}/labor/`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data: RawTrackingEntry[] = await response.json();
@@ -262,7 +271,7 @@ export default function Dashboard() {
     }
     const info = STATUS_CONFIG[configKey] || STATUS_CONFIG['IN_PROGRESS'];
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${info.bg} ${info.text}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${info.bg} ${info.text}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${info.dot} mr-1.5 ${status === 'COMPLETED' ? '' : 'animate-pulse'}`} />
         {info.label}
       </span>
@@ -272,7 +281,7 @@ export default function Dashboard() {
   const getPriorityBadge = (priority: string) => {
     const info = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG['NORMAL'];
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${info.bg} ${info.text}`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${info.bg} ${info.text}`}>
         {info.label}
       </span>
     );
@@ -281,7 +290,7 @@ export default function Dashboard() {
   const getTypeBadge = (type: string) => {
     const info = TYPE_CONFIG[type] || { bg: 'bg-gray-100 dark:bg-slate-700', text: 'text-gray-600 dark:text-slate-300', label: type };
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${info.bg} ${info.text}`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${info.bg} ${info.text}`}>
         {info.label}
       </span>
     );
@@ -407,14 +416,14 @@ export default function Dashboard() {
                     <button
                       key={tab}
                       onClick={() => { setTravelerFilter(tab); setTravelerPage(1); }}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap transition-all ${
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                         isActive
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600'
                       }`}
                     >
                       {tab === 'All' ? 'All' : (STATUS_CONFIG[tab]?.label || tab)}
-                      <span className={`px-1 py-0 rounded-full text-[9px] font-bold ${
+                      <span className={`px-1 py-0 rounded-full text-[11px] font-bold ${
                         isActive ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-slate-600 text-gray-500 dark:text-slate-400'
                       }`}>{count}</span>
                     </button>
@@ -439,16 +448,16 @@ export default function Dashboard() {
                   </colgroup>
                   <thead className="bg-gray-50/80 dark:bg-slate-900/80">
                     <tr>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Job #</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Part / Desc</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Type</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Status</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Steps</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Depts</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Work Center</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Qty</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Due</th>
-                      <th className="px-2 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Pri</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Job #</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Part / Desc</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Type</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Status</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Steps</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Depts</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Work Center</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Qty</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Due</th>
+                      <th className="px-2 py-2 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Pri</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-50 dark:divide-slate-700">
@@ -458,23 +467,23 @@ export default function Dashboard() {
                         href={`/travelers/${t.id}`}
                         className="table-row hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer group"
                       >
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-blue-700 dark:text-blue-400 group-hover:text-blue-900 dark:group-hover:text-blue-300 truncate">
+                        <td className="px-2 py-2 whitespace-nowrap text-sm font-semibold text-blue-700 dark:text-blue-400 group-hover:text-blue-900 dark:group-hover:text-blue-300 truncate">
                           {t.job_number}
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700 dark:text-slate-300">
-                          <div className="truncate font-medium text-[11px]">{t.part_number}</div>
-                          <div className="truncate text-[9px] text-gray-400 dark:text-slate-500">{t.part_description}</div>
+                        <td className="px-2 py-2 text-xs text-gray-700 dark:text-slate-300">
+                          <div className="truncate font-medium text-xs">{t.part_number}</div>
+                          <div className="truncate text-xs text-gray-400 dark:text-slate-500">{t.part_description}</div>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           {getTypeBadge(t.traveler_type)}
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           {getStatusBadge(t.status, t.percent_complete)}
                         </td>
-                        <td className="px-2 py-1.5">
+                        <td className="px-2 py-2">
                           <div className="flex items-center gap-1.5">
-                            <div className="relative w-7 h-7 flex-shrink-0">
-                              <svg className="w-7 h-7 -rotate-90" viewBox="0 0 36 36">
+                            <div className="relative w-9 h-9 flex-shrink-0">
+                              <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
                                 <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
                                 <circle cx="18" cy="18" r="15.5" fill="none"
                                   stroke={t.percent_complete >= 100 ? '#16a34a' : t.percent_complete >= 75 ? '#2563eb' : t.percent_complete >= 50 ? '#f59e0b' : t.percent_complete >= 25 ? '#f97316' : '#ef4444'}
@@ -482,49 +491,46 @@ export default function Dashboard() {
                                   strokeDasharray={`${t.percent_complete * 0.9742} 97.42`}
                                 />
                               </svg>
-                              <span className="absolute inset-0 flex items-center justify-center text-[7px] font-extrabold text-gray-700 dark:text-slate-300">{t.percent_complete}%</span>
+                              <span className="absolute inset-0 flex items-center justify-center text-xs font-extrabold text-gray-700 dark:text-slate-300">{t.percent_complete}%</span>
                             </div>
-                            <div className="text-[10px] font-bold text-gray-700 dark:text-slate-300">{t.completed_steps}/{t.total_steps}</div>
+                            <div className="text-xs font-bold text-gray-700 dark:text-slate-300">{t.completed_steps}/{t.total_steps}</div>
                           </div>
                         </td>
                         <td className="px-2 py-1.5">
                           {t.department_progress && t.department_progress.length > 0 ? (
                             <div className="space-y-0.5">
-                              {t.department_progress.slice(0, 2).map((dept) => {
+                              {t.department_progress.map((dept) => {
                                 const isDone = dept.percent_complete >= 100;
                                 const isNone = dept.completed_steps === 0;
                                 return (
                                   <div key={dept.department} className="flex items-center gap-0.5">
-                                    <span className={`w-1 h-1 rounded-full flex-shrink-0 ${isDone ? 'bg-green-500' : isNone ? 'bg-gray-300 dark:bg-slate-500' : 'bg-blue-500 animate-pulse'}`} />
-                                    <span className="text-[7px] font-semibold w-10 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }}>{dept.department}</span>
-                                    <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-1 overflow-hidden">
-                                      <div className="h-1 rounded-full" style={{ width: `${dept.percent_complete}%`, backgroundColor: isDone ? '#16a34a' : (DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280') }} />
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDone ? 'bg-green-500' : isNone ? 'bg-gray-300 dark:bg-slate-500' : 'bg-blue-500 animate-pulse'}`} />
+                                    <span className="text-xs font-semibold w-14 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }}>{dept.department}</span>
+                                    <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                      <div className="h-2 rounded-full" style={{ width: `${dept.percent_complete}%`, backgroundColor: isDone ? '#16a34a' : (DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280') }} />
                                     </div>
-                                    <span className="text-[7px] font-bold text-gray-500 dark:text-slate-400 w-5 text-right">{dept.percent_complete}%</span>
+                                    <span className="text-xs font-bold text-gray-500 dark:text-slate-400 w-8 text-right">{dept.percent_complete}%</span>
                                   </div>
                                 );
                               })}
-                              {t.department_progress.length > 2 && (
-                                <div className="text-[7px] text-blue-500 font-medium">+{t.department_progress.length - 2} more</div>
-                              )}
                             </div>
                           ) : (
-                            <div className="text-[8px] text-gray-300 dark:text-slate-600">—</div>
+                            <div className="text-[10px] text-gray-300 dark:text-slate-600">—</div>
                           )}
                         </td>
                         <td className="px-2 py-1.5 text-gray-600 dark:text-slate-400">
-                          <div className="truncate text-[10px]">{t.current_step || t.current_work_center || t.work_center || '—'}</div>
+                          <div className="truncate text-xs">{t.current_step || t.current_work_center || t.work_center || '—'}</div>
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap">
-                          <div className="text-[10px] font-semibold text-gray-700 dark:text-slate-300">{t.quantity}</div>
+                          <div className="text-xs font-semibold text-gray-700 dark:text-slate-300">{t.quantity}</div>
                           {(t.qty_accepted > 0 || t.qty_rejected > 0) && (
-                            <div className="text-[8px] text-gray-400 dark:text-slate-500">
+                            <div className="text-xs text-gray-400 dark:text-slate-500">
                               <span className="text-green-600">{t.qty_accepted}ok</span>
                               {t.qty_rejected > 0 && <span className="text-red-500 ml-0.5">{t.qty_rejected}rej</span>}
                             </div>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-[10px] text-gray-500 dark:text-slate-400 font-mono truncate">
+                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-500 dark:text-slate-400 font-mono truncate">
                           {t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap">
@@ -582,36 +588,36 @@ export default function Dashboard() {
                 <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-gray-50/80 dark:bg-slate-900/50">
                   <div className="flex items-center gap-1.5">
                     <SignalIcon className="w-3.5 h-3.5 text-emerald-500" />
-                    <h2 className="text-[11px] font-bold text-gray-700 dark:text-slate-300">Live Tracking</h2>
-                    <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                    <h2 className="text-xs font-bold text-gray-700 dark:text-slate-300">Live Tracking</h2>
+                    <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
                       {liveUpdates.filter(u => u.is_active).length} live
                     </span>
                   </div>
-                  <Link href="/labor-tracking" className="text-blue-600 dark:text-blue-400 text-[9px] font-semibold hover:underline">
+                  <Link href="/labor-tracking" className="text-blue-600 dark:text-blue-400 text-[11px] font-semibold hover:underline">
                     View All
                   </Link>
                 </div>
                 <table className="w-full">
                   <thead className="bg-gray-50/50 dark:bg-slate-900/30">
                     <tr>
-                      <th className="px-2 py-1 text-left text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase">Job</th>
-                      <th className="px-2 py-1 text-left text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase">Location</th>
-                      <th className="px-2 py-1 text-left text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase">Operator</th>
-                      <th className="px-2 py-1 text-left text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase">Status</th>
+                      <th className="px-2 py-1 text-left text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase">Job</th>
+                      <th className="px-2 py-1 text-left text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase">Location</th>
+                      <th className="px-2 py-1 text-left text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase">Operator</th>
+                      <th className="px-2 py-1 text-left text-[11px] font-bold text-gray-400 dark:text-slate-500 uppercase">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                     {liveUpdates.length > 0 ? liveUpdates.slice(0, 6).map((update, index) => (
                       <tr key={index} className="hover:bg-gray-50/80 dark:hover:bg-slate-700/50 transition-colors">
                         <td className="px-2 py-1 whitespace-nowrap">
-                          <Link href={`/travelers?search=${encodeURIComponent(update.job_number)}`} className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 hover:underline">
+                          <Link href={`/travelers?search=${encodeURIComponent(update.job_number)}`} className="text-xs font-semibold text-blue-700 dark:text-blue-400 hover:underline">
                             {update.job_number}
                           </Link>
                         </td>
-                        <td className="px-2 py-1 whitespace-nowrap text-[10px] text-gray-600 dark:text-slate-400">{update.work_center}</td>
-                        <td className="px-2 py-1 whitespace-nowrap text-[10px] text-gray-600 dark:text-slate-400">{update.operator_name}</td>
+                        <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-600 dark:text-slate-400">{update.work_center}</td>
+                        <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-600 dark:text-slate-400">{update.operator_name}</td>
                         <td className="px-2 py-1 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${update.is_active ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'}`}>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold ${update.is_active ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'}`}>
                             {update.is_active && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
                             {update.is_active ? 'Active' : 'Done'}
                           </span>
@@ -619,7 +625,7 @@ export default function Dashboard() {
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={4} className="px-2 py-4 text-center text-[11px] text-gray-400 dark:text-slate-500">No active production updates</td>
+                        <td colSpan={4} className="px-2 py-4 text-center text-xs text-gray-400 dark:text-slate-500">No active production updates</td>
                       </tr>
                     )}
                   </tbody>
@@ -630,7 +636,7 @@ export default function Dashboard() {
               <div className="bg-white dark:bg-slate-800 shadow-md rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
                 <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center gap-1.5 bg-gray-50/80 dark:bg-slate-900/50">
                   <BoltIcon className="w-3.5 h-3.5 text-amber-500" />
-                  <h2 className="text-[11px] font-bold text-gray-700 dark:text-slate-300">Alerts & Actions</h2>
+                  <h2 className="text-xs font-bold text-gray-700 dark:text-slate-300">Alerts & Actions</h2>
                 </div>
                 <div className="p-2.5">
                   <div className="grid grid-cols-2 gap-2">
@@ -641,22 +647,22 @@ export default function Dashboard() {
                       { title: 'Active Labor', count: dashboardData.active_labor_entries || 0, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', href: '/labor-tracking' },
                     ].map((alert, i) => (
                       <Link key={i} href={alert.href} className={`${alert.bg} rounded-lg p-2 hover:shadow-sm transition-all`}>
-                        <p className="text-[9px] font-semibold text-gray-500 dark:text-slate-400 uppercase">{alert.title}</p>
+                        <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase">{alert.title}</p>
                         <p className={`text-lg font-extrabold ${alert.color} leading-none mt-0.5`}>{alert.count}</p>
                       </Link>
                     ))}
                   </div>
                   {overdueJobs.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
-                      <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase mb-1.5">Overdue Jobs</p>
+                      <p className="text-[11px] font-bold text-red-600 dark:text-red-400 uppercase mb-1.5">Overdue Jobs</p>
                       <div className="space-y-1 max-h-28 overflow-y-auto">
                         {overdueJobs.slice(0, 3).map((job) => (
                           <Link key={job.id} href={`/travelers/${job.id}`} className="flex items-center justify-between p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                             <div className="min-w-0">
-                              <p className="text-[10px] font-bold text-gray-800 dark:text-slate-200 truncate">{job.job_number}</p>
-                              <p className="text-[9px] text-gray-500 dark:text-slate-400 truncate">{job.part_description}</p>
+                              <p className="text-xs font-bold text-gray-800 dark:text-slate-200 truncate">{job.job_number}</p>
+                              <p className="text-[11px] text-gray-500 dark:text-slate-400 truncate">{job.part_description}</p>
                             </div>
-                            <p className="text-[9px] text-red-600 dark:text-red-400 font-semibold whitespace-nowrap ml-2">{new Date(job.due_date).toLocaleDateString()}</p>
+                            <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold whitespace-nowrap ml-2">{new Date(job.due_date).toLocaleDateString()}</p>
                           </Link>
                         ))}
                       </div>
@@ -706,15 +712,20 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Charts Row */}
+            {/* Stuck Travelers & Forecast Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <StatusDistributionChart data={dashboardData.status_distribution} />
+              <StuckTravelersCard data={dashboardData.stuck_travelers} />
+              <ForecastCard data={dashboardData.forecast} />
+            </div>
+
+            {/* Work Center Utilization */}
+            <div className="grid grid-cols-1 gap-4 mt-4">
               <WorkCenterUtilizationChart data={dashboardData.labor_by_work_center} />
             </div>
 
             {/* Labor Trends (full width) */}
             <div className="mt-4">
-              <LaborTrendsChart data={dashboardData.labor_trend} />
+              <LaborTrendsChart data={dashboardData.labor_trend} departmentData={dashboardData.department_trend} />
             </div>
 
             {/* Work Center Status */}

@@ -57,6 +57,11 @@ export default function NotificationsPage() {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
+      if (!token) {
+        toast.error('Not authenticated. Please log in again.');
+        setLoading(false);
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/notifications/`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -66,9 +71,12 @@ export default function NotificationsPage() {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
+      } else {
+        toast.error('Failed to load notifications');
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      toast.error('Failed to load notifications');
     } finally {
       setLoading(false);
     }
@@ -126,23 +134,22 @@ export default function NotificationsPage() {
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+      if (!token) return;
 
-      await Promise.all(
-        unreadIds.map(id =>
-          fetch(`${API_BASE_URL}/notifications/${id}`, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ is_read: true })
-          })
-        )
-      );
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
-      toast.success('All notifications marked as read!');
+      if (response.ok) {
+        setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+        toast.success('All notifications marked as read!');
+      } else {
+        toast.error('Failed to mark all as read');
+      }
     } catch (error) {
       console.error('Error marking all as read:', error);
       toast.error('Failed to mark all as read');

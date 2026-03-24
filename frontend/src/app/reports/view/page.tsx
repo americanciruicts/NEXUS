@@ -62,12 +62,13 @@ function ReportViewContent() {
   const fetchReportData = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
+      if (!token) return;
 
       if (type === 'single_traveler' || type === 'all_travelers') {
         const response = await fetch(`${API_BASE_URL}/labor/`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!response.ok) throw new Error('API error');
+        if (!response.ok) throw new Error(`Failed to fetch labor data (${response.status})`);
         let data = await response.json();
         if (type === 'single_traveler' && jobNumber) {
           data = data.filter((entry: any) => entry.job_number === jobNumber);

@@ -158,7 +158,7 @@ const getTravelerTypeBadge = (type: string) => {
 
   const config = typeConfig[type] || { bg: 'bg-gray-100 dark:bg-slate-700', text: 'text-gray-800 dark:text-slate-200', border: 'border-gray-300 dark:border-slate-600', label: type };
   return (
-    <span className={`inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-bold border ${config.bg} ${config.text} ${config.border}`}>
+    <span className={`inline-flex items-center px-1.5 py-0 rounded-full text-xs font-bold border ${config.bg} ${config.text} ${config.border}`}>
       {config.label}
     </span>
   );
@@ -208,6 +208,11 @@ function TravelersPage() {
 
   useEffect(() => {
     fetchTravelers();
+    // Auto-refresh every 30 seconds for live status/progress updates
+    const interval = setInterval(() => {
+      fetchTravelers();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchTravelers = async (retryCount = 0) => {
@@ -314,7 +319,7 @@ function TravelersPage() {
 
     const config = statusConfig[configKey] || statusConfig['CREATED'];
     return (
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${config.color} ${config.text} whitespace-nowrap`}>
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold border ${config.color} ${config.text} whitespace-nowrap`}>
         {label}
       </span>
     );
@@ -486,9 +491,9 @@ function TravelersPage() {
         onCancel={closeConfirm}
       />
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-2 sm:p-4 lg:p-6">
         {/* Header with Stats */}
-        <div className="mb-4 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-xl p-4 shadow-xl relative overflow-hidden">
+        <div className="mb-3 sm:mb-4 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-xl p-3 sm:p-4 shadow-xl relative overflow-hidden">
           <div className="relative z-10 flex flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="bg-white/15 backdrop-blur-sm p-2 rounded-lg border border-white/20">
@@ -502,21 +507,21 @@ function TravelersPage() {
             <div className="flex items-center gap-2">
               <div className="bg-white/15 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20 text-center">
                 <div className="text-lg font-extrabold">{stats.active}</div>
-                <div className="text-[9px] text-blue-200/70 uppercase tracking-wider font-semibold">Active</div>
+                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Active</div>
               </div>
               <div className="bg-white/15 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20 text-center">
                 <div className="text-lg font-extrabold">{stats.drafts}</div>
-                <div className="text-[9px] text-blue-200/70 uppercase tracking-wider font-semibold">Drafts</div>
+                <div className="text-[11px] text-blue-200/70 uppercase tracking-wider font-semibold">Drafts</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters and Actions */}
-        <div className="mb-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-3">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mb-3 sm:mb-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-2 sm:p-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
             {/* Search */}
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-0 sm:min-w-[200px]">
               <input
                 type="text"
                 placeholder="Search job#, part#, description..."
@@ -527,7 +532,7 @@ function TravelersPage() {
             </div>
 
             {/* View Filter Tabs */}
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5 overflow-x-auto">
               {(['active', 'drafts', 'all'] as const).map((view) => (
                 <button
                   key={view}
@@ -544,7 +549,7 @@ function TravelersPage() {
             </div>
 
             {/* Type Filter Tabs */}
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5">
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-lg p-0.5 overflow-x-auto">
               {([
                 { value: 'all', label: 'All Types', color: 'from-gray-600 to-gray-700' },
                 { value: 'PCB_ASSEMBLY', label: 'PCBA', color: 'from-blue-600 to-blue-700' },
@@ -638,8 +643,8 @@ function TravelersPage() {
           ) : (
             <>
 
-            {/* Desktop Table View - shown on ALL devices */}
-            <div className="block w-full relative overflow-x-auto">
+            {/* Desktop Table View - hidden on mobile, shown on lg+ */}
+            <div className="hidden lg:block w-full relative overflow-x-auto">
               <div className="absolute top-0 left-0 right-0 h-14 overflow-hidden pointer-events-none z-20">
                 <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
@@ -720,7 +725,7 @@ function TravelersPage() {
                           <div className="mb-0.5 flex items-center gap-1 flex-wrap">
                             {getTravelerTypeBadge(traveler.travelerType)}
                             {traveler.status === 'DRAFT' && (
-                              <span className="inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-bold border border-amber-400 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 animate-pulse">
+                              <span className="inline-flex items-center px-1.5 py-0 rounded-full text-xs font-bold border border-amber-400 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 animate-pulse">
                                 DRAFT
                               </span>
                             )}
@@ -734,7 +739,7 @@ function TravelersPage() {
                         <div className="space-y-0.5 overflow-hidden">
                           <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">Part# <span className="underline">{traveler.partNumber}</span></div>
                           <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={traveler.description}>Desc: {traveler.description || 'N/A'}</div>
-                          <div className="text-[10px] text-gray-500 dark:text-slate-400 space-y-0">
+                          <div className="text-xs text-gray-500 dark:text-slate-400 space-y-0">
                             <div>Trav Rev: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</span> · Cust Rev: <span className="font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</span></div>
                             <div>Qty: <span className="font-bold text-gray-900 dark:text-slate-100">{traveler.quantity}</span></div>
                           </div>
@@ -748,9 +753,9 @@ function TravelersPage() {
                       </td>
                       <td className="px-2 py-2">
                         <div className="space-y-0.5">
-                          <div className="text-[11px] text-gray-600 dark:text-slate-400">Start: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
-                          <div className="text-[11px] text-gray-600 dark:text-slate-400">Due: <span className="font-semibold text-gray-900 dark:text-slate-100 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
-                          <div className="text-[11px] text-gray-600 dark:text-slate-400">Ship: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400">Start: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400">Due: <span className="font-semibold text-gray-900 dark:text-slate-100 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</span></div>
+                          <div className="text-xs text-gray-600 dark:text-slate-400">Ship: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</span></div>
                         </div>
                       </td>
                       <td className="px-2 py-2">
@@ -767,31 +772,24 @@ function TravelersPage() {
                       {/* Step Progress Column */}
                       <td className="px-1 py-2">
                         <Link href={`/travelers/${traveler.dbId}`} className="block hover:opacity-80 transition-opacity cursor-pointer">
-                          <div className="flex items-center gap-1.5">
-                            <div className="relative w-9 h-9 flex-shrink-0">
-                              <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
-                                <circle cx="18" cy="18" r="15.5" fill="none"
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className="relative w-11 h-11 flex-shrink-0">
+                              <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
+                                <circle cx="22" cy="22" r="19" fill="none" stroke="#e5e7eb" strokeWidth="2.5" className="dark:stroke-slate-600" />
+                                <circle cx="22" cy="22" r="19" fill="none"
                                   stroke={traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444'}
                                   strokeWidth="2.5" strokeLinecap="round"
-                                  strokeDasharray={`${traveler.progress * 0.9742} 97.42`}
+                                  strokeDasharray={`${traveler.progress * 1.194} 119.4`}
                                 />
                               </svg>
-                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-extrabold text-gray-700 dark:text-slate-300">{traveler.progress}%</span>
+                              <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-gray-700 dark:text-slate-300">{traveler.completedSteps}/{traveler.totalSteps}</span>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[10px] font-bold text-gray-800 dark:text-slate-200">{traveler.completedSteps}<span className="text-gray-400 dark:text-slate-500 font-normal">/{traveler.totalSteps}</span></div>
-                              <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1 mt-0.5 overflow-hidden">
-                                <div className="h-1 rounded-full transition-all duration-500"
+                            <div className="w-full min-w-0">
+                              <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                                <div className="h-1.5 rounded-full transition-all duration-500"
                                   style={{ width: `${traveler.progress}%`, backgroundColor: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : '#f97316' }}
                                 />
                               </div>
-                              {traveler.progress >= 100 && (
-                                <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-1 py-0 rounded-full mt-0.5">
-                                  <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                  Done
-                                </span>
-                              )}
                             </div>
                           </div>
                         </Link>
@@ -801,28 +799,25 @@ function TravelersPage() {
                         <Link href={`/travelers/${traveler.dbId}`} className="block hover:opacity-80 transition-opacity cursor-pointer">
                           {traveler.departmentProgress.length > 0 ? (
                             <div className="space-y-0.5">
-                              {traveler.departmentProgress.slice(0, 3).map((dept) => {
+                              {traveler.departmentProgress.map((dept) => {
                                 const isComplete = dept.percent_complete >= 100;
                                 const isNotStarted = dept.completed_steps === 0;
                                 return (
-                                  <div key={dept.department} className="flex items-center gap-0.5">
-                                    <span className={`w-1 h-1 rounded-full flex-shrink-0 ${isComplete ? 'bg-green-500' : isNotStarted ? 'bg-gray-300 dark:bg-slate-600' : 'bg-blue-500 animate-pulse'}`} />
-                                    <span className="text-[8px] font-semibold w-10 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }} title={dept.department}>{dept.department}</span>
-                                    <div className="flex-1 bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
-                                      <div className="h-1.5 rounded-full transition-all duration-500"
+                                  <div key={dept.department} className="flex items-center gap-1">
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isComplete ? 'bg-green-500' : isNotStarted ? 'bg-gray-300 dark:bg-slate-600' : 'bg-blue-500 animate-pulse'}`} />
+                                    <span className="text-xs font-semibold w-12 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }} title={dept.department}>{dept.department}</span>
+                                    <div className="flex-1 bg-gray-100 dark:bg-slate-600 rounded-full h-2 overflow-hidden">
+                                      <div className="h-2 rounded-full transition-all duration-500"
                                         style={{ width: `${dept.percent_complete}%`, backgroundColor: isComplete ? '#16a34a' : (DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280') }}
                                       />
                                     </div>
-                                    <span className="text-[8px] font-bold text-gray-500 dark:text-slate-400 w-6 text-right">{dept.percent_complete}%</span>
+                                    <span className="text-xs font-bold text-gray-500 dark:text-slate-400 w-7 text-right">{dept.percent_complete}%</span>
                                   </div>
                                 );
                               })}
-                              {traveler.departmentProgress.length > 3 && (
-                                <div className="text-[8px] text-blue-500 font-medium text-center">+{traveler.departmentProgress.length - 3} more</div>
-                              )}
                             </div>
                           ) : (
-                            <div className="text-[9px] text-gray-400 dark:text-slate-500 text-center">—</div>
+                            <div className="text-[11px] text-gray-400 dark:text-slate-500 text-center">—</div>
                           )}
                         </Link>
                       </td>
@@ -895,8 +890,8 @@ function TravelersPage() {
               </table>
             </div>
 
-            {/* Mobile Card View - Hidden: use desktop table on all devices */}
-            <div className="hidden w-full">
+            {/* Mobile/Tablet Card View - shown below lg */}
+            <div className="block lg:hidden w-full">
               <div className="p-3 space-y-4">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
@@ -931,74 +926,91 @@ function TravelersPage() {
 
                     {/* Card Content */}
                     <div className="p-3 space-y-2">
-                      {/* Part Details */}
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Part Number</div>
-                        <div className="text-sm font-bold text-gray-900 dark:text-slate-100">{traveler.partNumber}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Description</div>
-                        <div className="text-sm text-gray-700 dark:text-slate-300">{traveler.description || 'N/A'}</div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      {/* Status & Progress Row */}
+                      <div className="flex items-center justify-between gap-2">
                         <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Traveler Rev</div>
-                          <div className="text-sm text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</div>
+                          {getStatusBadge(traveler.status, traveler.progress)}
                         </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Customer Rev</div>
-                          <div className="text-sm text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Quantity</div>
-                          <div className="text-sm text-gray-900 dark:text-slate-100">{traveler.quantity}</div>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className="relative w-11 h-11 flex-shrink-0">
+                            <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
+                              <circle cx="22" cy="22" r="19" fill="none" stroke="#e5e7eb" strokeWidth="2.5" className="dark:stroke-slate-600" />
+                              <circle cx="22" cy="22" r="19" fill="none"
+                                stroke={traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444'}
+                                strokeWidth="2.5" strokeLinecap="round"
+                                strokeDasharray={`${traveler.progress * 1.194} 119.4`}
+                              />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-gray-700 dark:text-slate-300">{traveler.completedSteps}/{traveler.totalSteps}</span>
+                          </div>
+                          <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                            <div className="h-1.5 rounded-full transition-all duration-500"
+                              style={{ width: `${traveler.progress}%`, backgroundColor: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : '#f97316' }}
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      {/* Customer & Dates Grid */}
+                      {/* Part Details */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Part Number</div>
+                          <div className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{traveler.partNumber}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Quantity</div>
+                          <div className="text-sm font-bold text-gray-900 dark:text-slate-100">{traveler.quantity}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Description</div>
+                        <div className="text-xs text-gray-700 dark:text-slate-300 truncate">{traveler.description || 'N/A'}</div>
+                      </div>
+
+                      {/* Customer & Dates */}
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                         <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Customer Code</div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.customerCode || 'N/A'}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Customer</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">{traveler.customerName || traveler.customerCode || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Customer Name</div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.customerName}>{traveler.customerName || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Start Date</div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Due Date</div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold">Ship Date</div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Due Date</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
                         </div>
                       </div>
 
-                      {/* Shipping Info */}
-                      <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
-                        <div className="text-xs text-gray-500 dark:text-slate-400 font-semibold mb-1">Shipping</div>
-                        <div className="grid grid-cols-2 gap-1 text-xs">
-                          <div>Ship Via: <span className="font-semibold">{traveler.shipVia || 'N/A'}</span></div>
-                          <div>From: <span className="font-semibold">{traveler.fromStock || 'N/A'}</span></div>
-                          <div className="col-span-2">To: <span className="font-semibold">{traveler.toStock || 'N/A'}</span></div>
+                      {/* Department Progress */}
+                      {traveler.departmentProgress.length > 0 && (
+                        <div className="pt-2 border-t border-gray-200 dark:border-slate-700 space-y-1">
+                          {traveler.departmentProgress.map((dept) => {
+                            const isComplete = dept.percent_complete >= 100;
+                            const isNotStarted = dept.completed_steps === 0;
+                            return (
+                              <div key={dept.department} className="flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isComplete ? 'bg-green-500' : isNotStarted ? 'bg-gray-300 dark:bg-slate-600' : 'bg-blue-500 animate-pulse'}`} />
+                                <span className="text-[11px] font-semibold w-14 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }}>{dept.department}</span>
+                                <div className="flex-1 bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                                  <div className="h-1.5 rounded-full transition-all duration-500"
+                                    style={{ width: `${dept.percent_complete}%`, backgroundColor: isComplete ? '#16a34a' : (DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280') }}
+                                  />
+                                </div>
+                                <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 w-8 text-right">{dept.percent_complete}%</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
+                      )}
 
                       {/* Actions */}
                       <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
-                        <div className={`grid ${user?.role !== 'OPERATOR' ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                        <div className={`grid ${user?.role !== 'OPERATOR' ? 'grid-cols-4' : 'grid-cols-1'} gap-1`}>
                           <Link
                             href={`/travelers/${traveler.dbId}`}
                             className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors flex flex-col items-center justify-center"
                             title="View"
                           >
                             <EyeIcon className="h-5 w-5" />
-                            <span className="text-xs mt-1">View</span>
+                            <span className="text-[10px] mt-0.5">View</span>
                           </Link>
                           {user?.role !== 'OPERATOR' && (
                             <>
@@ -1008,7 +1020,7 @@ function TravelersPage() {
                                 title="Edit"
                               >
                                 <PencilIcon className="h-5 w-5" />
-                                <span className="text-xs mt-1">Edit</span>
+                                <span className="text-[10px] mt-0.5">Edit</span>
                               </Link>
                               <button
                                 onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
@@ -1016,7 +1028,7 @@ function TravelersPage() {
                                 title="Print"
                               >
                                 <PrinterIcon className="h-5 w-5" />
-                                <span className="text-xs mt-1">Print</span>
+                                <span className="text-[10px] mt-0.5">Print</span>
                               </button>
                               <button
                                 onClick={() => {
@@ -1028,9 +1040,7 @@ function TravelersPage() {
                                         const token = localStorage.getItem('nexus_token');
                                         const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
                                           method: 'DELETE',
-                                          headers: {
-                                            'Authorization': `Bearer ${token}`
-                                          }
+                                          headers: { 'Authorization': `Bearer ${token}` }
                                         });
                                         if (response.ok) {
                                           showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
@@ -1051,7 +1061,7 @@ function TravelersPage() {
                                 title="Delete"
                               >
                                 <TrashIcon className="h-5 w-5" />
-                                <span className="text-xs mt-1">Delete</span>
+                                <span className="text-[10px] mt-0.5">Delete</span>
                               </button>
                             </>
                           )}
@@ -1070,7 +1080,7 @@ function TravelersPage() {
                     <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                     <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
                   </div>
-                  <div className="relative z-10 flex items-center justify-between">
+                  <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="pagination-select">
                         <option value={10}>10</option>
@@ -1080,7 +1090,7 @@ function TravelersPage() {
                       </select>
                       <span className="text-xs text-white/80">{startIndex + 1}-{Math.min(endIndex, filteredTravelers.length)} of {filteredTravelers.length}</span>
                     </div>
-                    <div className="flex items-center gap-0.5">
+                    <div className="flex items-center gap-0.5 flex-wrap justify-center">
                       <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">«</button>
                       <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded text-xs font-semibold bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-40 disabled:cursor-not-allowed">‹</button>
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {

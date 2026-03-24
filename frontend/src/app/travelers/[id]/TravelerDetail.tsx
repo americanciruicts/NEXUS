@@ -155,6 +155,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [headerBarcode, setHeaderBarcode] = useState<string>('');
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
   // Track auto-filled values to require at least one change before saving
   const [autoFilledFrom, setAutoFilledFrom] = useState<{
@@ -229,7 +230,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       try {
         const token = localStorage.getItem('nexus_token');
         const response = await fetch(`${API_BASE_URL}/work-centers-mgmt/?traveler_type=${dbType}`, {
-          headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+          headers: { 'Authorization': `Bearer ${token || ''}` }
         });
         if (response.ok) {
           const data = await response.json();
@@ -250,7 +251,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       try {
         const response = await fetch(`${API_BASE_URL}/travelers/${travelerId}`, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+            'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
           }
         });
 
@@ -352,7 +353,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
         const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}`, {
           headers: {
-            'Authorization': `Bearer ${token || 'mock-token'}`
+            'Authorization': `Bearer ${token || ''}`
           }
         });
 
@@ -374,7 +375,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       try {
         const token = localStorage.getItem('nexus_token');
         const response = await fetch(`${API_BASE_URL}/travelers/department-progress/${travelerDbId}`, {
-          headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+          headers: { 'Authorization': `Bearer ${token || ''}` }
         });
         if (response.ok) {
           const data = await response.json();
@@ -395,7 +396,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
         const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`, {
           headers: {
-            'Authorization': `Bearer ${token || 'mock-token'}`
+            'Authorization': `Bearer ${token || ''}`
           }
         });
 
@@ -575,7 +576,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
         },
         body: JSON.stringify(payload)
       });
@@ -750,7 +751,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     const fetchNextWO = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}` }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
         });
         if (response.ok) {
           const data = await response.json();
@@ -927,7 +928,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
         },
         body: JSON.stringify(travelerData)
       });
@@ -1042,7 +1043,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
         },
         body: JSON.stringify(travelerData)
       });
@@ -1069,7 +1070,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const autoFillFromExistingJob = async (jobNumber: string) => {
     if (!jobNumber || jobNumber.length < 2) return;
     try {
-      const token = localStorage.getItem('nexus_token') || 'mock-token';
+      const token = localStorage.getItem('nexus_token');
+      if (!token) return;
       const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(jobNumber)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -1224,7 +1226,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-2 gap-5 max-w-3xl w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 max-w-3xl w-full px-2 sm:px-0">
             {travelerTypes.map((type) => {
               const IconComponent = type.icon;
               return (
@@ -1787,15 +1789,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-purple-200.border-t-4 td { font-size: 12px !important; padding: 0.3rem !important; }
         }
       `}</style>
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
         {/* Action Bar - Screen Only */}
-        <div className="flex flex-row justify-between items-center gap-3 no-print bg-white dark:bg-slate-800 shadow-md rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3 no-print bg-white dark:bg-slate-800 shadow-md rounded-lg p-2 sm:p-4">
           <button
             onClick={() => createMode ? router.push('/travelers') : router.back()}
-            className="flex items-center justify-start space-x-2 px-4 py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-base font-medium"
+            className="flex items-center justify-start space-x-1 sm:space-x-2 px-2 sm:px-4 py-1.5 sm:py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-sm sm:text-base font-medium"
           >
-            <ArrowLeftIcon className="h-5 w-5" />
-            <span>{createMode ? 'Back to Travelers' : 'Back to Travelers'}</span>
+            <ArrowLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="hidden sm:inline">{createMode ? 'Back to Travelers' : 'Back to Travelers'}</span>
+            <span className="sm:hidden">Back</span>
           </button>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {createMode ? (
@@ -1874,6 +1877,58 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                               }}
                               className={`w-full text-left px-4 py-2.5 text-sm font-semibold ${opt.bg} transition-colors ${
                                 displayTraveler.priority === opt.value ? 'bg-gray-100 dark:bg-slate-700' : ''
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Status Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => { setStatusDropdownOpen(!statusDropdownOpen); setPriorityDropdownOpen(false); }}
+                        className={`flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm ${
+                          displayTraveler.status === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                          displayTraveler.status === 'IN_PROGRESS' ? 'bg-purple-600 hover:bg-purple-700 text-white' :
+                          displayTraveler.status === 'CREATED' ? 'bg-teal-600 hover:bg-teal-700 text-white' :
+                          'bg-amber-600 hover:bg-amber-700 text-white'
+                        }`}
+                      >
+                        <span>{{ 'DRAFT': 'Draft', 'CREATED': 'Awaiting Start', 'IN_PROGRESS': 'In Progress', 'COMPLETED': 'Completed' }[displayTraveler.status] || displayTraveler.status}</span>
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      {statusDropdownOpen && (
+                        <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 min-w-[160px]">
+                          {[
+                            { value: 'DRAFT', label: 'Draft', bg: 'hover:bg-amber-50 text-amber-700' },
+                            { value: 'CREATED', label: 'Awaiting Start', bg: 'hover:bg-teal-50 text-teal-700' },
+                            { value: 'IN_PROGRESS', label: 'In Progress', bg: 'hover:bg-purple-50 text-purple-700' },
+                            { value: 'COMPLETED', label: 'Completed', bg: 'hover:bg-green-50 text-green-700' },
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={async () => {
+                                setStatusDropdownOpen(false);
+                                try {
+                                  const token = localStorage.getItem('nexus_token') || '';
+                                  const res = await fetch(`${API_BASE_URL}/travelers/${travelerId}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({ status: opt.value }),
+                                  });
+                                  if (res.ok) {
+                                    setTraveler(prev => prev ? { ...prev, status: opt.value } : prev);
+                                    setEditedTraveler(prev => prev ? { ...prev, status: opt.value } : prev);
+                                    toast.success(`Status changed to ${opt.label}`);
+                                  } else {
+                                    toast.error('Failed to update status');
+                                  }
+                                } catch { toast.error('Failed to update status'); }
+                              }}
+                              className={`w-full text-left px-4 py-2.5 text-sm font-semibold ${opt.bg} transition-colors ${
+                                displayTraveler.status === opt.value ? 'bg-gray-100 dark:bg-slate-700' : ''
                               }`}
                             >
                               {opt.label}
@@ -1967,7 +2022,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
           <div className="p-4">
             {/* Top Section: Overall Circle + Labor Hours */}
-            <div className="flex gap-5 mb-5">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-5 mb-5">
               {/* Overall Progress - Centered Circle */}
               <div className="flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 px-6 py-4">
                 <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">Overall Progress</div>
@@ -2069,7 +2124,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             {/* Department Progress Grid */}
             <div>
               <div className="text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-2">Department Progress</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {departmentProgress.map((dept) => {
                   const barColor = DEPARTMENT_BAR_COLORS[dept.department] || DEPARTMENT_BAR_COLORS['Other'];
                   const colors = DEPARTMENT_COLORS[dept.department] || DEPARTMENT_COLORS['Other'];
@@ -2115,12 +2170,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         )}
 
         {/* Main Traveler Form */}
-        <div className="bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black overflow-hidden text-black dark:text-white print:!text-black" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
+        <div className="bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black text-black dark:text-white print:!text-black" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
           <div>
           {/* Header Section */}
           <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
-            {/* Mobile Layout - Hidden: use desktop layout on all devices */}
-            <div className="hidden print:hidden mb-4">
+            {/* Mobile Layout - shown below md */}
+            <div className="block md:hidden print:hidden mb-4">
               <div className="flex flex-col items-center justify-center mb-4">
                 <div className="text-base sm:text-lg font-black mb-2 text-black dark:text-white" style={{fontWeight: '900'}}>
                   {isEditing ? (
@@ -2172,7 +2227,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-1" style={{gridColumn: 'span 2'}}><span className="font-semibold" style={{flexShrink: 0}}>WO:</span> <span className="text-black dark:text-white">{isEditing ? (
                       <span className="flex items-center gap-1">
-                        <input type="text" value={workOrderPrefix} readOnly className="border border-gray-300 dark:border-slate-600 rounded bg-gray-100 dark:bg-slate-800 text-center text-black dark:text-white" style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} />
+                        <input type="text" value={workOrderPrefix} onChange={(e) => { setWorkOrderPrefix(e.target.value); const wo = e.target.value && workOrderSuffix ? `${e.target.value}-${workOrderSuffix}` : e.target.value || workOrderSuffix; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-center text-black dark:text-white" style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} placeholder="Prefix" />
                         <span className="text-gray-400 dark:text-slate-500 font-bold">-</span>
                         <input type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-sm text-black dark:text-white" style={{width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
                       </span>
@@ -2205,11 +2260,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </div>
             </div>
 
-            {/* Desktop & Print Layout - Original 3 Columns */}
-            <div className="grid grid-cols-3 gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-center overflow-hidden">
+            {/* Desktop & Print Layout - hidden on mobile, shown md+ */}
+            <div className="hidden md:grid md:grid-cols-3 gap-2 print:!grid print:!grid-cols-3 print:gap-2 items-center">
               {/* Left Column */}
-              <div className="space-y-0.5 print:space-y-0.5 flex flex-col items-start overflow-hidden">
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+              <div className="space-y-0.5 print:space-y-0.5 flex flex-col items-start min-w-0">
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Cust. Code:</span>
                   {isEditing ? (
                     <input
@@ -2222,32 +2277,36 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     <span className="flex-1 text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.customerCode || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Cust. Name:</span>
                   {isEditing ? (
                     <input
                       type="text"
                       value={editData.customerName}
                       onChange={(e) => updateField('customerName', e.target.value)}
-                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm max-w-full text-black dark:text-white"
+                      className="flex-1 min-w-0 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-base print:text-[8px] truncate overflow-hidden text-black dark:text-white">{displayTraveler.customerName || '-'}</span>
+                    <span className="flex-1 text-base print:text-[8px] truncate text-black dark:text-white">{displayTraveler.customerName || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Work Order:</span>
                   {isEditing ? (
-                      <div className="flex items-center gap-1 flex-1 max-w-full">
+                      <div className="flex items-center gap-1 flex-1 min-w-0 max-w-full flex-wrap sm:flex-nowrap">
                         <input
                           type="text"
                           value={workOrderPrefix}
-                          readOnly
-                          className="border border-gray-300 dark:border-slate-600 rounded bg-gray-100 dark:bg-slate-800 text-center text-black dark:text-white"
-                          style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px', flexShrink: 0}}
-                          title="Auto-generated prefix"
+                          onChange={(e) => {
+                            setWorkOrderPrefix(e.target.value);
+                            const wo = e.target.value && workOrderSuffix ? `${e.target.value}-${workOrderSuffix}` : e.target.value || workOrderSuffix;
+                            updateField('workOrder', wo);
+                          }}
+                          className="w-20 sm:w-[90px] min-w-0 border border-gray-300 dark:border-slate-600 rounded text-center text-black dark:text-white"
+                          style={{padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}}
+                          placeholder="Prefix"
                         />
-                        <span className="text-gray-400 dark:text-slate-500 text-xs">-</span>
+                        <span className="text-gray-400 dark:text-slate-500 text-xs flex-shrink-0">-</span>
                         <input
                           type="text"
                           value={workOrderSuffix}
@@ -2256,15 +2315,15 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value;
                             updateField('workOrder', wo);
                           }}
-                          className="w-24 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-black dark:text-white"
+                          className="w-16 sm:w-24 min-w-0 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-black dark:text-white"
                           placeholder="Suffix"
                         />
                       </div>
                   ) : (
-                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.workOrder || '-'}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.workOrder || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Quantity:</span>
                   {isEditing ? (
                     <input
@@ -2274,10 +2333,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.quantity}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.quantity}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">PO Number:</span>
                   {isEditing ? (
                     <input
@@ -2287,10 +2346,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.poNumber || '-'}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.poNumber || '-'}</span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full overflow-hidden">
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Part No:</span>
                   {isEditing ? (
                     <input
@@ -2300,7 +2359,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
-                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.partNumber || '-'}</span>
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
               </div>
@@ -3042,7 +3101,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </DndContext>
 
             {/* Bottom Info */}
-            <div className="bg-gray-50 dark:bg-slate-900 px-3 py-3 grid grid-cols-3 gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px]">
+            <div className="bg-gray-50 dark:bg-slate-900 px-2 sm:px-3 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px] print:!grid-cols-3">
               <div className="flex flex-row items-baseline gap-1 print:gap-0.5">
                 <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">From Stock:</span>
                 {isEditing ? (

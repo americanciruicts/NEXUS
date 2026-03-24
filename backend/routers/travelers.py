@@ -1224,7 +1224,8 @@ async def update_traveler(
 async def patch_traveler(
     traveler_id: int,
     updates: dict,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Partially update a traveler (e.g., toggle active status)"""
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
@@ -1253,6 +1254,12 @@ async def patch_traveler(
     for key, value in updates.items():
         if hasattr(traveler, key):
             print(f"Setting {key} = {value} (was {getattr(traveler, key)})")
+            # Convert status string to enum
+            if key == 'status' and isinstance(value, str):
+                try:
+                    value = TravelerStatus(value)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid status: {value}")
             setattr(traveler, key, value)
 
     db.commit()
@@ -1273,11 +1280,15 @@ async def patch_traveler(
 @router.delete("/{traveler_id}")
 async def delete_traveler(
     traveler_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Delete a traveler"""
-    # For now, allow deletion without authentication
-    # TODO: Re-enable admin-only restriction when frontend auth is fully implemented
+    """Delete a traveler (admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete travelers"
+        )
 
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
     if not traveler:

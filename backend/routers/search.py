@@ -11,7 +11,7 @@ from database import get_db
 from models import Traveler, User, WorkOrder, LaborEntry, ProcessStep, WorkCenter, UserRole
 from routers.auth import get_current_user
 
-router = APIRouter(prefix="/search", tags=["Search"])
+router = APIRouter(tags=["Search"])
 
 
 @router.get("/")
@@ -31,16 +31,13 @@ async def global_search(
 
     # Search Travelers
     travelers = db.query(Traveler).filter(
-        and_(
-            Traveler.is_active == True,
-            or_(
-                Traveler.job_number.ilike(search_term),
-                Traveler.work_order_number.ilike(search_term),
-                Traveler.part_number.ilike(search_term),
-                Traveler.part_description.ilike(search_term),
-                Traveler.customer_name.ilike(search_term),
-                Traveler.customer_code.ilike(search_term)
-            )
+        or_(
+            Traveler.job_number.ilike(search_term),
+            Traveler.work_order_number.ilike(search_term),
+            Traveler.part_number.ilike(search_term),
+            Traveler.part_description.ilike(search_term),
+            Traveler.customer_name.ilike(search_term),
+            Traveler.customer_code.ilike(search_term)
         )
     ).limit(limit).all()
 
@@ -64,7 +61,7 @@ async def global_search(
 
     # Search Users (only for ADMIN role)
     user_results = []
-    if current_user.role == "ADMIN":
+    if current_user.role == UserRole.ADMIN:
         users = db.query(User).filter(
             or_(
                 User.username.ilike(search_term),
@@ -96,7 +93,7 @@ async def global_search(
         or_(
             WorkOrder.work_order_number.ilike(search_term),
             WorkOrder.customer_name.ilike(search_term),
-            WorkOrder.po_number.ilike(search_term)
+            WorkOrder.part_number.ilike(search_term)
         )
     ).limit(limit).all()
 
@@ -106,12 +103,12 @@ async def global_search(
             "type": "work_order",
             "title": wo.work_order_number,
             "subtitle": f"{wo.customer_name}",
-            "description": f"PO: {wo.po_number or 'N/A'} | Status: {wo.status}",
+            "description": f"Part: {wo.part_number} | Customer: {wo.customer_name or 'N/A'}",
             "url": f"/travelers?wo={wo.work_order_number}",
-            "status": wo.status,
+            "status": "active" if wo.is_active else "inactive",
             "metadata": {
                 "quantity": wo.quantity,
-                "due_date": wo.due_date
+                "part_number": wo.part_number
             }
         }
         for wo in work_orders
@@ -131,7 +128,7 @@ async def global_search(
             "type": "labor",
             "title": f"Labor Entry - {le.traveler.job_number if le.traveler else 'Unknown'}",
             "subtitle": le.description or "No description",
-            "description": f"Duration: {le.duration or 'N/A'} | {'Completed' if le.is_completed else 'In Progress'}",
+            "description": f"Hours: {le.hours_worked or 0} | {'Completed' if le.is_completed else 'In Progress'}",
             "url": f"/labor-tracking",
             "status": "completed" if le.is_completed else "in_progress",
             "metadata": {
@@ -202,8 +199,8 @@ async def search_travelers(
 
 @router.get("/autocomplete/job-numbers")
 async def autocomplete_job_numbers(
-    q: str = Query("", description="Search query - leave empty for all active jobs"),
-    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    q: str = Query("", description="Search query - leave empty for all jobs"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum results"),
     status: Optional[str] = Query(None, description="Filter by status (e.g., 'IN_PROGRESS', 'COMPLETED')"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -213,7 +210,7 @@ async def autocomplete_job_numbers(
     Returns matching job numbers with part description and customer name for context
     """
 
-    query = db.query(Traveler).filter(Traveler.is_active == True)
+    query = db.query(Traveler)
 
     if q:
         search_term = f"%{q}%"
@@ -323,22 +320,17 @@ async def autocomplete_work_centers(
 @router.get("/autocomplete/operators")
 async def autocomplete_operators(
     q: str = Query("", description="Search query - leave empty for all"),
-    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    limit: int = Query(50, ge=1, le=100, description="Maximum results"),
     active_only: bool = Query(True, description="Only return active users"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Autocomplete endpoint for operator names
-    Returns users with OPERATOR or ADMIN role
+    Returns all users from user management
     """
 
-    query = db.query(User).filter(
-        or_(
-            User.role == UserRole.OPERATOR,
-            User.role == UserRole.ADMIN
-        )
-    )
+    query = db.query(User)
 
     if active_only:
         query = query.filter(User.is_active == True)
@@ -370,3 +362,51 @@ async def autocomplete_operators(
         }
         for u in users
     ]
+
+
+@router.get("/autocomplete/work-centers-by-job")
+async def autocomplete_work_centers_by_job(
+    job_number: str = Query(..., description="Job number to fetch process steps for"),
+    q: str = Query("", description="Optional filter query"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get work center options from a traveler's process steps by job number.
+    Returns the process steps as work center dropdown options.
+    Also allows manual typing/scanning - results are filtered by q if provided.
+    """
+    from sqlalchemy.orm import joinedload
+
+    traveler = db.query(Traveler).options(
+        joinedload(Traveler.process_steps)
+    ).filter(
+        Traveler.job_number == job_number
+    ).first()
+
+    if not traveler:
+        return []
+
+    steps = sorted(traveler.process_steps, key=lambda s: s.step_number)
+
+    results = []
+    search_term = q.lower() if q else ""
+
+    for step in steps:
+        operation = step.operation or ""
+        wc_code = step.work_center_code or operation
+
+        # Filter by search query if provided
+        if search_term and search_term not in operation.lower() and search_term not in wc_code.lower():
+            continue
+
+        results.append({
+            "step_id": step.id,
+            "step_number": step.step_number,
+            "operation": operation,
+            "work_center_code": wc_code,
+            "label": f"{step.step_number}. {operation}",
+            "value": operation or wc_code
+        })
+
+    return results

@@ -8,10 +8,12 @@ from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
-# Primary: Neon cloud database
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_rDiAmTp5bv9J@ep-late-wildflower-ad4p3dpq-pooler.c-2.us-east-1.aws.neon.tech/nexus?sslmode=require")
-# Fallback: Local database
-DATABASE_URL_LOCAL = os.getenv("DATABASE_URL_LOCAL", "postgresql://stockpick_user:stockpick_pass@aci-database:5432/nexus")
+# Primary: Neon cloud database (set DATABASE_URL in environment)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required")
+# Fallback: Local database (optional)
+DATABASE_URL_LOCAL = os.getenv("DATABASE_URL_LOCAL")
 
 # Create primary engine (Neon cloud)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)

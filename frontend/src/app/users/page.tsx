@@ -27,19 +27,19 @@ function ConfirmModal({ isOpen, title, message, onConfirm, onCancel }: ConfirmMo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 transform transition-all">
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 transform transition-all">
         <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-            <ExclamationCircleIcon className="h-6 w-6 text-red-600" />
+          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <ExclamationCircleIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100">{title}</h3>
         </div>
-        <p className="text-gray-600 mb-6">{message}</p>
+        <p className="text-gray-600 dark:text-slate-400 mb-6">{message}</p>
         <div className="flex justify-end space-x-3">
           <button
             onClick={onCancel}
-            className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-all"
+            className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-300 rounded-lg font-semibold transition-all"
           >
             Cancel
           </button>
@@ -213,8 +213,11 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('nexus_token');
-      console.log('🔍 Fetching users...');
-      console.log('🔑 Token:', token ? 'Found' : 'Missing');
+      if (!token) {
+        showToast('Not authenticated. Please log in again.', 'error');
+        setLoading(false);
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/users/`, {
         headers: {
@@ -222,21 +225,16 @@ export default function UsersPage() {
         }
       });
 
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Users fetched:', data);
-        console.log('📊 Total users:', data.length);
         setUsers(data);
       } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to fetch users:', response.status, response.statusText);
-        console.error('❌ Error details:', errorText);
+        console.error('Failed to fetch users:', response.status, response.statusText);
+        showToast('Failed to load users', 'error');
       }
     } catch (error) {
-      console.error('❌ Exception while fetching users:', error);
+      console.error('Exception while fetching users:', error);
+      showToast('Failed to load users', 'error');
     } finally {
       setLoading(false);
     }
@@ -347,7 +345,7 @@ export default function UsersPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <div className="w-full space-y-4 p-4 lg:p-6">
           {/* Toast Notification */}
           {toast && (
@@ -368,7 +366,7 @@ export default function UsersPage() {
           />
 
           {/* Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
+          <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -380,7 +378,7 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">User Management</h1>
-                  <p className="text-sm text-blue-200/80 mt-0.5">Manage users, roles, and permissions ({filteredUsers.length} users)</p>
+                  <p className="text-sm text-teal-200/80 mt-0.5">Manage users, roles, and permissions ({filteredUsers.length} users)</p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
@@ -414,18 +412,18 @@ export default function UsersPage() {
                 onClick={() => setRoleFilter(role)}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   roleFilter === role
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 {role === 'ALL' ? 'All' : role === 'ADMIN' ? 'Admin' : 'Operator'}
                 <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                  roleFilter === role ? 'bg-white/20' : 'bg-gray-100'
+                  roleFilter === role ? 'bg-white/20' : 'bg-gray-100 dark:bg-slate-700'
                 }`}>{count}</span>
               </button>
             );
           })}
-          <div className="w-px h-8 bg-gray-300 mx-1" />
+          <div className="w-px h-8 bg-gray-300 dark:bg-slate-600 mx-1" />
           {(['ALL', 'ITAR', 'NON_ITAR'] as const).map((itar) => {
             const count = itar === 'ALL' ? users.length : itar === 'ITAR' ? users.filter(u => u.is_itar).length : users.filter(u => !u.is_itar).length;
             return (
@@ -435,12 +433,12 @@ export default function UsersPage() {
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   itarFilter === itar
                     ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 {itar === 'ALL' ? 'All ITAR' : itar === 'ITAR' ? 'ITAR' : 'Non-ITAR'}
                 <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                  itarFilter === itar ? 'bg-white/20' : 'bg-gray-100'
+                  itarFilter === itar ? 'bg-white/20' : 'bg-gray-100 dark:bg-slate-700'
                 }`}>{count}</span>
               </button>
             );
@@ -448,7 +446,7 @@ export default function UsersPage() {
         </div>
 
         {/* User Table */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
           {loading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -456,7 +454,7 @@ export default function UsersPage() {
           ) : (
             <>
             {/* Table Header + Pagination */}
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
               <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                 <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -471,20 +469,20 @@ export default function UsersPage() {
               </div>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block md:hidden">
-              <div className="divide-y divide-gray-200">
+            {/* Mobile Card View - Hidden: use desktop table on all devices */}
+            <div className="hidden">
+              <div className="divide-y divide-gray-200 dark:divide-slate-700">
                 {paginatedUsers.map((u) => (
-                  <div key={u.id} className="p-4 hover:bg-gray-50">
+                  <div key={u.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-700">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                           <UserCircleIcon className="h-6 w-6 text-white" />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{u.first_name}</div>
-                          <div className="text-xs text-gray-500">@{u.username}</div>
-                          <div className="text-xs text-gray-500">{u.email}</div>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{u.first_name}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">@{u.username}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">{u.email}</div>
                         </div>
                       </div>
                       <div className="flex space-x-1">
@@ -508,51 +506,51 @@ export default function UsersPage() {
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto relative">
+            <div className="block relative">
               <div className="absolute top-0 left-0 right-0 h-14 overflow-hidden pointer-events-none z-20">
                 <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
                 <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
               </div>
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
+                  <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
                     <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">User Information</th>
                     <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Role</th>
                     <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
                     {paginatedUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-4">
                             <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                               <UserCircleIcon className="h-6 w-6 text-white" />
                             </div>
                             <div>
-                              <div className="text-sm font-semibold text-gray-900">{u.first_name}</div>
-                              <div className="text-sm text-gray-500">@{u.username}</div>
-                              <div className="text-sm text-gray-500">{u.email}</div>
+                              <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{u.first_name}</div>
+                              <div className="text-sm text-gray-500 dark:text-slate-400">@{u.username}</div>
+                              <div className="text-sm text-gray-500 dark:text-slate-400">{u.email}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-wrap gap-1">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                              u.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
-                              'bg-green-100 text-green-800'
+                              u.role === 'ADMIN' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' :
+                              'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                             }`}>
                               {u.role}
                             </span>
                             {u.is_approver && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
                                 APPROVER
                               </span>
                             )}
                             {u.is_itar && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
                                 ITAR
                               </span>
                             )}
@@ -560,7 +558,7 @@ export default function UsersPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                            u.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            u.is_active ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                           }`}>
                             {u.is_active ? 'Active' : 'Inactive'}
                           </span>
@@ -569,14 +567,14 @@ export default function UsersPage() {
                           <div className="flex space-x-2">
                             <button
                               onClick={() => handleEdit(u)}
-                              className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-all"
+                              className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all"
                               title="Edit User"
                             >
                               <PencilIcon className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => openDeleteConfirm(u.id, u.first_name || u.username)}
-                              className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-all"
+                              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-all"
                               title="Delete User"
                             >
                               <TrashIcon className="h-4 w-4" />
@@ -591,9 +589,9 @@ export default function UsersPage() {
 
             {paginatedUsers.length === 0 && (
               <div className="text-center py-12">
-                <UserCircleIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-semibold text-gray-900">No users found</h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <UserCircleIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-slate-500" />
+                <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-100">No users found</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
                   {searchTerm ? 'Try a different search term.' : 'Get started by adding a new user.'}
                 </p>
               </div>
@@ -601,7 +599,7 @@ export default function UsersPage() {
 
             {/* Bottom Pagination */}
             {filteredUsers.length > 0 && (
-              <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+              <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
                 <div className="absolute inset-0 opacity-10 pointer-events-none">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                   <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -656,23 +654,23 @@ export default function UsersPage() {
 
           {/* Add/Edit User Modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-gradient-to-br from-blue-900/30 via-indigo-900/30 to-purple-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-gradient-to-br from-teal-900/30 via-emerald-900/30 to-green-900/30 dark:from-black/50 dark:via-black/60 dark:to-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-4 sm:p-6 md:p-8">
                 <div className="flex items-center justify-between mb-4 sm:mb-8">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-100">
                     {editingUser ? 'Edit User' : 'Create New User'}
                   </h2>
                   <button
                     onClick={handleCloseModal}
-                    className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-all"
+                    className="text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-all"
                   >
                     <XMarkIcon className="h-6 w-6" />
                   </button>
                 </div>
 
                 {error && (
-                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
                     {error}
                   </div>
                 )}
@@ -680,18 +678,18 @@ export default function UsersPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Username</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Username</label>
                       <input
                         type="text"
                         required
                         value={formData.username}
                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Email</label>
                       <div className="relative">
                         <input
                           type="email"
@@ -699,12 +697,12 @@ export default function UsersPage() {
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           onBlur={(e) => {
-                            const email = e.target.value;
-                            if (email && !email.includes('@')) {
+                            const email = e.target.value.trim();
+                            if (email && !email.includes('@') && !editingUser) {
                               setFormData({ ...formData, email: `${email}@americancircuits.com` });
                             }
                           }}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                          className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                           placeholder="username@americancircuits.com"
                         />
                       </div>
@@ -712,7 +710,7 @@ export default function UsersPage() {
 
                     {!editingUser && (
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Password</label>
                         <div className="flex space-x-2">
                           <div className="relative flex-1">
                             <input
@@ -720,13 +718,13 @@ export default function UsersPage() {
                               required
                               value={formData.password}
                               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                              className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                               placeholder="Enter password"
                             />
                             <button
                               type="button"
                               onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
                               title={showPassword ? "Hide password" : "Show password"}
                             >
                               {showPassword ? (
@@ -749,22 +747,22 @@ export default function UsersPage() {
                     )}
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">First Name</label>
                       <input
                         type="text"
                         required
                         value={formData.first_name}
                         onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Role</label>
                       <select
                         value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'OPERATOR' })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                       >
                         <option value="OPERATOR">Operator</option>
                         <option value="ADMIN">Admin</option>
@@ -773,8 +771,8 @@ export default function UsersPage() {
                   </div>
 
                   {/* Permissions */}
-                  <div className="bg-blue-50 p-4 rounded-lg space-y-3">
-                    <p className="text-sm font-semibold text-gray-700 mb-2">Permissions</p>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg space-y-3">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Permissions</p>
                     <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
@@ -783,7 +781,7 @@ export default function UsersPage() {
                         onChange={(e) => setFormData({ ...formData, is_approver: e.target.checked })}
                         className="mr-3 h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
                       />
-                      <span className="text-sm font-medium text-gray-700">Approver - Can approve travelers and changes</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Approver - Can approve travelers and changes</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -793,15 +791,15 @@ export default function UsersPage() {
                         onChange={(e) => setFormData({ ...formData, is_itar: e.target.checked })}
                         className="mr-3 h-4 w-4 text-amber-600 rounded focus:ring-amber-500"
                       />
-                      <span className="text-sm font-medium text-gray-700">ITAR Access - Can view travelers with &apos;M&apos; in job number</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300">ITAR Access - Can view travelers with &apos;M&apos; in job number</span>
                     </label>
                   </div>
 
-                  <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                  <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-slate-700">
                     <button
                       type="button"
                       onClick={handleCloseModal}
-                      className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold"
+                      className="px-6 py-3 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-all font-semibold"
                     >
                       Cancel
                     </button>
