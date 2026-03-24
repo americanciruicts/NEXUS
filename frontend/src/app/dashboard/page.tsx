@@ -481,19 +481,24 @@ export default function Dashboard() {
                           {getStatusBadge(t.status, t.percent_complete)}
                         </td>
                         <td className="px-2 py-2">
-                          <div className="flex items-center gap-1.5">
-                            <div className="relative w-9 h-9 flex-shrink-0">
-                              <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
-                                <circle cx="18" cy="18" r="15.5" fill="none"
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="relative w-11 h-11 flex-shrink-0">
+                              <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
+                                <circle cx="22" cy="22" r="19" fill="none" stroke="#e5e7eb" strokeWidth="2.5" className="dark:stroke-slate-600" />
+                                <circle cx="22" cy="22" r="19" fill="none"
                                   stroke={t.percent_complete >= 100 ? '#16a34a' : t.percent_complete >= 75 ? '#2563eb' : t.percent_complete >= 50 ? '#f59e0b' : t.percent_complete >= 25 ? '#f97316' : '#ef4444'}
                                   strokeWidth="2.5" strokeLinecap="round"
-                                  strokeDasharray={`${t.percent_complete * 0.9742} 97.42`}
+                                  strokeDasharray={`${t.percent_complete * 1.194} 119.4`}
                                 />
                               </svg>
-                              <span className="absolute inset-0 flex items-center justify-center text-xs font-extrabold text-gray-700 dark:text-slate-300">{t.percent_complete}%</span>
+                              <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-gray-700 dark:text-slate-300">{t.completed_steps}/{t.total_steps}</span>
                             </div>
-                            <div className="text-xs font-bold text-gray-700 dark:text-slate-300">{t.completed_steps}/{t.total_steps}</div>
+                            <span className="text-[11px] font-bold" style={{ color: t.percent_complete >= 100 ? '#16a34a' : t.percent_complete >= 75 ? '#2563eb' : t.percent_complete >= 50 ? '#f59e0b' : t.percent_complete >= 25 ? '#f97316' : '#ef4444' }}>{t.percent_complete}%</span>
+                            <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                              <div className="h-1.5 rounded-full transition-all duration-500"
+                                style={{ width: `${t.percent_complete}%`, backgroundColor: t.percent_complete >= 100 ? '#16a34a' : t.percent_complete >= 75 ? '#2563eb' : t.percent_complete >= 50 ? '#f59e0b' : '#f97316' }}
+                              />
+                            </div>
                           </div>
                         </td>
                         <td className="px-2 py-1.5">
