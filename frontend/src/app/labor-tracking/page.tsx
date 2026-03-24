@@ -2168,6 +2168,7 @@ export default function LaborTrackingPage() {
 
       {/* Manual Entry Modal (ADMIN only) */}
       <Modal
+        size="lg"
         isOpen={isManualEntryOpen}
         onClose={() => {
           setIsManualEntryOpen(false);
@@ -2389,6 +2390,7 @@ export default function LaborTrackingPage() {
 
       {/* Edit Entry Modal (ADMIN only) */}
       <Modal
+        size="lg"
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title="Edit Labor Entry"
