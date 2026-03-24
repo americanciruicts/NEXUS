@@ -772,7 +772,7 @@ function TravelersPage() {
                       {/* Step Progress Column */}
                       <td className="px-1 py-2">
                         <Link href={`/travelers/${traveler.dbId}`} className="block hover:opacity-80 transition-opacity cursor-pointer">
-                          <div className="flex flex-col items-center gap-0.5">
+                          <div className="flex flex-col items-center gap-1">
                             <div className="relative w-11 h-11 flex-shrink-0">
                               <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
                                 <circle cx="22" cy="22" r="19" fill="none" stroke="#e5e7eb" strokeWidth="2.5" className="dark:stroke-slate-600" />
@@ -784,6 +784,7 @@ function TravelersPage() {
                               </svg>
                               <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-gray-700 dark:text-slate-300">{traveler.completedSteps}/{traveler.totalSteps}</span>
                             </div>
+                            <span className="text-[11px] font-bold" style={{ color: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444' }}>{traveler.progress}%</span>
                             <div className="w-full min-w-0">
                               <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
                                 <div className="h-1.5 rounded-full transition-all duration-500"
@@ -931,7 +932,7 @@ function TravelersPage() {
                         <div>
                           {getStatusBadge(traveler.status, traveler.progress)}
                         </div>
-                        <div className="flex flex-col items-center gap-0.5">
+                        <div className="flex flex-col items-center gap-1">
                           <div className="relative w-11 h-11 flex-shrink-0">
                             <svg className="w-11 h-11 -rotate-90" viewBox="0 0 44 44">
                               <circle cx="22" cy="22" r="19" fill="none" stroke="#e5e7eb" strokeWidth="2.5" className="dark:stroke-slate-600" />
@@ -943,7 +944,8 @@ function TravelersPage() {
                             </svg>
                             <span className="absolute inset-0 flex items-center justify-center text-[11px] font-extrabold text-gray-700 dark:text-slate-300">{traveler.completedSteps}/{traveler.totalSteps}</span>
                           </div>
-                          <div className="w-full bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
+                          <span className="text-[11px] font-bold" style={{ color: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : traveler.progress >= 25 ? '#f97316' : '#ef4444' }}>{traveler.progress}%</span>
+                          <div className="w-16 bg-gray-100 dark:bg-slate-600 rounded-full h-1.5 overflow-hidden">
                             <div className="h-1.5 rounded-full transition-all duration-500"
                               style={{ width: `${traveler.progress}%`, backgroundColor: traveler.progress >= 100 ? '#16a34a' : traveler.progress >= 75 ? '#2563eb' : traveler.progress >= 50 ? '#f59e0b' : '#f97316' }}
                             />
