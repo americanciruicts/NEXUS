@@ -95,6 +95,8 @@ export default function LaborTrackingPage() {
     start_time: '',
     end_time: '',
     comment: '',
+    qty_completed: '' as string,
+    pauses: [] as Array<{ paused_at: string; resumed_at: string; comment: string }>,
   });
   const [manualJobWorkCenterOptions, setManualJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [editEntryData, setEditEntryData] = useState({
@@ -105,6 +107,9 @@ export default function LaborTrackingPage() {
     start_time: '',
     end_time: '',
     comment: '',
+    qty_completed: '' as string,
+    pause_logs: [] as PauseLogItem[],
+    newPause: { paused_at: '', resumed_at: '', comment: '' },
   });
 
   // Qty completed modal states
@@ -802,11 +807,25 @@ export default function LaborTrackingPage() {
           is_completed: true,     // CRITICAL: Mark as completed to prevent timer activation
           ...(manualEntryData.step_id ? { step_id: manualEntryData.step_id } : {}),
           ...(manualEntryData.operator_id ? { employee_id: manualEntryData.operator_id } : {}),
-          comment: manualEntryData.comment || null
+          comment: manualEntryData.comment || null,
+          qty_completed: manualEntryData.qty_completed ? parseInt(manualEntryData.qty_completed) : null
         })
       });
 
       if (response.ok) {
+        const createdEntry = await response.json();
+        // Create pause logs if any were added
+        if (manualEntryData.pauses.length > 0) {
+          for (const pause of manualEntryData.pauses) {
+            const pauseStart = convertLocalToISO(pause.paused_at);
+            const pauseEnd = convertLocalToISO(pause.resumed_at);
+            await fetch(`${API_BASE_URL}/labor/${createdEntry.id}/pauses`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ paused_at: pauseStart, resumed_at: pauseEnd, comment: pause.comment || null })
+            });
+          }
+        }
         toast.success('Manual entry created successfully!');
         setIsManualEntryOpen(false);
         setManualEntryData({
@@ -818,6 +837,8 @@ export default function LaborTrackingPage() {
           start_time: '',
           end_time: '',
           comment: '',
+          qty_completed: '',
+          pauses: [],
         });
         setManualJobWorkCenterOptions([]);
         // Reload entries but DO NOT check for active entry (to avoid timer activation)
@@ -849,7 +870,8 @@ export default function LaborTrackingPage() {
           start_time: editEntryData.start_time,
           end_time: editEntryData.end_time,
           description: `${editEntryData.work_center} - ${editEntryData.operator_name}`,
-          comment: editEntryData.comment || null
+          comment: editEntryData.comment || null,
+          qty_completed: editEntryData.qty_completed ? parseInt(editEntryData.qty_completed) : null
         })
       });
 
@@ -876,8 +898,61 @@ export default function LaborTrackingPage() {
       start_time: entry.start_time,
       end_time: entry.end_time || new Date().toISOString(),
       comment: entry.comment || '',
+      qty_completed: entry.qty_completed != null ? String(entry.qty_completed) : '',
+      pause_logs: entry.pause_logs || [],
+      newPause: { paused_at: '', resumed_at: '', comment: '' },
     });
     setIsEditModalOpen(true);
+  };
+
+  const addPauseToEditEntry = async () => {
+    const { paused_at, resumed_at } = editEntryData.newPause;
+    if (!paused_at || !resumed_at) {
+      toast.error('Please fill in both pause start and end times');
+      return;
+    }
+    const pauseStart = convertLocalToISO(paused_at);
+    const pauseEnd = convertLocalToISO(resumed_at);
+    if (new Date(pauseEnd) <= new Date(pauseStart)) {
+      toast.error('Resume time must be after pause time');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const res = await fetch(`${API_BASE_URL}/labor/${editEntryData.id}/pauses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ paused_at: pauseStart, resumed_at: pauseEnd, comment: editEntryData.newPause.comment || null })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEditEntryData(prev => ({
+          ...prev,
+          pause_logs: [...prev.pause_logs, { id: data.id, paused_at: pauseStart, resumed_at: pauseEnd, duration_seconds: data.duration_seconds, comment: prev.newPause.comment || undefined }],
+          newPause: { paused_at: '', resumed_at: '', comment: '' }
+        }));
+        fetchLaborEntries();
+        toast.success('Pause added');
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || 'Failed to add pause');
+      }
+    } catch { toast.error('Error adding pause'); }
+  };
+
+  const deletePauseFromEditEntry = async (pauseId: number) => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const res = await fetch(`${API_BASE_URL}/labor/${editEntryData.id}/pauses/${pauseId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setEditEntryData(prev => ({ ...prev, pause_logs: prev.pause_logs.filter(p => p.id !== pauseId) }));
+        fetchLaborEntries();
+        toast.success('Pause removed');
+      }
+    } catch { toast.error('Error removing pause'); }
   };
 
   // Helper function to convert datetime-local input to ISO string
@@ -2105,6 +2180,8 @@ export default function LaborTrackingPage() {
             start_time: '',
             end_time: '',
             comment: '',
+            qty_completed: '',
+            pauses: [],
           });
           setManualJobWorkCenterOptions([]);
         }}
@@ -2123,6 +2200,8 @@ export default function LaborTrackingPage() {
                   start_time: '',
                   end_time: '',
                   comment: '',
+                  qty_completed: '',
+                  pauses: [],
                 });
                 setManualJobWorkCenterOptions([]);
               }}
@@ -2240,6 +2319,61 @@ export default function LaborTrackingPage() {
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+              Qty Completed <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={manualEntryData.qty_completed}
+              onChange={(e) => setManualEntryData({ ...manualEntryData, qty_completed: e.target.value })}
+              placeholder="Enter quantity..."
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
+            />
+          </div>
+
+          {/* Pauses Section */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+              Pauses <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            {manualEntryData.pauses.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {manualEntryData.pauses.map((p, idx) => (
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-sm">
+                    <span className="text-gray-500 font-mono text-xs">#{idx + 1}</span>
+                    <span className="text-gray-700 dark:text-slate-300">{p.paused_at} → {p.resumed_at}</span>
+                    {p.comment && <span className="text-gray-500 text-xs truncate">({p.comment})</span>}
+                    <button onClick={() => setManualEntryData(prev => ({ ...prev, pauses: prev.pauses.filter((_, i) => i !== idx) }))} className="ml-auto text-red-500 hover:text-red-700 text-xs font-bold">Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input type="datetime-local" id="manual-pause-start" placeholder="Pause start" className="px-3 py-1.5 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-amber-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200" />
+              <input type="datetime-local" id="manual-pause-end" placeholder="Pause end" className="px-3 py-1.5 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-amber-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200" />
+              <div className="flex gap-2">
+                <input type="text" id="manual-pause-comment" placeholder="Comment (opt)" className="flex-1 px-3 py-1.5 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-amber-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const startEl = document.getElementById('manual-pause-start') as HTMLInputElement;
+                    const endEl = document.getElementById('manual-pause-end') as HTMLInputElement;
+                    const commentEl = document.getElementById('manual-pause-comment') as HTMLInputElement;
+                    if (!startEl?.value || !endEl?.value) { toast.error('Fill pause start and end'); return; }
+                    setManualEntryData(prev => ({
+                      ...prev,
+                      pauses: [...prev.pauses, { paused_at: startEl.value, resumed_at: endEl.value, comment: commentEl?.value || '' }]
+                    }));
+                    startEl.value = ''; endEl.value = ''; if (commentEl) commentEl.value = '';
+                  }}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold whitespace-nowrap"
+                >+ Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
               Comment <span className="text-gray-400 text-xs">(optional)</span>
             </label>
             <textarea
@@ -2335,6 +2469,69 @@ export default function LaborTrackingPage() {
                 onChange={(e) => setEditEntryData({ ...editEntryData, end_time: convertLocalToISO(e.target.value) })}
                 className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+              Qty Completed <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={editEntryData.qty_completed}
+              onChange={(e) => setEditEntryData({ ...editEntryData, qty_completed: e.target.value })}
+              placeholder="Enter quantity..."
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
+            />
+          </div>
+
+          {/* Existing Pauses */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+              Pauses {editEntryData.pause_logs.length > 0 && <span className="text-amber-600 text-xs">({editEntryData.pause_logs.length} total)</span>}
+            </label>
+            {editEntryData.pause_logs.length > 0 && (
+              <div className="space-y-1.5 mb-3">
+                {editEntryData.pause_logs.map((pl, idx) => (
+                  <div key={pl.id} className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-sm">
+                    <span className="text-gray-500 font-mono text-xs">#{idx + 1}</span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">{pl.duration_seconds ? formatSecondsCompact(pl.duration_seconds) : 'active'}</span>
+                    <span className="text-gray-500 dark:text-slate-400 text-xs">
+                      {new Date(pl.paused_at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
+                      {pl.resumed_at && ` → ${new Date(pl.resumed_at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}`}
+                    </span>
+                    {pl.comment && <span className="text-gray-400 text-xs truncate">({pl.comment})</span>}
+                    <button onClick={() => deletePauseFromEditEntry(pl.id)} className="ml-auto text-red-500 hover:text-red-700 text-xs font-bold" title="Remove pause">X</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input
+                type="datetime-local"
+                value={editEntryData.newPause.paused_at}
+                onChange={(e) => setEditEntryData(prev => ({ ...prev, newPause: { ...prev.newPause, paused_at: e.target.value } }))}
+                className="px-3 py-1.5 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-amber-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200"
+                placeholder="Pause start"
+              />
+              <input
+                type="datetime-local"
+                value={editEntryData.newPause.resumed_at}
+                onChange={(e) => setEditEntryData(prev => ({ ...prev, newPause: { ...prev.newPause, resumed_at: e.target.value } }))}
+                className="px-3 py-1.5 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-amber-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200"
+                placeholder="Pause end"
+              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editEntryData.newPause.comment}
+                  onChange={(e) => setEditEntryData(prev => ({ ...prev, newPause: { ...prev.newPause, comment: e.target.value } }))}
+                  placeholder="Comment (opt)"
+                  className="flex-1 px-3 py-1.5 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-amber-500 focus:outline-none dark:bg-slate-700 dark:text-slate-200"
+                />
+                <button type="button" onClick={addPauseToEditEntry} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold whitespace-nowrap">+ Add</button>
+              </div>
             </div>
           </div>
 

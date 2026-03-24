@@ -63,6 +63,7 @@ class LaborEntryCreate(BaseModel):
     is_completed: Optional[bool] = None
     employee_id: Optional[int] = None  # Admin can specify a different employee
     comment: Optional[str] = None
+    qty_completed: Optional[int] = None
 
 class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
@@ -248,6 +249,7 @@ async def start_labor_entry(
         description=labor_data.description,
         comment=labor_data.comment,
         is_completed=labor_data.is_completed if labor_data.is_completed is not None else False,
+        qty_completed=labor_data.qty_completed,
         work_center=work_center_name,
         sequence_number=sequence_num
     )
@@ -501,6 +503,82 @@ async def delete_labor_entry(
     )
 
     return {"message": "Labor entry deleted successfully", "id": labor_id}
+
+
+class AdminPauseLogCreate(BaseModel):
+    paused_at: datetime
+    resumed_at: datetime
+    comment: Optional[str] = None
+
+
+@router.post("/{labor_id}/pauses")
+async def add_pause_log(
+    labor_id: int,
+    pause_data: AdminPauseLogCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin: Add a pause log to a labor entry and recalculate hours"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    labor_entry = db.query(LaborEntry).filter(LaborEntry.id == labor_id).first()
+    if not labor_entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Labor entry not found")
+
+    if pause_data.resumed_at <= pause_data.paused_at:
+        raise HTTPException(status_code=400, detail="Resumed time must be after paused time")
+
+    duration_seconds = (pause_data.resumed_at - pause_data.paused_at).total_seconds()
+
+    pause_log = PauseLog(
+        labor_entry_id=labor_id,
+        paused_at=pause_data.paused_at,
+        resumed_at=pause_data.resumed_at,
+        duration_seconds=round(duration_seconds, 1),
+        comment=pause_data.comment
+    )
+    db.add(pause_log)
+
+    # Recalculate hours_worked subtracting all pauses
+    if labor_entry.start_time and labor_entry.end_time:
+        total_seconds = (labor_entry.end_time - labor_entry.start_time).total_seconds()
+        all_pauses = db.query(PauseLog).filter(PauseLog.labor_entry_id == labor_id).all()
+        total_pause_secs = sum(p.duration_seconds or 0 for p in all_pauses) + duration_seconds
+        labor_entry.hours_worked = round(max(total_seconds - total_pause_secs, 0) / 3600, 2)
+
+    db.commit()
+    return {"message": "Pause added", "id": pause_log.id, "duration_seconds": pause_log.duration_seconds}
+
+
+@router.delete("/{labor_id}/pauses/{pause_id}")
+async def delete_pause_log(
+    labor_id: int,
+    pause_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin: Delete a pause log and recalculate hours"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+
+    pause_log = db.query(PauseLog).filter(PauseLog.id == pause_id, PauseLog.labor_entry_id == labor_id).first()
+    if not pause_log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pause log not found")
+
+    db.delete(pause_log)
+
+    # Recalculate hours_worked
+    labor_entry = db.query(LaborEntry).filter(LaborEntry.id == labor_id).first()
+    if labor_entry and labor_entry.start_time and labor_entry.end_time:
+        total_seconds = (labor_entry.end_time - labor_entry.start_time).total_seconds()
+        remaining_pauses = db.query(PauseLog).filter(PauseLog.labor_entry_id == labor_id).all()
+        total_pause_secs = sum(p.duration_seconds or 0 for p in remaining_pauses)
+        labor_entry.hours_worked = round(max(total_seconds - total_pause_secs, 0) / 3600, 2)
+
+    db.commit()
+    return {"message": "Pause deleted", "id": pause_id}
+
 
 @router.get("/", response_model=List[LaborEntryResponse])
 @router.get("", response_model=List[LaborEntryResponse], include_in_schema=False)
