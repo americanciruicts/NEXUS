@@ -311,6 +311,9 @@ async def update_labor_entry(
             detail="Not authorized to update this labor entry"
         )
 
+    # Capture original state before updates (for notification logic)
+    had_end_time_before = labor_entry.end_time is not None
+
     # Handle resume (clear pause_time)
     if labor_data.clear_pause:
         labor_entry.pause_time = None
@@ -364,12 +367,12 @@ async def update_labor_entry(
     labor_entry.job_number = traveler.job_number if traveler else None
 
     # Create notification for all admins
-    if labor_data.end_time:
-        action = "stopped"
-    elif labor_data.pause_time:
+    if labor_data.pause_time:
         action = "paused"
     elif labor_data.clear_pause:
         action = "resumed"
+    elif labor_data.end_time and not had_end_time_before:
+        action = "stopped"
     else:
         action = "updated"
     create_notification_for_admins(
