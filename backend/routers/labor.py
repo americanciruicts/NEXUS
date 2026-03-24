@@ -5,12 +5,22 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 
 from database import get_db
-from models import User, LaborEntry, Traveler, ProcessStep, NotificationType, WorkCenter, TravelerStatus, UserRole
+from models import User, LaborEntry, Traveler, ProcessStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
 
 router = APIRouter()
 
+
+def get_pause_data(db: Session, entry_id: int):
+    """Get pause logs, total pause seconds, and count for a labor entry."""
+    logs = db.query(PauseLog).filter(PauseLog.labor_entry_id == entry_id).order_by(PauseLog.paused_at).all()
+    total_seconds = sum(l.duration_seconds or 0 for l in logs)
+    return {
+        "pause_logs": [PauseLogResponse.model_validate(l) for l in logs],
+        "total_pause_seconds": round(total_seconds, 1) if logs else None,
+        "pause_count": len(logs) if logs else None,
+    }
 
 def update_step_and_traveler_progress(db: Session, labor_entry: LaborEntry):
     """When a labor entry is completed, mark its linked process step as completed
@@ -57,11 +67,23 @@ class LaborEntryCreate(BaseModel):
 class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
     clear_pause: Optional[bool] = None  # Set to true to resume (clear pause_time)
+    pause_comment: Optional[str] = None  # Comment for pause/resume
     end_time: Optional[datetime] = None
     description: Optional[str] = None
     is_completed: Optional[bool] = None
     qty_completed: Optional[int] = None
     comment: Optional[str] = None
+    start_time: Optional[datetime] = None
+
+class PauseLogResponse(BaseModel):
+    id: int
+    paused_at: datetime
+    resumed_at: Optional[datetime] = None
+    duration_seconds: Optional[float] = None
+    comment: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 class LaborEntryResponse(BaseModel):
     id: int
@@ -86,6 +108,10 @@ class LaborEntryResponse(BaseModel):
     po_number: Optional[str] = None
     part_number: Optional[str] = None
     quantity: Optional[int] = None
+    # Pause history
+    pause_logs: Optional[List[PauseLogResponse]] = None
+    total_pause_seconds: Optional[float] = None
+    pause_count: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -314,9 +340,29 @@ async def update_labor_entry(
     # Capture original state before updates (for notification logic)
     had_end_time_before = labor_entry.end_time is not None
 
-    # Handle resume (clear pause_time)
+    # Log pause event
+    if labor_data.pause_time:
+        pause_log = PauseLog(
+            labor_entry_id=labor_entry.id,
+            paused_at=labor_data.pause_time,
+            comment=labor_data.pause_comment
+        )
+        db.add(pause_log)
+
+    # Handle resume (clear pause_time) and close the open pause log
     if labor_data.clear_pause:
         labor_entry.pause_time = None
+        # Find the open pause log (no resumed_at) and close it
+        open_pause = db.query(PauseLog).filter(
+            PauseLog.labor_entry_id == labor_entry.id,
+            PauseLog.resumed_at.is_(None)
+        ).order_by(PauseLog.paused_at.desc()).first()
+        if open_pause:
+            now = datetime.now(open_pause.paused_at.tzinfo) if open_pause.paused_at.tzinfo else datetime.utcnow()
+            open_pause.resumed_at = now
+            open_pause.duration_seconds = (now - open_pause.paused_at).total_seconds()
+            if labor_data.pause_comment:
+                open_pause.comment = labor_data.pause_comment
 
     # Update fields
     update_data = labor_data.model_dump(exclude_unset=True, exclude={'clear_pause'})
@@ -342,7 +388,12 @@ async def update_labor_entry(
                 detail=f"Calculated time is negative. End time must be after start time."
             )
 
-        hours_worked = round(total_seconds / 3600, 2)
+        # Subtract total pause duration from worked time
+        pause_logs = db.query(PauseLog).filter(PauseLog.labor_entry_id == labor_entry.id).all()
+        total_pause_secs = sum(l.duration_seconds or 0 for l in pause_logs)
+        effective_seconds = max(total_seconds - total_pause_secs, 0)
+
+        hours_worked = round(effective_seconds / 3600, 2)
 
         # Final validation that hours are not negative
         if hours_worked < 0:
@@ -385,7 +436,28 @@ async def update_labor_entry(
         created_by_username=current_user.username
     )
 
-    return labor_entry
+    # Build response with pause data
+    response_dict = {
+        "id": labor_entry.id,
+        "traveler_id": labor_entry.traveler_id,
+        "step_id": labor_entry.step_id,
+        "employee_id": labor_entry.employee_id,
+        "employee_name": labor_entry.employee_name,
+        "job_number": labor_entry.job_number,
+        "start_time": labor_entry.start_time,
+        "pause_time": labor_entry.pause_time,
+        "end_time": labor_entry.end_time,
+        "hours_worked": labor_entry.hours_worked,
+        "description": labor_entry.description,
+        "is_completed": labor_entry.is_completed,
+        "work_center": labor_entry.work_center,
+        "sequence_number": labor_entry.sequence_number,
+        "qty_completed": labor_entry.qty_completed,
+        "comment": labor_entry.comment,
+        "created_at": labor_entry.created_at,
+        **get_pause_data(db, labor_entry.id)
+    }
+    return LaborEntryResponse(**response_dict)
 
 @router.delete("/{labor_id}")
 async def delete_labor_entry(
@@ -473,7 +545,8 @@ async def get_all_labor_entries(
             "part_number": traveler.part_number if traveler else None,
             "quantity": traveler.quantity if traveler else None,
             "qty_completed": entry.qty_completed,
-            "comment": entry.comment
+            "comment": entry.comment,
+            **get_pause_data(db, entry.id)
         }
         result.append(LaborEntryResponse(**entry_dict))
 
@@ -518,7 +591,8 @@ async def get_traveler_labor_entries(
             "sequence_number": entry.sequence_number,
             "qty_completed": entry.qty_completed,
             "comment": entry.comment,
-            "created_at": entry.created_at
+            "created_at": entry.created_at,
+            **get_pause_data(db, entry.id)
         }
         result.append(LaborEntryResponse(**entry_dict))
 
@@ -578,7 +652,8 @@ async def get_my_labor_entries(
             "work_order": traveler.work_order_number if traveler else None,
             "po_number": traveler.po_number if traveler else None,
             "part_number": traveler.part_number if traveler else None,
-            "quantity": traveler.quantity if traveler else None
+            "quantity": traveler.quantity if traveler else None,
+            **get_pause_data(db, entry.id)
         }
         result.append(LaborEntryResponse(**entry_dict))
 
@@ -615,7 +690,8 @@ async def get_active_labor_entry(
         "work_center": active_entry.work_center,
         "sequence_number": active_entry.sequence_number,
         "comment": active_entry.comment,
-        "created_at": active_entry.created_at
+        "created_at": active_entry.created_at,
+        **get_pause_data(db, active_entry.id)
     }
 
     return LaborEntryResponse(**entry_dict)

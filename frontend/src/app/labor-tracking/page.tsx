@@ -30,6 +30,17 @@ interface LaborEntry {
   sequence_number?: number;
   qty_completed?: number;
   comment?: string;
+  pause_logs?: PauseLogItem[];
+  total_pause_seconds?: number;
+  pause_count?: number;
+}
+
+interface PauseLogItem {
+  id: number;
+  paused_at: string;
+  resumed_at?: string;
+  duration_seconds?: number;
+  comment?: string;
 }
 
 export default function LaborTrackingPage() {
@@ -61,6 +72,9 @@ export default function LaborTrackingPage() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [pauseTime, setPauseTime] = useState<Date | null>(null);
   const [activeEntryId, setActiveEntryId] = useState<number | null>(null);
+  const [showPauseCommentModal, setShowPauseCommentModal] = useState(false);
+  const [pauseComment, setPauseComment] = useState('');
+  const [pauseAction, setPauseAction] = useState<'pause' | 'resume'>('pause');
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Modal states
@@ -502,12 +516,18 @@ export default function LaborTrackingPage() {
     }
   };
 
-  const pauseTimer = async () => {
+  const pauseTimer = () => {
     if (!activeEntryId) {
       toast.error('No active timer found');
       return;
     }
+    setPauseAction('pause');
+    setPauseComment('');
+    setShowPauseCommentModal(true);
+  };
 
+  const executePause = async (comment?: string) => {
+    if (!activeEntryId) return;
     try {
       const token = localStorage.getItem('nexus_token');
       const currentPauseTime = new Date();
@@ -519,7 +539,8 @@ export default function LaborTrackingPage() {
           'Authorization': `Bearer ${token || 'mock-token'}`
         },
         body: JSON.stringify({
-          pause_time: currentPauseTime.toISOString()
+          pause_time: currentPauseTime.toISOString(),
+          pause_comment: comment || null
         })
       });
 
@@ -527,8 +548,6 @@ export default function LaborTrackingPage() {
         setIsPaused(true);
         setPauseTime(currentPauseTime);
         toast.info('Timer paused!');
-
-        // Reload entries to update table
         fetchLaborEntries();
       } else {
         const error = await response.json();
@@ -540,12 +559,17 @@ export default function LaborTrackingPage() {
     }
   };
 
-  const resumeTimer = async () => {
+  const resumeTimer = () => {
     if (!activeEntryId) {
       toast.error('No active timer found');
       return;
     }
+    // Resume directly without comment modal
+    executeResume();
+  };
 
+  const executeResume = async (comment?: string) => {
+    if (!activeEntryId) return;
     try {
       const token = localStorage.getItem('nexus_token');
       const response = await fetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
@@ -555,7 +579,8 @@ export default function LaborTrackingPage() {
           'Authorization': `Bearer ${token || 'mock-token'}`
         },
         body: JSON.stringify({
-          clear_pause: true
+          clear_pause: true,
+          pause_comment: comment || null
         })
       });
 
@@ -563,6 +588,7 @@ export default function LaborTrackingPage() {
         setIsPaused(false);
         setPauseTime(null);
         toast.info('Timer resumed!');
+        fetchLaborEntries();
       } else {
         const error = await response.json();
         toast.error(`Error: ${error.detail || 'Failed to resume timer'}`);
@@ -1068,7 +1094,7 @@ export default function LaborTrackingPage() {
               )}
 
               {/* Input Form */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+              <div className="relative z-[50] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 <div>
                   <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Job Number <span className="text-red-500">*</span>
@@ -1247,7 +1273,7 @@ export default function LaborTrackingPage() {
             const groups = Object.values(jobWorkCenterGroups);
 
             return groups.length > 0 ? (
-              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+              <div className="relative z-[10] bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-3">
                 <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-2 flex items-center">
                   <svg className="w-4 h-4 mr-1.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -1508,9 +1534,11 @@ export default function LaborTrackingPage() {
                             <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">{new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false })}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 dark:text-slate-400">Pause Time</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Pauses</p>
                             <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">
-                              {entry.pause_time ? new Date(entry.pause_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
+                              {(entry.pause_count || 0) > 0
+                                ? `${entry.pause_count}x (${formatHoursDualCompact((entry.total_pause_seconds || 0) / 3600)})`
+                                : '0'}
                             </p>
                           </div>
                           <div>
@@ -1587,13 +1615,10 @@ export default function LaborTrackingPage() {
                       const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || 'N/A';
                       const sequenceDisplay = entry.sequence_number ? `${entry.sequence_number}. ${workCenter}` : workCenter;
 
-                      // Calculate pause duration if available
-                      let pauseDuration = 0;
-                      if (entry.pause_time && entry.end_time) {
-                        const pauseStart = new Date(entry.pause_time).getTime();
-                        const endTime = new Date(entry.end_time).getTime();
-                        pauseDuration = (endTime - pauseStart) / (1000 * 60 * 60); // Convert to hours
-                      }
+                      // Pause data from API
+                      const pauseCount = entry.pause_count || 0;
+                      const totalPauseSecs = entry.total_pause_seconds || 0;
+                      const totalPauseHours = totalPauseSecs / 3600;
 
                       const hasComment = !!entry.comment;
                       const totalCols = 10 + (user?.role === 'ADMIN' ? 2 : 0);
@@ -1638,12 +1663,15 @@ export default function LaborTrackingPage() {
                             {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
                           </td>
                           <td className={`px-4 py-3 whitespace-nowrap text-sm ${hasComment ? 'pb-1' : ''}`}>
-                            {pauseDuration > 0 ? (
-                              <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-md font-semibold text-xs">
-                                {formatHoursDualCompact(pauseDuration)}
-                              </span>
+                            {pauseCount > 0 ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-md font-semibold text-xs">
+                                  {formatHoursDualCompact(totalPauseHours)}
+                                </span>
+                                <span className="text-[10px] text-gray-500 dark:text-slate-400">{pauseCount}x paused</span>
+                              </div>
                             ) : (
-                              <span className="text-gray-400 dark:text-slate-500">-</span>
+                              <span className="text-xs text-gray-400 dark:text-slate-500">0</span>
                             )}
                           </td>
                           <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 ${hasComment ? 'pb-1' : ''}`}>
@@ -1898,6 +1926,52 @@ export default function LaborTrackingPage() {
           </div>
         </Modal>
       )}
+
+      {/* Pause Comment Modal (optional comment) */}
+      <Modal
+        isOpen={showPauseCommentModal}
+        onClose={() => { setShowPauseCommentModal(false); setPauseComment(''); }}
+        title={pauseAction === 'pause' ? 'Pause Timer' : 'Resume Timer'}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-slate-400">
+            {pauseAction === 'pause' ? 'Add an optional comment for this pause:' : 'Add an optional comment:'}
+          </p>
+          <textarea
+            value={pauseComment}
+            onChange={(e) => setPauseComment(e.target.value)}
+            placeholder="Optional comment (e.g., lunch break, waiting for parts...)"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 text-sm resize-none"
+            rows={2}
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => { setShowPauseCommentModal(false); setPauseComment(''); }}
+              className="px-4 py-2 text-sm font-semibold text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setShowPauseCommentModal(false);
+                if (pauseAction === 'pause') {
+                  executePause(pauseComment);
+                } else {
+                  executeResume(pauseComment);
+                }
+                setPauseComment('');
+              }}
+              className={`px-4 py-2 text-sm font-semibold text-white rounded-lg ${
+                pauseAction === 'pause'
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {pauseAction === 'pause' ? 'Pause' : 'Resume'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Qty Completed Modal */}
       <Modal

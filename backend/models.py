@@ -215,6 +215,19 @@ class LaborEntry(Base):
     # Relationships
     traveler = relationship("Traveler", back_populates="labor_entries")
     employee = relationship("User", back_populates="labor_entries")
+    pause_logs = relationship("PauseLog", back_populates="labor_entry", cascade="all, delete-orphan", order_by="PauseLog.paused_at")
+
+class PauseLog(Base):
+    __tablename__ = "pause_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    labor_entry_id = Column(Integer, ForeignKey("labor_entries.id", ondelete="CASCADE"), nullable=False)
+    paused_at = Column(DateTime(timezone=True), nullable=False)
+    resumed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Float, nullable=True)  # Calculated on resume
+    comment = Column(Text, nullable=True)
+
+    labor_entry = relationship("LaborEntry", back_populates="pause_logs")
 
 class Approval(Base):
     __tablename__ = "approvals"
