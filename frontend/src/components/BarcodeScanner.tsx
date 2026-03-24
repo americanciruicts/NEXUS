@@ -57,13 +57,13 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Scan Traveler Code</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-slate-100">Scan Traveler Code</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
           >
             <XMarkIcon className="h-6 w-6" />
           </button>
@@ -76,8 +76,8 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
               onClick={() => setScanMode('manual')}
               className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md border ${
                 scanMode === 'manual'
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'
               }`}
             >
               <DocumentTextIcon className="h-5 w-5" />
@@ -87,8 +87,8 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
               onClick={startCameraScanning}
               className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md border ${
                 scanMode === 'camera'
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600'
               }`}
             >
               <QrCodeIcon className="h-5 w-5" />
@@ -98,7 +98,7 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
 
           {scanMode === 'manual' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                 Enter Barcode or QR Code
               </label>
               <textarea
@@ -106,9 +106,9 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
                 onChange={(e) => setManualInput(e.target.value)}
                 rows={3}
                 placeholder="Paste or type the barcode/QR code data here..."
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-300 dark:border-slate-600 px-3 py-2 focus:border-blue-500 focus:outline-none bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                 Supports: NEX-XXXXXX-JOBNUMBER or NEXUS|ID|JOB|PART|AC formats
               </p>
             </div>
@@ -116,9 +116,9 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
 
           {scanMode === 'camera' && (
             <div className="text-center py-8">
-              <QrCodeIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">Camera scanning would appear here</p>
-              <p className="text-sm text-gray-400 mt-2">
+              <QrCodeIcon className="h-16 w-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-slate-400">Camera scanning would appear here</p>
+              <p className="text-sm text-gray-400 dark:text-slate-500 mt-2">
                 In a real implementation, this would show the camera view
               </p>
             </div>
@@ -128,7 +128,7 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
           <div className="flex space-x-3 pt-4">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
             >
               Cancel
             </button>
@@ -144,9 +144,9 @@ export default function BarcodeScanner({ onScanResult, onClose }: BarcodeScanner
           </div>
 
           {/* Examples */}
-          <div className="mt-6 p-3 bg-gray-50 rounded-md">
-            <p className="text-xs font-medium text-gray-700 mb-2">Example formats:</p>
-            <div className="space-y-1 text-xs text-gray-600">
+          <div className="mt-6 p-3 bg-gray-50 dark:bg-slate-900 rounded-md">
+            <p className="text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">Example formats:</p>
+            <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
               <div><strong>Barcode:</strong> NEX-000001-8414L</div>
               <div><strong>QR Code:</strong> NEXUS|1|8414L|METSHIFT|AC</div>
             </div>

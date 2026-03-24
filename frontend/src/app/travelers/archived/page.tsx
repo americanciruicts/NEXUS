@@ -162,8 +162,8 @@ export default function ArchivedTravelersPage() {
   if (loading) {
     return (
       <Layout fullWidth>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 p-6 flex items-center justify-center">
-          <div className="text-xl text-gray-600">Loading archived travelers...</div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-6 flex items-center justify-center">
+          <div className="text-xl text-gray-600 dark:text-slate-400">Loading archived travelers...</div>
         </div>
       </Layout>
     );
@@ -171,9 +171,9 @@ export default function ArchivedTravelersPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 p-3 sm:p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-3 sm:p-4 md:p-6">
         {/* Header */}
-        <div className="mb-4 sm:mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+        <div className="mb-4 sm:mb-6 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -185,7 +185,7 @@ export default function ArchivedTravelersPage() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Archived Travelers</h1>
-                <p className="text-sm text-blue-200/80 mt-0.5">View and manage archived production travelers</p>
+                <p className="text-sm text-teal-200/80 mt-0.5">View and manage archived production travelers</p>
               </div>
             </div>
             <div className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2 sm:px-6 sm:py-4 border border-white/20 text-center">
@@ -196,7 +196,7 @@ export default function ArchivedTravelersPage() {
         </div>
 
         {/* Actions Bar */}
-        <div className="mb-4 sm:mb-6 bg-white rounded-xl shadow-lg border-2 border-gray-200 p-3 sm:p-4">
+        <div className="mb-4 sm:mb-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-slate-700 p-3 sm:p-4">
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             {/* Back Button */}
             <Link
@@ -214,7 +214,7 @@ export default function ArchivedTravelersPage() {
                 placeholder="Search archived travelers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-gray-500 focus:ring-2 focus:ring-gray-200 text-sm sm:text-base"
+                className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-gray-500 focus:ring-2 focus:ring-gray-200 text-sm sm:text-base bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
             </div>
 
@@ -253,20 +253,20 @@ export default function ArchivedTravelersPage() {
 
         {/* Archived Travelers List */}
         {filteredTravelers.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center border-2 border-gray-200">
-            <ArchiveBoxIcon className="h-24 w-24 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Archived Travelers</h3>
-            <p className="text-gray-600">Archived travelers will appear here</p>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-12 text-center border-2 border-gray-200 dark:border-slate-700">
+            <ArchiveBoxIcon className="h-24 w-24 mx-auto mb-4 text-gray-300 dark:text-slate-600" />
+            <h3 className="text-2xl font-bold text-gray-800 dark:text-slate-200 mb-2">No Archived Travelers</h3>
+            <p className="text-gray-600 dark:text-slate-400">Archived travelers will appear here</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {filteredTravelers.map((traveler) => (
               <div
                 key={traveler.id}
-                className={`bg-white rounded-xl shadow-lg border-2 ${
+                className={`bg-white dark:bg-slate-800 rounded-xl shadow-lg border-2 ${
                   selectedTravelers.includes(traveler.id)
-                    ? 'border-gray-500 ring-4 ring-gray-200'
-                    : 'border-gray-200'
+                    ? 'border-gray-500 dark:border-slate-400 ring-4 ring-gray-200 dark:ring-slate-700'
+                    : 'border-gray-200 dark:border-slate-700'
                 } p-6 transition-all hover:shadow-xl`}
               >
                 <div className="flex items-start space-x-4">
@@ -283,30 +283,30 @@ export default function ArchivedTravelersPage() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center space-x-3 mb-3">
-                          <h3 className="text-2xl font-bold text-gray-900">{traveler.job_number}</h3>
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border-2 border-gray-300 bg-gradient-to-r from-gray-50 to-slate-50 text-gray-800 shadow-sm">
+                          <h3 className="text-2xl font-bold text-gray-900 dark:text-slate-100">{traveler.job_number}</h3>
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border-2 border-gray-300 dark:border-slate-600 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-slate-700 dark:to-slate-700 text-gray-800 dark:text-slate-300 shadow-sm">
                             ARCHIVED
                           </span>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div>
-                            <p className="text-gray-500 font-semibold">Part Number</p>
-                            <p className="text-gray-900 font-bold">{traveler.part_number}</p>
+                            <p className="text-gray-500 dark:text-slate-400 font-semibold">Part Number</p>
+                            <p className="text-gray-900 dark:text-slate-100 font-bold">{traveler.part_number}</p>
                           </div>
                           <div>
-                            <p className="text-gray-500 font-semibold">Description</p>
-                            <p className="text-gray-900">{traveler.part_description}</p>
+                            <p className="text-gray-500 dark:text-slate-400 font-semibold">Description</p>
+                            <p className="text-gray-900 dark:text-slate-100">{traveler.part_description}</p>
                           </div>
                           <div>
-                            <p className="text-gray-500 font-semibold">Quantity</p>
-                            <p className="text-gray-900 font-bold">{traveler.quantity}</p>
+                            <p className="text-gray-500 dark:text-slate-400 font-semibold">Quantity</p>
+                            <p className="text-gray-900 dark:text-slate-100 font-bold">{traveler.quantity}</p>
                           </div>
                           <div>
-                            <p className="text-gray-500 font-semibold">Revision</p>
-                            <p className="text-gray-900 font-bold">{traveler.revision}</p>
+                            <p className="text-gray-500 dark:text-slate-400 font-semibold">Revision</p>
+                            <p className="text-gray-900 dark:text-slate-100 font-bold">{traveler.revision}</p>
                           </div>
                         </div>
-                        <div className="mt-3 text-xs text-gray-500">
+                        <div className="mt-3 text-xs text-gray-500 dark:text-slate-400">
                           <p>Archived: {new Date(traveler.updated_at).toLocaleString()}</p>
                         </div>
                       </div>
@@ -314,7 +314,7 @@ export default function ArchivedTravelersPage() {
                       {/* View Button */}
                       <Link
                         href={`/travelers/${traveler.id}`}
-                        className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                        className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
                         title="View"
                       >
                         <EyeIcon className="h-5 w-5" />
@@ -330,14 +330,14 @@ export default function ArchivedTravelersPage() {
 
       {/* Confirm Modal */}
       {confirmModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmModal.title}</h3>
-            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-600 dark:text-slate-400 mb-6">{confirmModal.message}</p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold"
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold"
               >
                 Cancel
               </button>

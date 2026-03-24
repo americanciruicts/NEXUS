@@ -46,7 +46,7 @@ export default function CloneTravelerPage() {
   if (isLoading) {
     return (
       <Layout fullWidth>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
           <div className="w-full p-4 lg:p-6">
             <div className="flex items-center justify-center h-64">
               <div className="text-xl text-gray-600">Loading traveler...</div>
@@ -60,7 +60,7 @@ export default function CloneTravelerPage() {
   if (!travelerData) {
     return (
       <Layout fullWidth>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
           <div className="w-full p-4 lg:p-6">
             <div className="flex items-center justify-center h-64">
               <div className="text-xl text-red-600">Traveler not found</div>
@@ -73,10 +73,10 @@ export default function CloneTravelerPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <div className="w-full p-4 lg:p-6">
           {/* Header */}
-          <div className="mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
+          <div className="mb-6 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -90,7 +90,7 @@ export default function CloneTravelerPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Clone Traveler</h1>
-                  <p className="text-sm text-blue-200/80 mt-0.5">Creating a new traveler based on {travelerId} with incremented revision</p>
+                  <p className="text-sm text-teal-200/80 mt-0.5">Creating a new traveler based on {travelerId} with incremented revision</p>
                 </div>
               </div>
               <button

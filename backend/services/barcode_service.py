@@ -11,8 +11,7 @@ class BarcodeService:
 
     @staticmethod
     def generate_traveler_barcode(traveler_id: int, job_number: str, work_order: str = "") -> str:
-        """Generate a barcode for a traveler - only job number"""
-        # Create barcode with only job number
+        """Generate a barcode for a traveler - shows job number only"""
         barcode_data = job_number
 
         try:
@@ -130,8 +129,14 @@ class BarcodeService:
             operation: Operation description
             work_order: Work order number
         """
-        # Simplified format: QR code only contains work center name for easy scanning
+        # Strip traveler type prefix from work center code to get clean name
+        # e.g. PCB_ASSEMBLY_ENGINEERING -> ENGINEERING, PCB_SMT_TOP -> SMT TOP, CABLE_CUTTING -> CUTTING
+        prefixes = ['PCB_ASSEMBLY_', 'PCB_', 'CABLE_', 'CABLES_', 'PURCHASING_']
         qr_string = work_center
+        for prefix in prefixes:
+            if work_center.startswith(prefix):
+                qr_string = work_center[len(prefix):].replace('_', ' ')
+                break
 
         try:
             # Generate smaller QR code with higher error correction for better scannability

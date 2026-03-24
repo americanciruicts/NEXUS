@@ -17,18 +17,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    // Always use light theme
-    setTheme('light');
-    document.documentElement.classList.remove('dark');
+    try {
+      const stored = localStorage.getItem('nexus_theme') as Theme | null;
+      if (stored === 'dark' || stored === 'light') {
+        setTheme(stored);
+        document.documentElement.classList.toggle('dark', stored === 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {
+      document.documentElement.classList.remove('dark');
+    }
   }, []);
 
   const toggleTheme = () => {
-    // Always keep light theme
-    setTheme('light');
-    document.documentElement.classList.remove('dark');
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    document.documentElement.classList.toggle('dark', next === 'dark');
+    try {
+      localStorage.setItem('nexus_theme', next);
+    } catch {
+      // ignore
+    }
   };
 
-  // Prevent flash of unstyled content
   if (!mounted) {
     return <>{children}</>;
   }

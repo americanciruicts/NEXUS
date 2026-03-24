@@ -29,14 +29,14 @@ const STATUS_LABELS: { [key: string]: string } = {
 export default function StatusDistributionChart({ data }: StatusDistributionChartProps) {
   if (!data) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 px-5 sm:px-6 py-4 relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 px-3 py-2.5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-          <h3 className="relative z-10 text-base sm:text-lg font-bold text-white">Status Distribution</h3>
-          <p className="relative z-10 text-xs text-blue-200/80">Traveler status breakdown</p>
+          <h3 className="relative z-10 text-sm font-bold text-white">Status Distribution</h3>
+          <p className="relative z-10 text-xs text-teal-200/80">Traveler status breakdown</p>
         </div>
         <div className="flex items-center justify-center h-64 p-4">
-          <p className="text-gray-500">No data available</p>
+          <p className="text-gray-500 dark:text-slate-400">No data available</p>
         </div>
       </div>
     );
@@ -49,13 +49,13 @@ export default function StatusDistributionChart({ data }: StatusDistributionChar
   }));
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-      <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 px-5 sm:px-6 py-4 relative overflow-hidden">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
+      <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 px-3 py-2.5 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <h3 className="relative z-10 text-base sm:text-lg font-bold text-white">Status Distribution</h3>
-        <p className="relative z-10 text-xs text-blue-200/80">Traveler status breakdown</p>
+        <h3 className="relative z-10 text-sm font-bold text-white">Status Distribution</h3>
+        <p className="relative z-10 text-xs text-teal-200/80">Traveler status breakdown</p>
       </div>
-      <div className="p-4 sm:p-6">
+      <div className="p-3">
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
           <Pie

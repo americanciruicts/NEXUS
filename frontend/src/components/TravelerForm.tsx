@@ -106,6 +106,9 @@ interface FullTravelerData {
   include_labor_hours?: boolean;
   is_lead_free?: boolean;
   is_itar?: boolean;
+  status?: string;
+  is_active?: boolean;
+  work_center?: string;
   process_steps?: ProcessStepData[];
 }
 
@@ -251,6 +254,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   const [travelerDbId, setTravelerDbId] = useState<number | null>(null);
   const [autoPopulatedRevision, setAutoPopulatedRevision] = useState<string>('');
   const [wasAutoPopulated, setWasAutoPopulated] = useState(false);
+
+  // Work order selector for jobs with multiple work orders
+  const [existingWorkOrders, setExistingWorkOrders] = useState<FullTravelerData[]>([]);
+  const [showWorkOrderSelector, setShowWorkOrderSelector] = useState(false);
 
   // Dynamic work centers from DB (fetched per traveler type)
   const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
@@ -512,161 +519,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     }
   }, [selectedType, mode, initialData]);
 
-  // Auto-populate form when job number and work order match an existing traveler
-  useEffect(() => {
-    console.log('🔍 Auto-populate check:', {
-      mode,
-      jobNumber: formData.jobNumber,
-      workOrder: formData.workOrderNumber,
-      willTrigger: mode === 'create' && formData.jobNumber && formData.workOrderNumber
-    });
-
-    // Only do this in create mode (not edit mode) and when both fields are filled with meaningful values
-    if (mode === 'create' && formData.jobNumber.trim().length >= 3 && formData.workOrderNumber.trim().length >= 3) {
-      console.log('✅ Auto-populate triggered! Waiting 300ms then fetching...');
-
-      // Cancel any previous request to prevent race conditions
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      // Create new abort controller for this request
-      abortControllerRef.current = new AbortController();
-      const currentController = abortControllerRef.current;
-
-      const fetchLatestRevision = async () => {
-        try {
-          const url = `${API_BASE_URL}/travelers/latest-revision?job_number=${encodeURIComponent(formData.jobNumber)}&work_order=${encodeURIComponent(formData.workOrderNumber)}`;
-          console.log('🌐 Fetching:', url);
-
-          const response = await fetch(url, {
-            signal: currentController.signal
-          });
-          console.log('📡 Response status:', response.status);
-
-          if (response.ok) {
-            const latestTraveler = await response.json();
-            console.log('✅ Got traveler data:', latestTraveler);
-
-            if (latestTraveler) {
-              // Parse specs if it's a JSON array
-              let specsText = '';
-              try {
-                const specsData = latestTraveler.specs;
-                if (specsData) {
-                  if (typeof specsData === 'string') {
-                    // Try to parse if it's a JSON string
-                    const parsed = JSON.parse(specsData);
-                    if (Array.isArray(parsed)) {
-                      specsText = parsed.map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
-                    } else {
-                      specsText = specsData;
-                    }
-                  } else if (Array.isArray(specsData)) {
-                    specsText = specsData.map((spec: Record<string, unknown>) => String(spec.text || '')).join('\n');
-                  }
-                }
-              } catch {
-                // If parsing fails, just use the raw value
-                specsText = String(latestTraveler.specs || '');
-              }
-
-              // Auto-increment the traveler revision
-              const oldRevision = String(latestTraveler.revision || 'A');
-              const newRevision = incrementRevision(oldRevision);
-
-              // Auto-populate form fields from the latest revision with incremented revision
-              setFormData(prev => ({
-                ...prev,
-                partNumber: String(latestTraveler.part_number || ''),
-                partDescription: String(latestTraveler.part_description || ''),
-                revision: newRevision,
-                customerRevision: String(latestTraveler.customer_revision || ''),
-                partRevision: String(latestTraveler.part_revision || ''),
-                quantity: Number(latestTraveler.quantity) || 0,
-                customerCode: String(latestTraveler.customer_code || ''),
-                customerName: String(latestTraveler.customer_name || ''),
-                priority: (latestTraveler.priority || 'NORMAL') as 'LOW' | 'NORMAL' | 'PREMIUM' | 'HIGH' | 'URGENT',
-                specs: specsText,
-                fromStock: String(latestTraveler.from_stock || ''),
-                toStock: String(latestTraveler.to_stock || ''),
-                shipVia: String(latestTraveler.ship_via || ''),
-                dueDate: extractDateOnly(latestTraveler.due_date),
-                shipDate: extractDateOnly(latestTraveler.ship_date),
-                comments: String(latestTraveler.comments || '')
-              }));
-
-              // Load process steps from the latest revision FIRST (before setting traveler type)
-              console.log('Latest traveler data:', latestTraveler);
-              console.log('Process steps from API:', latestTraveler.process_steps);
-              console.log('Is array?', Array.isArray(latestTraveler.process_steps));
-
-              if (latestTraveler.process_steps && Array.isArray(latestTraveler.process_steps)) {
-                console.log('Number of process steps:', latestTraveler.process_steps.length);
-                const existingSteps = latestTraveler.process_steps.map((step: Record<string, unknown>, index: number) => ({
-                  id: String(Date.now() + index), // Generate new IDs for the form
-                  sequence: Number(step.step_number),
-                  workCenter: String(step.operation),
-                  instruction: String(step.instructions || ''),
-                  quantity: Number(step.quantity || 0),
-                  rejected: 0, // Reset these for new traveler
-                  accepted: 0,
-                  assign: '',
-                  date: ''
-                }));
-                console.log('✅ Mapped steps count:', existingSteps.length);
-                console.log('✅ First step:', existingSteps[0]);
-                console.log('✅ Calling setFormSteps with', existingSteps.length, 'steps');
-                setFormSteps(existingSteps);
-                console.log('✅ setFormSteps called - React will update on next render');
-              } else {
-                console.warn('No process steps found or not an array');
-              }
-
-              // Set flags
-              setIsLeadFree(latestTraveler.is_lead_free || false);
-              setIsITAR(latestTraveler.is_itar || false);
-              setIncludeLaborHours(latestTraveler.include_labor_hours || false);
-
-              console.log('✅ Auto-populate complete with', latestTraveler.process_steps?.length || 0, 'steps');
-
-              // Store the old and new revisions
-              setAutoPopulatedRevision(newRevision);
-              setWasAutoPopulated(true);
-
-              // Show notification to user
-              toast.info(`Auto-populated from revision ${oldRevision}! Revision incremented to: ${newRevision}`);
-
-              // Keep page at top after auto-populating
-              setTimeout(() => window.scrollTo(0, 0), 0);
-            } else {
-              console.log('⚠️ API returned null - no matching traveler found');
-            }
-          } else {
-            console.warn('⚠️ API returned error status:', response.status);
-          }
-        } catch (error) {
-          // Ignore abort errors (they're expected when a new request cancels the old one)
-          if (error instanceof Error && error.name === 'AbortError') {
-            console.log('🔄 Previous request cancelled');
-            return;
-          }
-          console.error('❌ Error fetching latest revision:', error);
-        }
-      };
-
-      // Debounce the API call to avoid excessive requests (reduced to 300ms)
-      const timeoutId = setTimeout(fetchLatestRevision, 300);
-      return () => {
-        console.log('🔄 Cleaning up auto-populate timeout');
-        clearTimeout(timeoutId);
-        // Cancel ongoing request on cleanup
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-      };
-    }
-  }, [formData.jobNumber, formData.workOrderNumber, mode]);
+  // Auto-populate is now handled by onBlur/onKeyDown handlers on the job number input fields.
+  // Those handlers fetch all work orders for the job, show a selector if multiple exist,
+  // and always assign a NEW work order number (not the old one).
 
   const loadDefaultSteps = (type: TravelerType) => {
     // Pre-populate ALL work center steps for the selected type
@@ -1057,7 +912,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   };
 
   // Shared auto-fill function used by both type selection screen and job number field
-  const autoFillFromExisting = (fullData: FullTravelerData) => {
+  const autoFillFromExisting = async (fullData: FullTravelerData) => {
     // Auto-increment the traveler revision
     const oldRevision = String(fullData.revision || 'A');
     const newRevision = incrementRevision(oldRevision);
@@ -1082,18 +937,31 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       specsText = String(fullData.specs || '');
     }
 
-    // Split work order number into prefix and suffix
-    if (fullData.work_order_number) {
-      const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
-      setWorkOrderPrefix(prefix);
-      setWorkOrderSuffix(suffix);
+    // Fetch a NEW work order number for the new traveler (not reuse the existing one)
+    try {
+      const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.next_work_order_prefix) {
+          setWorkOrderPrefix(data.next_work_order_prefix);
+          setWorkOrderSuffix('');
+        }
+      }
+    } catch {
+      // Fallback: use existing work order if fetch fails
+      if (fullData.work_order_number) {
+        const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
+        setWorkOrderPrefix(prefix);
+        setWorkOrderSuffix(suffix);
+      }
     }
 
     // Auto-populate ALL fields
     setFormData(prev => ({
       ...prev,
       jobNumber: fullData.job_number || prev.jobNumber,
-      workOrderNumber: fullData.work_order_number || prev.workOrderNumber,
       poNumber: fullData.po_number || '',
       partNumber: fullData.part_number || '',
       partDescription: fullData.part_description || '',
@@ -1188,13 +1056,19 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     if (!value) return;
                     try {
                       const token = localStorage.getItem('nexus_token') || 'mock-token';
-                      const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
+                      const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}/all-work-orders`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                       });
                       if (response.ok) {
-                        const fullData: FullTravelerData = await response.json();
-                        if (fullData && fullData.job_number) {
-                          autoFillFromExisting(fullData);
+                        const allWorkOrders: FullTravelerData[] = await response.json();
+                        if (allWorkOrders && allWorkOrders.length > 1) {
+                          // Multiple work orders - show selector
+                          setExistingWorkOrders(allWorkOrders);
+                          setShowWorkOrderSelector(true);
+                          toast.info(`Found ${allWorkOrders.length} work orders for job ${value}. Please select one to auto-fill from.`);
+                        } else if (allWorkOrders && allWorkOrders.length === 1) {
+                          // Single work order - auto-fill directly
+                          autoFillFromExisting(allWorkOrders[0]);
                         } else {
                           toast.warning('No existing traveler found with that job number. Please select a type to create a new one.');
                         }
@@ -1211,13 +1085,17 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   if (!value || value.length < 2) return;
                   try {
                     const token = localStorage.getItem('nexus_token') || 'mock-token';
-                    const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
+                    const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}/all-work-orders`, {
                       headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (response.ok) {
-                      const fullData: FullTravelerData = await response.json();
-                      if (fullData && fullData.job_number) {
-                        autoFillFromExisting(fullData);
+                      const allWorkOrders: FullTravelerData[] = await response.json();
+                      if (allWorkOrders && allWorkOrders.length > 1) {
+                        setExistingWorkOrders(allWorkOrders);
+                        setShowWorkOrderSelector(true);
+                        toast.info(`Found ${allWorkOrders.length} work orders for this job. Please select one.`);
+                      } else if (allWorkOrders && allWorkOrders.length === 1) {
+                        autoFillFromExisting(allWorkOrders[0]);
                       }
                     }
                   } catch { /* silent */ }
@@ -1226,6 +1104,54 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             </div>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5">Press Enter or tab out to search. Auto-fills all details including work center steps.</p>
           </div>
+
+          {/* Work Order Selector Modal */}
+          {showWorkOrderSelector && existingWorkOrders.length > 0 && (
+            <div className="mb-4 bg-white dark:bg-slate-800 rounded-xl border-2 border-amber-300 dark:border-amber-600 p-4 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">
+                  Multiple Work Orders Found for Job: <span className="text-indigo-600 dark:text-indigo-400">{existingWorkOrders[0]?.job_number}</span>
+                </h3>
+                <button
+                  onClick={() => { setShowWorkOrderSelector(false); setExistingWorkOrders([]); }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 text-lg font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Select which work order to auto-fill from. A new work order number will be assigned automatically.</p>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {existingWorkOrders.map((wo) => (
+                  <button
+                    key={wo.id}
+                    onClick={() => {
+                      autoFillFromExisting(wo);
+                      setShowWorkOrderSelector(false);
+                      setExistingWorkOrders([]);
+                    }}
+                    className="w-full text-left p-3 rounded-lg border-2 border-gray-200 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-sm text-gray-800 dark:text-slate-200">WO: {wo.work_order_number}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">Rev: {wo.revision}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">| {wo.traveler_type}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        wo.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                        wo.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>{wo.status}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-600 dark:text-slate-400">
+                      Part: {wo.part_number} - {wo.part_description} | Qty: {wo.quantity}
+                      {wo.work_center && ` | WC: ${wo.work_center}`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Cards Grid - 2x2 */}
           <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-3">
@@ -1467,7 +1393,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         </div>
 
         {/* Main Form - Page 1 */}
-        <div className="bg-white dark:bg-slate-800 shadow-lg rounded-lg border-2 border-indigo-100 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 shadow-lg rounded-lg border-2 border-indigo-100 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6">
           {/* Top Row - Responsive */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
             <div>
@@ -1487,13 +1413,17 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                     if (value.length >= 2 && mode === 'create') {
                       try {
                         const token = localStorage.getItem('nexus_token') || 'mock-token';
-                        const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}`, {
+                        const response = await fetch(`${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(value)}/all-work-orders`, {
                           headers: { 'Authorization': `Bearer ${token}` }
                         });
                         if (response.ok) {
-                          const fullData: FullTravelerData = await response.json();
-                          if (fullData && fullData.job_number) {
-                            autoFillFromExisting(fullData);
+                          const allWorkOrders: FullTravelerData[] = await response.json();
+                          if (allWorkOrders && allWorkOrders.length > 1) {
+                            setExistingWorkOrders(allWorkOrders);
+                            setShowWorkOrderSelector(true);
+                            toast.info(`Found ${allWorkOrders.length} work orders for job ${value}. Select one to auto-fill.`);
+                          } else if (allWorkOrders && allWorkOrders.length === 1) {
+                            autoFillFromExisting(allWorkOrders[0]);
                           }
                         }
                       } catch (error) {
@@ -1514,10 +1444,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                 <input
                   type="text"
                   value={workOrderPrefix}
-                  readOnly
-                  className="flex-1 min-w-0 border-2 border-gray-300 dark:border-slate-600 bg-gray-100 dark:bg-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm font-bold text-gray-600 dark:text-slate-400 cursor-not-allowed"
-                  placeholder="12345"
-                  title="Auto-generated prefix (read-only)"
+                  onChange={(e) => setWorkOrderPrefix(e.target.value)}
+                  className="flex-1 min-w-0 border-2 border-blue-300 dark:border-blue-600 rounded px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                  placeholder="26030"
+                  title="Work order prefix (editable)"
                 />
                 <span className="text-gray-600 dark:text-slate-400 font-bold flex-shrink-0 text-xs sm:text-sm">-</span>
                 <input
@@ -1525,8 +1455,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                   value={workOrderSuffix}
                   onChange={(e) => setWorkOrderSuffix(e.target.value)}
                   className="w-14 sm:w-16 md:w-20 flex-shrink-0 border-2 border-blue-300 dark:border-blue-600 rounded px-1 sm:px-2 py-1.5 text-xs sm:text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-                  placeholder="6"
-                  title="Editable suffix"
+                  placeholder="1"
+                  title="Work order suffix"
                 />
               </div>
             </div>
@@ -1558,6 +1488,54 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
               />
             </div>
           </div>
+
+          {/* Work Order Selector - shown when job has multiple work orders */}
+          {showWorkOrderSelector && existingWorkOrders.length > 0 && (
+            <div className="mb-3 sm:mb-4 md:mb-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl border-2 border-amber-300 dark:border-amber-600 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-slate-200">
+                  Select Work Order for Job: <span className="text-indigo-600 dark:text-indigo-400">{existingWorkOrders[0]?.job_number}</span>
+                </h3>
+                <button
+                  onClick={() => { setShowWorkOrderSelector(false); setExistingWorkOrders([]); }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 text-lg font-bold px-2"
+                >
+                  &times;
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Multiple work orders exist for this job. Select one to auto-fill from (a new work order number will be assigned).</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {existingWorkOrders.map((wo) => (
+                  <button
+                    key={wo.id}
+                    onClick={() => {
+                      autoFillFromExisting(wo);
+                      setShowWorkOrderSelector(false);
+                      setExistingWorkOrders([]);
+                    }}
+                    className="w-full text-left p-3 rounded-lg border-2 border-gray-200 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all bg-white dark:bg-slate-800"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-sm text-gray-800 dark:text-slate-200">WO: {wo.work_order_number}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">Rev: {wo.revision}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">| {wo.traveler_type}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        wo.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                        wo.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>{wo.status}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-600 dark:text-slate-400">
+                      Part: {wo.part_number} - {wo.part_description} | Qty: {wo.quantity}
+                      {wo.work_center && ` | WC: ${wo.work_center}`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Customer and Part Info */}
           <div className="space-y-3 sm:space-y-4 mb-3 sm:mb-4 md:mb-6">

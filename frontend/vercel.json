@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://yield-referenced-remaining-burke.trycloudflare.com/nexus/api/:path*"
+      "destination": "https://backend-seven-xi-94.vercel.app/:path*"
     }
   ]
 }

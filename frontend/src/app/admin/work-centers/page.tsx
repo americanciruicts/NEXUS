@@ -18,6 +18,9 @@ import {
   PCB_WORK_CENTERS,
   CABLES_WORK_CENTERS,
   PURCHASING_WORK_CENTERS,
+  DEPARTMENT_COLORS,
+  parseDepartments,
+  getDepartmentColor,
 } from '@/data/workCenters';
 
 // Inline arrow SVGs - heroicons ArrowUp/ArrowDown fail to bundle in this project
@@ -40,6 +43,7 @@ interface WorkCenterDB {
   description: string;
   traveler_type: string | null;
   category: string | null;
+  department: string | null;
   sort_order: number;
   is_active: boolean;
 }
@@ -62,7 +66,7 @@ const TABS = [
 ];
 
 // Static data map for initial sync
-const STATIC_DATA: Record<string, { name: string; description: string }[]> = {
+const STATIC_DATA: Record<string, { name: string; description: string; department?: string }[]> = {
   PCB_ASSEMBLY: PCB_ASSEMBLY_WORK_CENTERS,
   PCB: PCB_WORK_CENTERS,
   CABLE: CABLES_WORK_CENTERS,
@@ -83,11 +87,8 @@ export default function WorkCenterManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedWC, setSelectedWC] = useState<WorkCenterDB | null>(null);
-  const [formData, setFormData] = useState({ name: '', code: '', description: '', category: '' });
-
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const [formData, setFormData] = useState({ name: '', code: '', description: '', category: '', department: '', traveler_type: 'PCB_ASSEMBLY', sort_order: '' });
+  const [deptDropdownOpen, setDeptDropdownOpen] = useState(false);
 
   const isAdmin = user?.role === 'ADMIN';
 
@@ -129,6 +130,7 @@ export default function WorkCenterManagementPage() {
           description: item.description,
           traveler_type: type,
           category: null,
+          department: item.department || null,
           sort_order: idx + 1,
           is_active: true,
         });
@@ -197,7 +199,6 @@ export default function WorkCenterManagementPage() {
     }
     filtered.sort((a, b) => a.sort_order - b.sort_order);
     setWorkCenters(filtered);
-    setCurrentPage(1);
   }, [allWorkCenters, activeTab, searchTerm]);
 
   const handleAdd = async () => {
@@ -207,7 +208,9 @@ export default function WorkCenterManagementPage() {
     }
     try {
       const token = localStorage.getItem('nexus_token');
-      const code = `${activeTab}_${(formData.code || formData.name).replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`;
+      const travelerType = formData.traveler_type || activeTab;
+      const code = `${travelerType}_${(formData.code || formData.name).replace(/\s+/g, '_').replace(/\//g, '_').replace(/&/g, 'AND').toUpperCase()}`;
+      const sortOrder = formData.sort_order ? parseInt(formData.sort_order) : null;
       const response = await fetch(`${API_BASE_URL}/work-centers-mgmt/`, {
         method: 'POST',
         headers: {
@@ -218,18 +221,20 @@ export default function WorkCenterManagementPage() {
           name: formData.name,
           code: code,
           description: formData.description,
-          traveler_type: activeTab,
+          traveler_type: travelerType,
           category: formData.category || null,
+          department: formData.department || null,
+          sort_order: sortOrder,
           is_active: true
         })
       });
 
       if (response.ok) {
-        const newWC = await response.json();
-        setAllWorkCenters(prev => [...prev, newWC]);
         setIsAddModalOpen(false);
-        setFormData({ name: '', code: '', description: '', category: '' });
+        setFormData({ name: '', code: '', description: '', category: '', department: '', traveler_type: activeTab, sort_order: '' });
         toast.success(`Work center "${formData.name}" added successfully`);
+        // Re-fetch to get updated sort orders
+        fetchWorkCenters();
       } else {
         const err = await response.json();
         toast.error(err.detail || 'Failed to add work center');
@@ -243,17 +248,22 @@ export default function WorkCenterManagementPage() {
     if (!selectedWC || !formData.name.trim()) return;
     try {
       const token = localStorage.getItem('nexus_token');
+      const sortOrder = formData.sort_order ? parseInt(formData.sort_order) : undefined;
+      const body: Record<string, unknown> = {
+        name: formData.name,
+        description: formData.description,
+        category: formData.category || null,
+        department: formData.department || null,
+        traveler_type: formData.traveler_type || selectedWC.traveler_type,
+      };
+      if (sortOrder !== undefined) body.sort_order = sortOrder;
       const response = await fetch(`${API_BASE_URL}/work-centers-mgmt/${selectedWC.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: formData.name,
-          description: formData.description,
-          category: formData.category || null
-        })
+        body: JSON.stringify(body)
       });
 
       if (response.ok) {
@@ -296,7 +306,7 @@ export default function WorkCenterManagementPage() {
 
   const openEditModal = (wc: WorkCenterDB) => {
     setSelectedWC(wc);
-    setFormData({ name: wc.name, code: wc.code, description: wc.description || '', category: wc.category || '' });
+    setFormData({ name: wc.name, code: wc.code, description: wc.description || '', category: wc.category || '', department: wc.department || '', traveler_type: wc.traveler_type || activeTab, sort_order: String(wc.sort_order) });
     setIsEditModalOpen(true);
   };
 
@@ -372,8 +382,8 @@ export default function WorkCenterManagementPage() {
   if (loading) {
     return (
       <Layout fullWidth>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center">
-          <div className="text-xl text-gray-600">Loading work centers...</div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 flex items-center justify-center">
+          <div className="text-xl text-gray-600 dark:text-slate-400">Loading work centers...</div>
         </div>
       </Layout>
     );
@@ -381,10 +391,10 @@ export default function WorkCenterManagementPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
         <div className="w-full space-y-4 p-4 lg:p-6">
           {/* Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
+          <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-2xl rounded-2xl p-5 md:p-8 relative overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -398,7 +408,7 @@ export default function WorkCenterManagementPage() {
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                     Work Center Management
                   </h1>
-                  <p className="text-sm text-blue-200/80 mt-0.5">
+                  <p className="text-sm text-teal-200/80 mt-0.5">
                     Manage work centers for each traveler type ({workCenters.length} work centers)
                   </p>
                 </div>
@@ -412,7 +422,7 @@ export default function WorkCenterManagementPage() {
                   className="px-4 py-2.5 rounded-xl border-0 w-full sm:w-64 focus:ring-2 focus:ring-white/50 shadow-md text-sm"
                 />
                 <button
-                  onClick={() => { setFormData({ name: '', code: '', description: '', category: '' }); setIsAddModalOpen(true); }}
+                  onClick={() => { setFormData({ name: '', code: '', description: '', category: '', department: '', traveler_type: activeTab, sort_order: '' }); setIsAddModalOpen(true); }}
                   className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-100 text-indigo-700 rounded-xl font-bold shadow-lg transition-all text-sm"
                 >
                   <PlusIcon className="h-5 w-5" />
@@ -430,14 +440,14 @@ export default function WorkCenterManagementPage() {
                 onClick={() => { setActiveTab(tab.key); setSearchTerm(''); }}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   activeTab === tab.key
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 {tab.label}
                 <span
                   className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                    activeTab === tab.key ? 'bg-white/20' : 'bg-gray-100'
+                    activeTab === tab.key ? 'bg-white/20' : 'bg-gray-100 dark:bg-slate-700'
                   }`}
                 >
                   {tab.count}
@@ -447,8 +457,8 @@ export default function WorkCenterManagementPage() {
           </div>
 
           {/* Work Centers Table */}
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 rounded-t-xl relative overflow-hidden">
               <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                 <div className="absolute bottom-0 left-0 w-14 h-14 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -464,92 +474,31 @@ export default function WorkCenterManagementPage() {
             </div>
 
             {(() => {
-              const totalPages = Math.ceil(workCenters.length / pageSize);
-              const startIdx = (currentPage - 1) * pageSize;
-              const paginatedWCs = workCenters.slice(startIdx, startIdx + pageSize);
-
               return (
                 <>
-                  {/* Mobile Card View */}
-                  <div className="block md:hidden">
-                    <div className="divide-y divide-gray-200">
-                      {paginatedWCs.map((wc, index) => {
-                        const globalIdx = startIdx + index;
-                        const isFirst = globalIdx === 0;
-                        const isLast = globalIdx === workCenters.length - 1;
-                        return (
-                          <div key={wc.id} className="p-4 hover:bg-gray-50 transition-colors">
-                            <div className="flex items-start gap-3">
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
-                                  {globalIdx + 1}
-                                </div>
-                                <div className="flex gap-0.5">
-                                  <button onClick={() => handleMove(wc.id, 'up')} disabled={isFirst}
-                                    className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
-                                    <ArrowUpSVG className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button onClick={() => handleMove(wc.id, 'down')} disabled={isLast}
-                                    className="p-0.5 text-gray-500 hover:text-blue-600 disabled:opacity-20 disabled:cursor-not-allowed">
-                                    <ArrowDownSVG className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-semibold text-gray-900">{wc.name}</div>
-                                <div className="text-sm text-gray-500 mt-0.5">{wc.description}</div>
-                                {wc.category && (
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border mt-1 ${
-                                    wc.category.includes('SMT') ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                    wc.category.includes('HAND') ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                    wc.category.includes('TH') ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                    wc.category.includes('AOI') ? 'bg-green-50 text-green-700 border-green-200' :
-                                    wc.category.includes('E-TEST') ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                    wc.category.includes('Labelling') ? 'bg-teal-50 text-teal-700 border-teal-200' :
-                                    'bg-gray-50 text-gray-700 border-gray-200'
-                                  }`}>
-                                    {wc.category}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => openEditModal(wc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
-                                  <PencilIcon className="h-4 w-4" />
-                                </button>
-                                <button onClick={() => openDeleteModal(wc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                                  <TrashIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
                   {/* Desktop Table View */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
+                  <div className="block">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
                       <thead className="sticky top-0 z-10">
-                        <tr className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800">
+                        <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
                           <th className="px-4 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider w-20">#</th>
                           <th className="px-4 py-4 text-center text-xs font-extrabold text-white uppercase tracking-wider w-20">Order</th>
                           <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
                           <th className="px-6 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Description</th>
+                          <th className="px-4 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Department</th>
                           <th className="px-4 py-4 text-left text-xs font-extrabold text-white uppercase tracking-wider">Category</th>
                           <th className="px-6 py-4 text-right text-xs font-extrabold text-white uppercase tracking-wider w-32">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {paginatedWCs.map((wc, index) => {
-                          const globalIdx = startIdx + index;
-                          const isFirst = globalIdx === 0;
-                          const isLast = globalIdx === workCenters.length - 1;
+                      <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
+                        {workCenters.map((wc, index) => {
+                          const isFirst = index === 0;
+                          const isLast = index === workCenters.length - 1;
                           return (
-                            <tr key={wc.id} className="hover:bg-gray-50 transition-colors">
+                            <tr key={wc.id} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                               <td className="px-4 py-3">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
-                                  {globalIdx + 1}
+                                <div className="w-8 h-8 bg-gradient-to-br from-teal-600 to-emerald-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+                                  {index + 1}
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-center">
@@ -573,10 +522,26 @@ export default function WorkCenterManagementPage() {
                                 </div>
                               </td>
                               <td className="px-6 py-3">
-                                <span className="text-sm font-semibold text-gray-900">{wc.name}</span>
+                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{wc.name}</span>
                               </td>
                               <td className="px-6 py-3">
-                                <span className="text-sm text-gray-600">{wc.description}</span>
+                                <span className="text-sm text-gray-600 dark:text-slate-400">{wc.description}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {wc.department ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {parseDepartments(wc.department).map((dept, i) => {
+                                      const colors = getDepartmentColor(dept);
+                                      return (
+                                        <span key={i} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${colors.bg} ${colors.text} ${colors.border}`}>
+                                          {dept}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                                )}
                               </td>
                               <td className="px-4 py-3">
                                 {wc.category ? (
@@ -592,7 +557,7 @@ export default function WorkCenterManagementPage() {
                                     {wc.category}
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-gray-400">—</span>
+                                  <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                                 )}
                               </td>
                               <td className="px-6 py-3 text-right">
@@ -622,59 +587,21 @@ export default function WorkCenterManagementPage() {
 
                   {workCenters.length === 0 && (
                     <div className="text-center py-12">
-                      <WrenchScrewdriverIcon className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900">No work centers found</h3>
-                      <p className="mt-1 text-sm text-gray-500">Add a new work center or try a different search term.</p>
-                    </div>
-                  )}
-
-                  {/* Pagination Controls */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
-                      <div className="text-sm text-gray-600">
-                        Showing {startIdx + 1}-{Math.min(startIdx + pageSize, workCenters.length)} of {workCenters.length}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          Previous
-                        </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                          <button
-                            key={page}
-                            onClick={() => setCurrentPage(page)}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-lg border ${
-                              currentPage === page
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        ))}
-                        <button
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
-                          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          Next
-                        </button>
-                      </div>
+                      <WrenchScrewdriverIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-slate-500" />
+                      <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-100">No work centers found</h3>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Add a new work center or try a different search term.</p>
                     </div>
                   )}
 
                   {/* Bottom Bar */}
-                  <div className="bg-gradient-to-r from-blue-600 via-indigo-700 to-purple-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
+                  <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-3 py-2 relative overflow-hidden rounded-b-xl">
                     <div className="absolute inset-0 opacity-10 pointer-events-none">
                       <div className="absolute top-0 right-0 w-16 h-16 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
                       <div className="absolute bottom-0 left-0 w-12 h-12 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
                     </div>
                     <div className="relative z-10 flex items-center justify-between">
                       <span className="text-xs text-white/80">
-                        Showing {workCenters.length} work centers (Page {currentPage} of {totalPages || 1})
+                        Showing all {workCenters.length} work centers
                       </span>
                       <span className="text-xs text-white/80 font-medium">
                         {TABS.find(t => t.key === activeTab)?.label}
@@ -690,41 +617,86 @@ export default function WorkCenterManagementPage() {
 
       {/* Add Work Center Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Add Work Center</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
-                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">Add Work Center</h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg">
+                <XMarkIcon className="h-5 w-5 text-gray-500 dark:text-slate-400" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Name *</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Name *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., WAVE SOLDER"
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Description</label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Brief description"
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Traveler Type</label>
+                <select
+                  value={formData.traveler_type}
+                  onChange={(e) => setFormData({ ...formData, traveler_type: e.target.value })}
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                >
+                  {TABS.map(tab => (
+                    <option key={tab.key} value={tab.key}>{tab.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative">
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Department</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => { setFormData({ ...formData, department: e.target.value }); setDeptDropdownOpen(true); }}
+                    onFocus={() => setDeptDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setDeptDropdownOpen(false), 200)}
+                    placeholder="Select or type a department..."
+                    className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                  />
+                  {deptDropdownOpen && (
+                    <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {Object.keys(DEPARTMENT_COLORS).filter(d => d !== 'Other' && d.toLowerCase().includes(formData.department.toLowerCase())).map(dept => (
+                        <button
+                          key={dept}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); setFormData({ ...formData, department: dept }); setDeptDropdownOpen(false); }}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-900 dark:text-slate-100"
+                        >
+                          {dept}
+                        </button>
+                      ))}
+                      {formData.department && !Object.keys(DEPARTMENT_COLORS).some(d => d.toLowerCase() === formData.department.toLowerCase()) && (
+                        <div className="px-4 py-2 text-xs text-gray-500 dark:text-slate-400 border-t border-gray-200 dark:border-slate-600">
+                          Press Enter or click away to use &quot;{formData.department}&quot; as custom department
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Category</label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 >
                   <option value="">No Category</option>
                   {CATEGORY_OPTIONS.filter(c => c).map(cat => (
@@ -732,13 +704,21 @@ export default function WorkCenterManagementPage() {
                   ))}
                 </select>
               </div>
-              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg px-4 py-3">
-                <label className="block text-sm font-bold text-gray-700 mb-1">Traveler Type</label>
-                <span className="text-lg font-extrabold text-indigo-700">{TABS.find(t => t.key === activeTab)?.label}</span>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1"># Position (Sort Order)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.sort_order}
+                  onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })}
+                  placeholder="Leave empty to add at the end"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Enter the position number where this work center should appear. Existing items will shift down.</p>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">
+              <button onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold">
                 Cancel
               </button>
               <button onClick={handleAdd} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">
@@ -751,39 +731,84 @@ export default function WorkCenterManagementPage() {
 
       {/* Edit Work Center Modal */}
       {isEditModalOpen && selectedWC && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Edit Work Center</h3>
-              <button onClick={() => setIsEditModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
-                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100">Edit Work Center</h3>
+              <button onClick={() => setIsEditModalOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg">
+                <XMarkIcon className="h-5 w-5 text-gray-500 dark:text-slate-400" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Name *</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Name *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Description</label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Traveler Type</label>
+                <select
+                  value={formData.traveler_type}
+                  onChange={(e) => setFormData({ ...formData, traveler_type: e.target.value })}
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                >
+                  {TABS.map(tab => (
+                    <option key={tab.key} value={tab.key}>{tab.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative">
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Department</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => { setFormData({ ...formData, department: e.target.value }); setDeptDropdownOpen(true); }}
+                    onFocus={() => setDeptDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setDeptDropdownOpen(false), 200)}
+                    placeholder="Select or type a department..."
+                    className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                  />
+                  {deptDropdownOpen && (
+                    <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {Object.keys(DEPARTMENT_COLORS).filter(d => d !== 'Other' && d.toLowerCase().includes(formData.department.toLowerCase())).map(dept => (
+                        <button
+                          key={dept}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); setFormData({ ...formData, department: dept }); setDeptDropdownOpen(false); }}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-900 dark:text-slate-100"
+                        >
+                          {dept}
+                        </button>
+                      ))}
+                      {formData.department && !Object.keys(DEPARTMENT_COLORS).some(d => d.toLowerCase() === formData.department.toLowerCase()) && (
+                        <div className="px-4 py-2 text-xs text-gray-500 dark:text-slate-400 border-t border-gray-200 dark:border-slate-600">
+                          Press Enter or click away to use &quot;{formData.department}&quot; as custom department
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1">Category</label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 >
                   <option value="">No Category</option>
                   {CATEGORY_OPTIONS.filter(c => c).map(cat => (
@@ -791,9 +816,21 @@ export default function WorkCenterManagementPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1"># Position (Sort Order)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.sort_order}
+                  onChange={(e) => setFormData({ ...formData, sort_order: e.target.value })}
+                  placeholder="Current position"
+                  className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Change the position number to reorder this work center.</p>
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">
+              <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold">
                 Cancel
               </button>
               <button onClick={handleEdit} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">
@@ -806,14 +843,14 @@ export default function WorkCenterManagementPage() {
 
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && selectedWC && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Work Center</h3>
-            <p className="text-gray-600 mb-6">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-slate-100 mb-2">Delete Work Center</h3>
+            <p className="text-gray-600 dark:text-slate-400 mb-6">
               Are you sure you want to delete <strong>{selectedWC.name}</strong>? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">
+              <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 rounded-lg font-semibold">
                 Cancel
               </button>
               <button onClick={handleDelete} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold">

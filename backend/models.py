@@ -209,6 +209,7 @@ class LaborEntry(Base):
     description = Column(Text)
     is_completed = Column(Boolean, default=False)
     qty_completed = Column(Integer, nullable=True)  # Quantity completed during this labor entry
+    comment = Column(Text, nullable=True)  # Optional operator/admin comment
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

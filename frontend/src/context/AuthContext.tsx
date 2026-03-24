@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/config/api';
@@ -37,28 +37,30 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const SESSION_TIMEOUT_MS = 14 * 60 * 60 * 1000;
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const warningShown15 = useRef(false);
+  const warningShown5 = useRef(false);
 
   useEffect(() => {
-    // Check for existing authentication on mount
     const checkAuth = () => {
       try {
         const authData = localStorage.getItem('nexus_auth');
         if (authData) {
           const parsed = JSON.parse(authData);
           if (parsed.isAuthenticated && parsed.role) {
-            // Check if 8 hours have passed since login (matching backend token expiration)
             const loginTime = parsed.loginTime || 0;
             const currentTime = Date.now();
-            const eightHoursInMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
 
-            if (currentTime - loginTime > eightHoursInMs) {
-              // 8 hours have passed, logout automatically
-              console.log('Session expired after 8 hours');
+            if (currentTime - loginTime > SESSION_TIMEOUT_MS) {
+              console.log('Session expired after 14 hours');
               localStorage.removeItem('nexus_auth');
               localStorage.removeItem('nexus_token');
               setUser(null);
@@ -85,40 +87,76 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   useEffect(() => {
-    // Redirect to login if not authenticated and not on login or SSO callback page
     if (!isLoading && !user && pathname !== '/auth/login' && !pathname.startsWith('/sso/')) {
-      router.push('/auth/login');
+      // Detect if we're on local network
+      const isLocal = typeof window !== 'undefined' && (
+        window.location.hostname.includes('.local') ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname === 'localhost'
+      );
+      // Redirect to FORGE login with redirect param so user comes back after login
+      const forgeLoginUrl = isLocal
+        ? 'http://acidashboard.aci.local:2005/login?redirect=nexus'
+        : 'https://aci-forge.vercel.app/login?redirect=nexus';
+      window.location.href = forgeLoginUrl;
     }
   }, [user, isLoading, pathname, router]);
 
   const logout = useCallback(() => {
     setUser(null);
+    warningShown15.current = false;
+    warningShown5.current = false;
     try {
       localStorage.removeItem('nexus_auth');
       localStorage.removeItem('nexus_token');
     } catch (error) {
       console.error('Error clearing localStorage:', error);
-      // Continue with logout even if localStorage fails
     }
-    router.push('/auth/login');
+    // Redirect to FORGE login with redirect param
+    const isLocal = typeof window !== 'undefined' && (
+      window.location.hostname.includes('.local') ||
+      window.location.hostname.startsWith('192.168.') ||
+      window.location.hostname === 'localhost'
+    );
+    const forgeLoginUrl = isLocal
+      ? 'http://acidashboard.aci.local:2005/login?redirect=nexus'
+      : 'https://aci-forge.vercel.app/login?redirect=nexus';
+    window.location.href = forgeLoginUrl;
   }, [router]);
 
   useEffect(() => {
-    // Periodic check for session expiration (every minute)
     const checkSessionExpiration = () => {
       try {
         const authData = localStorage.getItem('nexus_auth');
         if (authData && user) {
           const parsed = JSON.parse(authData);
           const loginTime = parsed.loginTime || 0;
-          const currentTime = Date.now();
-          const eightHoursInMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds (matching backend)
+          const elapsed = Date.now() - loginTime;
+          const remaining = SESSION_TIMEOUT_MS - elapsed;
 
-          if (currentTime - loginTime > eightHoursInMs) {
-            // 8 hours have passed, logout automatically
-            console.log('Session expired after 8 hours - auto logout');
-            toast.warning('Your session has expired after 8 hours. Please log in again.');
+          if (remaining <= 0) {
+            console.log('Session expired after 14 hours - auto logout');
+            toast.warning('Your session has expired. Please log in again.');
             logout();
+            return;
+          }
+
+          // 15-minute warning
+          if (remaining <= FIFTEEN_MINUTES_MS && !warningShown15.current) {
+            warningShown15.current = true;
+            const mins = Math.ceil(remaining / 60000);
+            toast.warning(`Session expiring in ${mins} minutes. Save your work.`, {
+              duration: 10000,
+            });
+          }
+
+          // 5-minute warning
+          if (remaining <= FIVE_MINUTES_MS && !warningShown5.current) {
+            warningShown5.current = true;
+            const mins = Math.ceil(remaining / 60000);
+            toast.error(`Session expiring in ${mins} minutes! Save your work now.`, {
+              duration: 15000,
+            });
           }
         }
       } catch (error) {
@@ -126,26 +164,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    // Check every minute (60000ms)
-    const intervalId = setInterval(checkSessionExpiration, 60000);
-
-    // Cleanup interval on unmount
+    // Check every 30 seconds
+    const intervalId = setInterval(checkSessionExpiration, 30000);
     return () => clearInterval(intervalId);
   }, [user, logout]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      // Call backend API to authenticate and get JWT token
       const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          username,
-          password
-        }),
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+        body: JSON.stringify({ username, password }),
+        signal: AbortSignal.timeout(10000)
       });
 
       if (response.ok) {
@@ -163,8 +195,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
 
         setUser(userData);
+        warningShown15.current = false;
+        warningShown5.current = false;
 
-        // Store token and user info in localStorage with error handling
         try {
           localStorage.setItem('nexus_token', accessToken);
           localStorage.setItem('nexus_auth', JSON.stringify({
@@ -177,7 +210,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }));
         } catch (error) {
           console.error('Error saving to localStorage:', error);
-          // Continue even if localStorage fails - user will need to login again on refresh
         }
 
         return true;

@@ -151,7 +151,7 @@ export default function ReportsPage() {
     setEndDate('');
   };
 
-  const totalHours = reportData?.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0) || 0;
+  const totalHours = (reportData && reportData.length > 0) ? reportData.reduce((sum, entry) => sum + (entry.hours_worked || 0), 0) : 0;
 
   return (
     <Layout fullWidth>
@@ -187,9 +187,9 @@ export default function ReportsPage() {
         }
       `}</style>
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-6">
         {/* Header */}
-        <div className="mb-6 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden no-print">
+        <div className="mb-6 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-2xl p-5 md:p-8 shadow-2xl relative overflow-hidden no-print">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -201,7 +201,7 @@ export default function ReportsPage() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Reports & Analytics</h1>
-                <p className="text-sm text-blue-200/80 mt-0.5">Generate and print labor tracking reports</p>
+                <p className="text-sm text-teal-200/80 mt-0.5">Generate and print labor tracking reports</p>
               </div>
             </div>
             <div className="header-buttons flex items-center gap-2 sm:gap-3">
@@ -226,8 +226,8 @@ export default function ReportsPage() {
         </div>
 
         {/* Report Form */}
-        <div className="bg-white shadow-xl rounded-xl border-2 border-gray-200 p-8 mb-6 no-print">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Generate Report</h2>
+        <div className="bg-white dark:bg-slate-800 shadow-xl rounded-xl border-2 border-gray-200 dark:border-slate-700 p-8 mb-6 no-print">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-6">Generate Report</h2>
 
           {/* Report Type Selection - 2x4 Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -445,50 +445,50 @@ export default function ReportsPage() {
           <div className="space-y-4">
             {reportType === 'single_traveler' && (
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Job Number</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
                 <input
                   type="text"
                   value={jobNumber}
                   onChange={(e) => setJobNumber(e.target.value)}
                   placeholder="e.g., 8744 PART"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-semibold"
+                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-semibold"
                 />
               </div>
             )}
 
             {reportType === 'single_operator' && (
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Operator Name</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Operator Name</label>
                 <input
                   type="text"
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
                   placeholder="e.g., John Doe"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 font-semibold"
+                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 font-semibold"
                 />
               </div>
             )}
 
             {reportType === 'single_work_center' && (
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Work Center Name</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Work Center Name</label>
                 <input
                   type="text"
                   value={workCenter}
                   onChange={(e) => setWorkCenter(e.target.value)}
                   placeholder="e.g., Assembly, Testing"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 font-semibold"
+                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200 font-semibold"
                 />
               </div>
             )}
 
             {reportType === 'single_category' && (
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Category</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-rose-500 focus:ring-2 focus:ring-rose-200 font-semibold"
+                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 font-semibold"
                 >
                   <option value="">Select a category...</option>
                   {CATEGORY_OPTIONS.map(cat => (
@@ -500,25 +500,25 @@ export default function ReportsPage() {
 
             {/* Job Number and Work Order for Work Center / Category Reports */}
             {(reportType === 'single_work_center' || reportType === 'all_work_centers' || reportType === 'single_category' || reportType === 'all_categories') && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Job Number (Optional)</label>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Job Number (Optional)</label>
                   <input
                     type="text"
                     value={jobNumber}
                     onChange={(e) => setJobNumber(e.target.value)}
                     placeholder="e.g., J12345"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
+                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Work Order (Optional)</label>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Work Order (Optional)</label>
                   <input
                     type="text"
                     value={workOrder}
                     onChange={(e) => setWorkOrder(e.target.value)}
                     placeholder="e.g., WO7890"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   />
                 </div>
               </div>
@@ -526,23 +526,23 @@ export default function ReportsPage() {
 
             {/* Date Range */}
             {(reportType === 'all_travelers' || reportType === 'single_operator' || reportType === 'single_work_center' || reportType === 'all_work_centers' || reportType === 'single_category' || reportType === 'all_categories') && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Start Date (Optional)</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Start Date (Optional)</label>
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">End Date (Optional)</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">End Date (Optional)</label>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 />
               </div>
               </div>
@@ -553,7 +553,7 @@ export default function ReportsPage() {
               <button
                 onClick={generateReport}
                 disabled={loading}
-                className="w-full px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed"
+                className="w-full px-8 py-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed"
               >
                 {loading ? 'Generating...' : 'Generate Report'}
               </button>
@@ -563,77 +563,77 @@ export default function ReportsPage() {
 
         {/* Report Table */}
         {reportData && (
-          <div className="bg-white shadow-xl rounded-xl border-2 border-gray-200 p-8">
+          <div className="bg-white dark:bg-slate-800 shadow-xl rounded-xl border-2 border-gray-200 dark:border-slate-700 p-8">
             <div className="mb-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">{reportTitle}</h2>
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100 mb-2">{reportTitle}</h2>
               <div className="flex items-center space-x-6 text-sm">
                 <div>
-                  <span className="font-semibold text-gray-600">Total Entries:</span>
-                  <span className="ml-2 text-gray-900 font-bold">{reportData.length}</span>
+                  <span className="font-semibold text-gray-600 dark:text-slate-400">Total Entries:</span>
+                  <span className="ml-2 text-gray-900 dark:text-slate-100 font-bold">{reportData.length}</span>
                 </div>
                 <div>
-                  <span className="font-semibold text-gray-600">Total Hours:</span>
-                  <span className="ml-2 text-gray-900 font-bold">{totalHours.toFixed(2)}</span>
+                  <span className="font-semibold text-gray-600 dark:text-slate-400">Total Hours:</span>
+                  <span className="ml-2 text-gray-900 dark:text-slate-100 font-bold">{totalHours.toFixed(2)}</span>
                 </div>
                 {(startDate || endDate) && (
                   <div>
-                    <span className="font-semibold text-gray-600">Period:</span>
-                    <span className="ml-2 text-gray-900">{startDate || 'All'} to {endDate || 'Present'}</span>
+                    <span className="font-semibold text-gray-600 dark:text-slate-400">Period:</span>
+                    <span className="ml-2 text-gray-900 dark:text-slate-100">{startDate || 'All'} to {endDate || 'Present'}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border-2 border-gray-300">
-                <thead className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+            <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-teal-600 to-emerald-600 text-white">
                   <tr>
-                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Date</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Job #</th>
-                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Part #</th>
-                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Description</th>
-                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Operator</th>
-                    <th className="border-r-2 border-white/30 px-4 py-3 text-left font-bold">Work Center</th>
-                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">Start Time</th>
-                    <th className="mobile-hide-report border-r-2 border-white/30 px-4 py-3 text-left font-bold">End Time</th>
-                    <th className="px-4 py-3 text-left font-bold">Hours</th>
+                    <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">Date</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-bold">Job #</th>
+                    <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">Part #</th>
+                    <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">Description</th>
+                    <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">Operator</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-bold">Work Center</th>
+                    <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">Start Time</th>
+                    <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">End Time</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-bold">Hours</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {reportData.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-8 text-gray-500 border-2 border-gray-200">
+                      <td colSpan={9} className="text-center py-8 text-gray-500 dark:text-slate-400">
                         No data found for the selected criteria
                       </td>
                     </tr>
                   ) : (
                     reportData.map((entry, index) => (
-                      <tr key={index} className="border-b-2 border-gray-200 hover:bg-blue-50">
-                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
+                      <tr key={index} className={`${index % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-gray-50 dark:bg-slate-800/50'} hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors`}>
+                        <td className="mobile-hide-report px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
                           {new Date(entry.start_time).toLocaleDateString()}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3 font-semibold">
+                        <td className="px-3 py-2 text-sm font-semibold text-gray-800 dark:text-slate-200">
                           {entry.traveler?.job_number || 'N/A'}
                         </td>
-                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
                           {entry.traveler?.part_number || 'N/A'}
                         </td>
-                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
                           {entry.description || entry.traveler?.part_description || 'N/A'}
                         </td>
-                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3 font-semibold">
+                        <td className="mobile-hide-report px-3 py-2 text-sm font-semibold text-gray-700 dark:text-slate-300">
                           {entry.employee?.username || 'System'}
                         </td>
-                        <td className="border-r-2 border-gray-200 px-4 py-3">
+                        <td className="px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
                           {entry.work_center || 'N/A'}
                         </td>
-                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
+                        <td className="mobile-hide-report px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
                           {new Date(entry.start_time).toLocaleTimeString()}
                         </td>
-                        <td className="mobile-hide-report border-r-2 border-gray-200 px-4 py-3">
-                          {entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : 'In Progress'}
+                        <td className="mobile-hide-report px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
+                          {entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : <span className="text-amber-600 dark:text-amber-400">In Progress</span>}
                         </td>
-                        <td className="px-4 py-3 font-bold">
+                        <td className="px-3 py-2 text-sm font-bold text-green-600 dark:text-green-400">
                           {entry.hours_worked.toFixed(2)}
                         </td>
                       </tr>

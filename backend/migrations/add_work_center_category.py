@@ -38,7 +38,6 @@ DEFAULT_CATEGORIES = {
     'SHIPPING': 'Labelling, Packaging, Shipping hrs. Actual',
     # Cable work centers
     'WIRE CUT': 'HAND hrs. Actual',
-    'WIRE CUTT': 'HAND hrs. Actual',
     'STRIP WIRE': 'HAND hrs. Actual',
     'HEAT SHRINK': 'HAND hrs. Actual',
     'TINNING': 'HAND hrs. Actual',

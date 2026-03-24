@@ -151,23 +151,23 @@ export default function GlobalSearch() {
       case 'labor':
         return <ClockIcon className="h-5 w-5 text-orange-600" />;
       default:
-        return <DocumentTextIcon className="h-5 w-5 text-gray-600" />;
+        return <DocumentTextIcon className="h-5 w-5 text-gray-600 dark:text-slate-400" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
     const statusColors: Record<string, string> = {
-      'CREATED': 'bg-gray-100 text-gray-700',
-      'IN_PROGRESS': 'bg-blue-100 text-blue-700',
-      'COMPLETED': 'bg-green-100 text-green-700',
-      'active': 'bg-green-100 text-green-700',
-      'inactive': 'bg-gray-100 text-gray-700',
-      'in_progress': 'bg-yellow-100 text-yellow-700',
-      'completed': 'bg-green-100 text-green-700'
+      'CREATED': 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300',
+      'IN_PROGRESS': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+      'COMPLETED': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+      'active': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+      'inactive': 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300',
+      'in_progress': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      'completed': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
     };
 
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[status] || 'bg-gray-100 text-gray-700'}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColors[status] || 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300'}`}>
         {status.replace('_', ' ')}
       </span>
     );
@@ -177,7 +177,7 @@ export default function GlobalSearch() {
     if (!results || results.total_results === 0) {
       if (query.length >= 2) {
         return (
-          <div className="px-4 py-8 text-center text-gray-500">
+          <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
             <p className="text-sm">No results found for &quot;{query}&quot;</p>
           </div>
         );
@@ -191,8 +191,8 @@ export default function GlobalSearch() {
       <div className="max-h-[500px] overflow-y-auto">
         {/* Travelers */}
         {results.results.travelers.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          <div className="border-b border-gray-200 dark:border-slate-700">
+            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
               Travelers ({results.results.travelers.length})
             </div>
             {results.results.travelers.map((result) => {
@@ -202,16 +202,16 @@ export default function GlobalSearch() {
                 <button
                   key={`traveler-${result.id}`}
                   onClick={() => handleNavigate(result)}
-                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 ${
-                    isSelected ? 'bg-blue-50' : ''
+                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 ${
+                    isSelected ? 'bg-blue-50 dark:bg-slate-700' : ''
                   }`}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0 mt-1">{getIcon(result.type)}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{result.title}</p>
-                      <p className="text-sm text-gray-600 truncate">{result.subtitle}</p>
-                      <p className="text-xs text-gray-500 mt-1">{result.description}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{result.title}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{result.subtitle}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{result.description}</p>
                       <div className="mt-2">{getStatusBadge(result.status)}</div>
                     </div>
                   </div>
@@ -223,8 +223,8 @@ export default function GlobalSearch() {
 
         {/* Users */}
         {results.results.users.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          <div className="border-b border-gray-200 dark:border-slate-700">
+            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
               Users ({results.results.users.length})
             </div>
             {results.results.users.map((result) => {
@@ -234,16 +234,16 @@ export default function GlobalSearch() {
                 <button
                   key={`user-${result.id}`}
                   onClick={() => handleNavigate(result)}
-                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 ${
-                    isSelected ? 'bg-blue-50' : ''
+                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 ${
+                    isSelected ? 'bg-blue-50 dark:bg-slate-700' : ''
                   }`}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0 mt-1">{getIcon(result.type)}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{result.title}</p>
-                      <p className="text-sm text-gray-600 truncate">{result.subtitle}</p>
-                      <p className="text-xs text-gray-500 mt-1">{result.description}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{result.title}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{result.subtitle}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{result.description}</p>
                     </div>
                   </div>
                 </button>
@@ -254,8 +254,8 @@ export default function GlobalSearch() {
 
         {/* Work Orders */}
         {results.results.work_orders.length > 0 && (
-          <div className="border-b border-gray-200">
-            <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          <div className="border-b border-gray-200 dark:border-slate-700">
+            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
               Work Orders ({results.results.work_orders.length})
             </div>
             {results.results.work_orders.map((result) => {
@@ -265,16 +265,16 @@ export default function GlobalSearch() {
                 <button
                   key={`work_order-${result.id}`}
                   onClick={() => handleNavigate(result)}
-                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 ${
-                    isSelected ? 'bg-blue-50' : ''
+                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 ${
+                    isSelected ? 'bg-blue-50 dark:bg-slate-700' : ''
                   }`}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0 mt-1">{getIcon(result.type)}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{result.title}</p>
-                      <p className="text-sm text-gray-600 truncate">{result.subtitle}</p>
-                      <p className="text-xs text-gray-500 mt-1">{result.description}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{result.title}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{result.subtitle}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{result.description}</p>
                       <div className="mt-2">{getStatusBadge(result.status)}</div>
                     </div>
                   </div>
@@ -287,7 +287,7 @@ export default function GlobalSearch() {
         {/* Labor Entries */}
         {results.results.labor_entries.length > 0 && (
           <div>
-            <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide">
               Labor Entries ({results.results.labor_entries.length})
             </div>
             {results.results.labor_entries.map((result) => {
@@ -297,16 +297,16 @@ export default function GlobalSearch() {
                 <button
                   key={`labor-${result.id}`}
                   onClick={() => handleNavigate(result)}
-                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 ${
-                    isSelected ? 'bg-blue-50' : ''
+                  className={`w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 ${
+                    isSelected ? 'bg-blue-50 dark:bg-slate-700' : ''
                   }`}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0 mt-1">{getIcon(result.type)}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{result.title}</p>
-                      <p className="text-sm text-gray-600 truncate">{result.subtitle}</p>
-                      <p className="text-xs text-gray-500 mt-1">{result.description}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{result.title}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{result.subtitle}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{result.description}</p>
                     </div>
                   </div>
                 </button>
@@ -323,10 +323,10 @@ export default function GlobalSearch() {
       {/* Search Button/Input */}
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center space-x-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/90 hover:text-white border border-white/20"
+        className="flex items-center space-x-1.5 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/90 hover:text-white border border-white/20"
       >
-        <span className="text-sm hidden md:inline">Search...</span>
-        <kbd className="hidden md:inline-flex items-center px-2 py-0.5 text-xs font-semibold text-white/70 bg-white/10 border border-white/20 rounded">
+        <span className="text-xs">Search...</span>
+        <kbd className="inline-flex items-center px-1.5 py-0 text-[10px] font-semibold text-white/70 bg-white/10 border border-white/20 rounded">
           ⌘K
         </kbd>
       </button>
@@ -335,13 +335,13 @@ export default function GlobalSearch() {
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsOpen(false)} />
+          <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-40" onClick={() => setIsOpen(false)} />
 
           {/* Search Panel */}
           <div className="fixed top-20 left-1/2 transform -translate-x-1/2 w-full max-w-2xl z-50">
-            <div className="bg-white rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 dark:ring-slate-600 overflow-hidden">
               {/* Search Input */}
-              <div className="px-4 py-3 border-b border-gray-200">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">
                 <div className="flex items-center space-x-2">
                   <input
                     ref={inputRef}
@@ -350,7 +350,7 @@ export default function GlobalSearch() {
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyNavigation}
                     placeholder="Search travelers, users, work orders..."
-                    className="flex-1 outline-none text-gray-900 placeholder-gray-400"
+                    className="flex-1 outline-none text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 bg-transparent"
                     autoFocus
                   />
                   {loading && (
@@ -362,7 +362,7 @@ export default function GlobalSearch() {
                       setQuery('');
                       setResults(null);
                     }}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
                   >
                     <XMarkIcon className="h-5 w-5" />
                   </button>
@@ -373,23 +373,23 @@ export default function GlobalSearch() {
               {renderResults()}
 
               {/* Footer */}
-              <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
+              <div className="px-4 py-2 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 text-xs text-gray-500 dark:text-slate-400 flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <span className="flex items-center space-x-1">
-                    <kbd className="px-2 py-0.5 bg-white border border-gray-300 rounded text-xs font-semibold">↑↓</kbd>
+                    <kbd className="px-2 py-0.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded text-xs font-semibold">↑↓</kbd>
                     <span>Navigate</span>
                   </span>
                   <span className="flex items-center space-x-1">
-                    <kbd className="px-2 py-0.5 bg-white border border-gray-300 rounded text-xs font-semibold">Enter</kbd>
+                    <kbd className="px-2 py-0.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded text-xs font-semibold">Enter</kbd>
                     <span>Select</span>
                   </span>
                   <span className="flex items-center space-x-1">
-                    <kbd className="px-2 py-0.5 bg-white border border-gray-300 rounded text-xs font-semibold">Esc</kbd>
+                    <kbd className="px-2 py-0.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded text-xs font-semibold">Esc</kbd>
                     <span>Close</span>
                   </span>
                 </div>
                 {results && (
-                  <span className="text-gray-600 font-medium">{results.total_results} results</span>
+                  <span className="text-gray-600 dark:text-slate-300 font-medium">{results.total_results} results</span>
                 )}
               </div>
             </div>

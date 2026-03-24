@@ -81,10 +81,10 @@ export default function DurationCalculator({
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Mode Toggle */}
-      <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+      <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
         <div className="flex items-center space-x-2">
-          <CalculatorIcon className="w-5 h-5 text-blue-600" />
-          <span className="text-sm font-semibold text-blue-900">Duration Calculator</span>
+          <CalculatorIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <span className="text-sm font-semibold text-blue-900 dark:text-blue-200">Duration Calculator</span>
         </div>
         <button
           type="button"
@@ -98,34 +98,34 @@ export default function DurationCalculator({
       {/* Time Inputs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
+          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
             Start Time <span className="text-red-500">*</span>
           </label>
           <input
             type="datetime-local"
             value={startTime}
             onChange={(e) => onStartTimeChange(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+            className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
             required
           />
         </div>
 
         {useEndTime ? (
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
               End Time <span className="text-red-500">*</span>
             </label>
             <input
               type="datetime-local"
               value={endTime}
               onChange={(e) => onEndTimeChange(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               required
             />
           </div>
         ) : (
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
               Duration <span className="text-red-500">*</span>
             </label>
             <input
@@ -133,10 +133,10 @@ export default function DurationCalculator({
               value={durationInput}
               onChange={(e) => handleDurationChange(e.target.value)}
               placeholder="e.g., 4h 30m or 4.5"
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all"
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               disabled={!startTime}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
               Enter duration as &quot;4h 30m&quot; or decimal &quot;4.5&quot;
             </p>
           </div>
@@ -145,19 +145,19 @@ export default function DurationCalculator({
 
       {/* Calculated Hours Preview */}
       {calculatedHours !== null && calculatedHours > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <ClockIcon className="w-5 h-5 text-emerald-600" />
-              <span className="text-sm font-semibold text-emerald-900">Calculated Duration:</span>
+              <ClockIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">Calculated Duration:</span>
             </div>
-            <span className="text-sm font-bold text-emerald-700">
+            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
               {calculatedHours.toFixed(2)} hrs ({hoursToHumanReadable(calculatedHours)})
             </span>
           </div>
 
           {!useEndTime && endTime && (
-            <div className="mt-2 text-xs text-emerald-800">
+            <div className="mt-2 text-xs text-emerald-800 dark:text-emerald-300">
               End time: {new Date(endTime).toLocaleString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -171,11 +171,11 @@ export default function DurationCalculator({
 
       {/* Validation Warning */}
       {startTime && endTime && calculatedHours !== null && calculatedHours <= 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm font-semibold text-red-900">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+          <p className="text-sm font-semibold text-red-900 dark:text-red-200">
             ⚠️ Invalid Time Range
           </p>
-          <p className="text-xs text-red-800 mt-1">
+          <p className="text-xs text-red-800 dark:text-red-300 mt-1">
             End time must be after start time. Please check your times.
           </p>
         </div>
@@ -183,22 +183,22 @@ export default function DurationCalculator({
 
       {/* Unusual Duration Warnings */}
       {calculatedHours !== null && calculatedHours > 12 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <p className="text-sm font-semibold text-yellow-900">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+          <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200">
             ⚠️ Unusually Long Duration
           </p>
-          <p className="text-xs text-yellow-800 mt-1">
+          <p className="text-xs text-yellow-800 dark:text-yellow-300 mt-1">
             This entry is over 12 hours. Please verify the times are correct.
           </p>
         </div>
       )}
 
       {calculatedHours !== null && calculatedHours < (5 / 60) && calculatedHours > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <p className="text-sm font-semibold text-yellow-900">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+          <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200">
             ⚠️ Very Short Duration
           </p>
-          <p className="text-xs text-yellow-800 mt-1">
+          <p className="text-xs text-yellow-800 dark:text-yellow-300 mt-1">
             This entry is less than 5 minutes. Please verify the times are correct.
           </p>
         </div>

@@ -163,6 +163,9 @@ class TravelerList(BaseModel):
     total_steps: int = 0
     completed_steps: int = 0
     percent_complete: float = 0.0
+    department_progress: Optional[list] = []
+    labor_progress: Optional[dict] = None
+    include_labor_hours: Optional[bool] = False
 
     class Config:
         from_attributes = True

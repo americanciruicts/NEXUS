@@ -217,7 +217,7 @@ export default function TravelersPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
         <div className="w-full space-y-4 p-4 lg:p-6">
           {/* Header */}
-          <div className="bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 shadow-lg rounded-lg p-6">
+          <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-lg rounded-lg p-6">
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-bold text-white mb-1">Travelers</h1>

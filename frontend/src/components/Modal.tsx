@@ -23,13 +23,13 @@ export default function Modal({ isOpen, onClose, title, children, footer }: Moda
       ></div>
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8 z-10">
+      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8 z-10">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl flex-shrink-0">
-          <h3 className="text-xl font-bold text-gray-900">{title}</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-slate-700 dark:to-slate-700 rounded-t-2xl flex-shrink-0">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100">{title}</h3>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 transition-colors p-1 hover:bg-white rounded-lg"
+            className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors p-1 hover:bg-white dark:hover:bg-slate-600 rounded-lg"
           >
             <XMarkIcon className="w-6 h-6" />
           </button>
@@ -42,7 +42,7 @@ export default function Modal({ isOpen, onClose, title, children, footer }: Moda
 
         {/* Footer - Always visible (if provided) */}
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex-shrink-0">
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 rounded-b-2xl flex-shrink-0">
             {footer}
           </div>
         )}

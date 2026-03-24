@@ -54,7 +54,7 @@ if not SECRET_KEY or len(SECRET_KEY) < 32:
         "Generate one with: python3 -c \"import secrets; print(secrets.token_urlsafe(64))\""
     )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 840  # 14 hours
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()

@@ -74,32 +74,26 @@ export default function TodaySnapshotGrid({ entries }: TodaySnapshotGridProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+    <div className="grid grid-cols-4 gap-3">
       {snapshots.map((item, index) => (
         <div
           key={index}
-          className={`bg-gradient-to-br ${item.gradient} rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 p-4 sm:p-5 ring-1 ${item.ring} relative overflow-hidden group`}
+          className={`bg-gradient-to-br ${item.gradient} rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 px-3 py-2 ring-1 ${item.ring} relative overflow-hidden group`}
         >
-          {/* Decorative circles */}
-          <div className="absolute inset-0 opacity-10 pointer-events-none">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-1/2 -translate-x-1/2" />
-          </div>
-
-          <div className="relative flex items-start justify-between">
+          <div className="relative flex items-center justify-between">
             <div className="flex-1">
-              <p className="text-white/70 text-[11px] sm:text-xs font-semibold uppercase tracking-wider mb-2">
+              <p className="text-white/70 text-[9px] font-semibold uppercase tracking-wider">
                 {item.title}
               </p>
-              <h3 className="text-white text-2xl sm:text-3xl font-extrabold leading-none">
+              <h3 className="text-white text-lg font-extrabold leading-none">
                 {item.value}
               </h3>
-              <p className="text-white/50 text-[10px] sm:text-xs mt-1.5 font-medium">
+              <p className="text-white/50 text-[8px] mt-0.5 font-medium">
                 {item.subtitle}
               </p>
             </div>
-            <div className={`${item.iconBg} p-2.5 rounded-xl backdrop-blur-sm`}>
-              <item.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${item.iconColor}`} />
+            <div className={`${item.iconBg} p-1.5 rounded-lg backdrop-blur-sm`}>
+              <item.icon className={`h-3.5 w-3.5 ${item.iconColor}`} />
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ export default function ToastProvider() {
       duration={5000}
       expand={true}
       visibleToasts={5}
+      theme="system"
     />
   );
 }

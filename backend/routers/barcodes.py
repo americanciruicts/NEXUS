@@ -58,7 +58,7 @@ async def get_traveler_barcode(
     # Generate unique ID
     unique_id = BarcodeService.generate_unique_traveler_id()
 
-    # Build barcode data string - only job number
+    # Build barcode data string - job number only
     barcode_data = traveler.job_number
 
     return {
@@ -78,33 +78,30 @@ async def scan_barcode(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Scan and parse barcode to get traveler information"""
+    """Scan and parse barcode to get traveler information.
+    Supports both NEX-format barcodes and plain job number barcodes."""
 
-    # Parse barcode
-    parsed_data = BarcodeService.parse_barcode(barcode_data.barcode)
+    scanned = barcode_data.barcode.strip()
+    traveler = None
 
-    if "error" in parsed_data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=parsed_data["error"]
-        )
+    # Try NEX- format first (legacy)
+    if scanned.startswith("NEX-"):
+        parsed_data = BarcodeService.parse_barcode(scanned)
+        if "error" not in parsed_data:
+            traveler = db.query(Traveler).filter(
+                Traveler.id == parsed_data["traveler_id"]
+            ).first()
 
-    # Find traveler by ID
-    traveler = db.query(Traveler).filter(
-        Traveler.id == parsed_data["traveler_id"]
-    ).first()
+    # Otherwise look up by job number directly
+    if not traveler:
+        traveler = db.query(Traveler).filter(
+            Traveler.job_number == scanned
+        ).first()
 
     if not traveler:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Traveler not found for this barcode"
-        )
-
-    # Verify job number matches
-    if traveler.job_number != parsed_data["job_number"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Barcode job number does not match traveler"
         )
 
     return {
@@ -426,26 +423,30 @@ async def search_by_barcode_or_qr(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Universal search by barcode or QR code data"""
+    """Universal search by barcode or QR code data.
+    Supports NEX- format barcodes, plain job number barcodes, and QR codes."""
 
-    # Try parsing as barcode first
-    barcode_result = BarcodeService.parse_barcode(code)
-    if barcode_result.get("valid"):
-        traveler = db.query(Traveler).filter(
-            Traveler.id == barcode_result["traveler_id"]
-        ).first()
+    code = code.strip()
 
-        if traveler and traveler.job_number == barcode_result["job_number"]:
-            return {
-                "type": "barcode",
-                "traveler": {
-                    "id": traveler.id,
-                    "job_number": traveler.job_number,
-                    "part_number": traveler.part_number,
-                    "part_description": traveler.part_description,
-                    "status": traveler.status.value
+    # Try parsing as NEX- format barcode
+    if code.startswith("NEX-"):
+        barcode_result = BarcodeService.parse_barcode(code)
+        if barcode_result.get("valid"):
+            traveler = db.query(Traveler).filter(
+                Traveler.id == barcode_result["traveler_id"]
+            ).first()
+
+            if traveler and traveler.job_number == barcode_result["job_number"]:
+                return {
+                    "type": "barcode",
+                    "traveler": {
+                        "id": traveler.id,
+                        "job_number": traveler.job_number,
+                        "part_number": traveler.part_number,
+                        "part_description": traveler.part_description,
+                        "status": traveler.status.value
+                    }
                 }
-            }
 
     # Try parsing as QR code (handles both traveler and step QR codes)
     qr_result = BarcodeService.parse_qr_code(code)
@@ -472,6 +473,22 @@ async def search_by_barcode_or_qr(
                 result["step_id"] = qr_result.get("step_id")
 
             return result
+
+    # Fallback: try looking up by job number directly (plain barcode scan)
+    traveler = db.query(Traveler).filter(
+        Traveler.job_number == code
+    ).first()
+    if traveler:
+        return {
+            "type": "barcode",
+            "traveler": {
+                "id": traveler.id,
+                "job_number": traveler.job_number,
+                "part_number": traveler.part_number,
+                "part_description": traveler.part_description,
+                "status": traveler.status.value
+            }
+        }
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,

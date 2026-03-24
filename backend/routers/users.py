@@ -155,7 +155,7 @@ async def delete_user(
     return {"message": f"User '{username}' deleted successfully"}
 
 @router.get("/approvers/list")
-async def get_approvers(db: Session = Depends(get_db)):
+async def get_approvers(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get list of approvers (Kris and Adam)"""
     approvers = db.query(User).filter(
         (User.is_approver == True) | (User.username.in_(["Kris", "Adam"]))

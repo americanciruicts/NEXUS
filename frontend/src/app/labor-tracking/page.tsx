@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/layout/Layout';
 import Modal from '@/components/Modal';
 import { ClockIcon, UserIcon, DocumentTextIcon, PlayIcon, StopIcon, PencilIcon, TrashIcon, EyeIcon, FunnelIcon, CheckIcon } from '@heroicons/react/24/outline';
@@ -29,6 +29,7 @@ interface LaborEntry {
   work_center?: string;
   sequence_number?: number;
   qty_completed?: number;
+  comment?: string;
 }
 
 export default function LaborTrackingPage() {
@@ -48,6 +49,7 @@ export default function LaborTrackingPage() {
   const [newEntry, setNewEntry] = useState({
     job_number: '',
     work_center: '',
+    step_id: undefined as number | undefined,
     operator_name: '',
     operator_id: undefined as number | undefined,
     date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
@@ -73,10 +75,12 @@ export default function LaborTrackingPage() {
   const [manualEntryData, setManualEntryData] = useState({
     job_number: '',
     work_center: '',
+    step_id: undefined as number | undefined,
     operator_name: '',
     operator_id: undefined as number | undefined,
     start_time: '',
     end_time: '',
+    comment: '',
   });
   const [manualJobWorkCenterOptions, setManualJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [editEntryData, setEditEntryData] = useState({
@@ -86,11 +90,13 @@ export default function LaborTrackingPage() {
     operator_name: '',
     start_time: '',
     end_time: '',
+    comment: '',
   });
 
   // Qty completed modal states
   const [isQtyModalOpen, setIsQtyModalOpen] = useState(false);
   const [qtyCompleted, setQtyCompleted] = useState('');
+  const [stopComment, setStopComment] = useState('');
   const [pendingStopEntryId, setPendingStopEntryId] = useState<number | null>(null);
   const [travelerMaxQty, setTravelerMaxQty] = useState<number | null>(null);
 
@@ -238,7 +244,7 @@ export default function LaborTrackingPage() {
   // Handle job number selection from autocomplete dropdown - THIS is when we fetch steps
   const handleJobNumberSelect = async (option: any) => {
     const jobNum = option.job_number || option.value;
-    setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '' }));
+    setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
     const steps = await fetchWorkCentersByJob(jobNum);
     setJobWorkCenterOptions(steps);
   };
@@ -376,6 +382,7 @@ export default function LaborTrackingPage() {
             setNewEntry({
               job_number: data.job_number || '',
               work_center: parts[0] || '',
+              step_id: data.step_id || undefined,
               operator_name: parts[1] || '',
               operator_id: data.employee_id || user?.id,
               date: start.toISOString().slice(0, 10),
@@ -454,6 +461,11 @@ export default function LaborTrackingPage() {
         start_time: now.toISOString(),
         description: description
       };
+
+      // Pass step_id if selected from work center dropdown
+      if (newEntry.step_id) {
+        requestBody.step_id = newEntry.step_id;
+      }
 
       // Admin can assign entry to another user
       if (user?.role === 'ADMIN' && newEntry.operator_id && newEntry.operator_id !== user.id) {
@@ -588,7 +600,8 @@ export default function LaborTrackingPage() {
         body: JSON.stringify({
           end_time: endTime.toISOString(),
           is_completed: true,
-          qty_completed: qtyCompleted ? parseInt(qtyCompleted) : null
+          qty_completed: qtyCompleted ? parseInt(qtyCompleted) : null,
+          comment: stopComment || null
         })
       });
 
@@ -603,6 +616,7 @@ export default function LaborTrackingPage() {
         setNewEntry({
           job_number: '',
           work_center: '',
+          step_id: undefined,
           operator_name: fullName,
           operator_id: user?.id,
           date: new Date().toISOString().slice(0, 10),
@@ -621,6 +635,7 @@ export default function LaborTrackingPage() {
       setIsQtyModalOpen(false);
       setPendingStopEntryId(null);
       setQtyCompleted('');
+      setStopComment('');
     }
   };
 
@@ -759,7 +774,9 @@ export default function LaborTrackingPage() {
           end_time: endTimeISO,  // CRITICAL: End time is set, making this a completed entry
           description: `${manualEntryData.work_center} - ${manualEntryData.operator_name}`,
           is_completed: true,     // CRITICAL: Mark as completed to prevent timer activation
-          ...(manualEntryData.operator_id ? { employee_id: manualEntryData.operator_id } : {})
+          ...(manualEntryData.step_id ? { step_id: manualEntryData.step_id } : {}),
+          ...(manualEntryData.operator_id ? { employee_id: manualEntryData.operator_id } : {}),
+          comment: manualEntryData.comment || null
         })
       });
 
@@ -769,10 +786,12 @@ export default function LaborTrackingPage() {
         setManualEntryData({
           job_number: '',
           work_center: '',
+          step_id: undefined,
           operator_name: '',
           operator_id: undefined,
           start_time: '',
           end_time: '',
+          comment: '',
         });
         setManualJobWorkCenterOptions([]);
         // Reload entries but DO NOT check for active entry (to avoid timer activation)
@@ -803,7 +822,8 @@ export default function LaborTrackingPage() {
         body: JSON.stringify({
           start_time: editEntryData.start_time,
           end_time: editEntryData.end_time,
-          description: `${editEntryData.work_center} - ${editEntryData.operator_name}`
+          description: `${editEntryData.work_center} - ${editEntryData.operator_name}`,
+          comment: editEntryData.comment || null
         })
       });
 
@@ -829,6 +849,7 @@ export default function LaborTrackingPage() {
       operator_name: entry.employee_name || entry.description?.split(' - ')?.[1] || '',
       start_time: entry.start_time,
       end_time: entry.end_time || new Date().toISOString(),
+      comment: entry.comment || '',
     });
     setIsEditModalOpen(true);
   };
@@ -1069,7 +1090,10 @@ export default function LaborTrackingPage() {
                   </label>
                   <Autocomplete
                     value={newEntry.work_center}
-                    onChange={(value) => setNewEntry({ ...newEntry, work_center: value })}
+                    onChange={(value) => setNewEntry({ ...newEntry, work_center: value, step_id: undefined })}
+                    onSelect={(option: any) => {
+                      setNewEntry(prev => ({ ...prev, work_center: option.value || option.label, step_id: option.step_id }));
+                    }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps
                       if (newEntry.job_number) {
@@ -1571,17 +1595,17 @@ export default function LaborTrackingPage() {
                         pauseDuration = (endTime - pauseStart) / (1000 * 60 * 60); // Convert to hours
                       }
 
+                      const hasComment = !!entry.comment;
+                      const totalCols = 10 + (user?.role === 'ADMIN' ? 2 : 0);
+                      const rowBg = selectedEntries.includes(entry.id)
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500'
+                        : 'hover:bg-blue-50/30 dark:hover:bg-slate-700/50';
+
                       return (
-                        <tr
-                          key={entry.id}
-                          className={`transition-colors ${
-                            selectedEntries.includes(entry.id)
-                              ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500'
-                              : 'hover:bg-blue-50/30 dark:hover:bg-slate-700/50'
-                          }`}
-                        >
+                        <React.Fragment key={entry.id}>
+                        <tr className={`transition-colors ${rowBg} ${hasComment ? 'border-b-0' : ''}`}>
                           {user?.role === 'ADMIN' && (
-                            <td className="px-3 py-3 whitespace-nowrap">
+                            <td className={`px-3 py-3 whitespace-nowrap ${hasComment ? 'pb-0' : ''}`} rowSpan={hasComment ? 2 : 1}>
                               <input
                                 type="checkbox"
                                 checked={selectedEntries.includes(entry.id)}
@@ -1590,30 +1614,30 @@ export default function LaborTrackingPage() {
                               />
                             </td>
                           )}
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300 ${hasComment ? 'pb-1' : ''}`}>
                             {new Date(entry.start_time).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className={`px-4 py-3 whitespace-nowrap ${hasComment ? 'pb-1' : ''}`}>
                             <div className="flex items-center space-x-2">
                               <DocumentTextIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
                               <span className="font-semibold text-gray-900 dark:text-slate-100 text-sm">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 font-medium">
+                          <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 font-medium ${hasComment ? 'pb-1' : ''}`}>
                             {entry.work_order || '-'}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-slate-300 ${hasComment ? 'pb-1' : ''}`}>
                             {operatorName}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className={`px-4 py-3 whitespace-nowrap ${hasComment ? 'pb-1' : ''}`}>
                             <span className="px-2.5 py-1 text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
                               {sequenceDisplay}
                             </span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                          <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 ${hasComment ? 'pb-1' : ''}`}>
                             {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <td className={`px-4 py-3 whitespace-nowrap text-sm ${hasComment ? 'pb-1' : ''}`}>
                             {pauseDuration > 0 ? (
                               <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-md font-semibold text-xs">
                                 {formatHoursDualCompact(pauseDuration)}
@@ -1622,20 +1646,20 @@ export default function LaborTrackingPage() {
                               <span className="text-gray-400 dark:text-slate-500">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
+                          <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 ${hasComment ? 'pb-1' : ''}`}>
                             {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }) : '-'}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className={`px-4 py-3 whitespace-nowrap ${hasComment ? 'pb-1' : ''}`}>
                             <div className="flex items-center space-x-1 text-sm font-bold text-emerald-600">
                               <ClockIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                               <span>{formatHoursDualCompact(entry.hours_worked)}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center text-sm font-semibold text-gray-700 dark:text-slate-300">
+                          <td className={`px-4 py-3 whitespace-nowrap text-center text-sm font-semibold text-gray-700 dark:text-slate-300 ${hasComment ? 'pb-1' : ''}`}>
                             {entry.qty_completed != null ? entry.qty_completed : '-'}
                           </td>
                           {user?.role === 'ADMIN' && (
-                            <td className="px-4 py-3 whitespace-nowrap">
+                            <td className={`px-4 py-3 whitespace-nowrap ${hasComment ? 'pb-1' : ''}`} rowSpan={hasComment ? 2 : 1}>
                               <div className="flex items-center justify-center gap-2">
                                 <button
                                   onClick={() => {
@@ -1660,6 +1684,18 @@ export default function LaborTrackingPage() {
                             </td>
                           )}
                         </tr>
+                        {hasComment && (
+                          <tr className={`${rowBg}`}>
+                            <td colSpan={totalCols - (user?.role === 'ADMIN' ? 2 : 0)} className="px-4 pt-0 pb-2">
+                              <div className="flex items-center gap-2 ml-0">
+                                <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg>
+                                <span className="text-xs font-semibold text-amber-800 dark:text-amber-200">{operatorName}:</span>
+                                <span className="text-xs text-amber-700 dark:text-amber-300 italic">{entry.comment}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -1870,12 +1906,13 @@ export default function LaborTrackingPage() {
           setIsQtyModalOpen(false);
           setPendingStopEntryId(null);
           setQtyCompleted('');
+          setStopComment('');
         }}
-        title="Quantity Completed"
+        title="Quantity Completed & Comment"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-slate-400">
-            How many units did you complete during this time?
+            How many units did you complete during this time? <span className="text-red-500 font-semibold">*</span>
             {travelerMaxQty != null && (
               <span className="block mt-1 font-semibold text-blue-600 dark:text-blue-400">
                 Traveler quantity: {travelerMaxQty}
@@ -1899,25 +1936,39 @@ export default function LaborTrackingPage() {
             className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:bg-slate-700 dark:text-white"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter') confirmStopTimer();
+              if (e.key === 'Enter' && qtyCompleted) confirmStopTimer();
             }}
           />
           {qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty && (
             <p className="text-xs text-red-600 font-medium">Quantity cannot exceed {travelerMaxQty}</p>
           )}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">
+              Comment <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <textarea
+              value={stopComment}
+              onChange={(e) => setStopComment(e.target.value)}
+              placeholder="Add a note about this work..."
+              rows={2}
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-white resize-none"
+            />
+          </div>
           <div className="flex justify-end space-x-3 pt-2">
             <button
               onClick={() => {
+                setIsQtyModalOpen(false);
+                setPendingStopEntryId(null);
                 setQtyCompleted('');
-                confirmStopTimer();
+                setStopComment('');
               }}
               className="px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-slate-200 font-medium rounded-lg transition-colors"
             >
-              Skip
+              Cancel
             </button>
             <button
               onClick={confirmStopTimer}
-              disabled={!!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
+              disabled={!qtyCompleted || !!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
               Stop Timer
@@ -1934,10 +1985,12 @@ export default function LaborTrackingPage() {
           setManualEntryData({
             job_number: '',
             work_center: '',
+            step_id: undefined,
             operator_name: '',
             operator_id: undefined,
             start_time: '',
             end_time: '',
+            comment: '',
           });
           setManualJobWorkCenterOptions([]);
         }}
@@ -1950,10 +2003,12 @@ export default function LaborTrackingPage() {
                 setManualEntryData({
                   job_number: '',
                   work_center: '',
+                  step_id: undefined,
                   operator_name: '',
                   operator_id: undefined,
                   start_time: '',
                   end_time: '',
+                  comment: '',
                 });
                 setManualJobWorkCenterOptions([]);
               }}
@@ -1986,7 +2041,7 @@ export default function LaborTrackingPage() {
                 }}
                 onSelect={async (option) => {
                   const jobNum = option.job_number || option.value;
-                  setManualEntryData(prev => ({ ...prev, job_number: jobNum, work_center: '' }));
+                  setManualEntryData(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
                   const steps = await fetchWorkCentersByJob(jobNum);
                   setManualJobWorkCenterOptions(steps);
                 }}
@@ -2003,7 +2058,10 @@ export default function LaborTrackingPage() {
               </label>
               <Autocomplete
                 value={manualEntryData.work_center}
-                onChange={(value) => setManualEntryData({ ...manualEntryData, work_center: value })}
+                onChange={(value) => setManualEntryData({ ...manualEntryData, work_center: value, step_id: undefined })}
+                onSelect={(option: any) => {
+                  setManualEntryData(prev => ({ ...prev, work_center: option.value || option.label, step_id: option.step_id }));
+                }}
                 fetchSuggestions={async (query) => {
                   if (manualEntryData.job_number) {
                     const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query);
@@ -2064,6 +2122,19 @@ export default function LaborTrackingPage() {
                 required
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+              Comment <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <textarea
+              value={manualEntryData.comment}
+              onChange={(e) => setManualEntryData({ ...manualEntryData, comment: e.target.value })}
+              placeholder="Add a note about this work..."
+              rows={2}
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 resize-none"
+            />
           </div>
         </div>
       </Modal>
@@ -2151,6 +2222,19 @@ export default function LaborTrackingPage() {
                 className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+              Comment <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <textarea
+              value={editEntryData.comment}
+              onChange={(e) => setEditEntryData({ ...editEntryData, comment: e.target.value })}
+              placeholder="Add or edit comment..."
+              rows={2}
+              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 resize-none"
+            />
           </div>
         </div>
       </Modal>

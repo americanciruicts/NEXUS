@@ -364,7 +364,14 @@ async def update_labor_entry(
     labor_entry.job_number = traveler.job_number if traveler else None
 
     # Create notification for all admins
-    action = "completed" if labor_data.end_time else "updated"
+    if labor_data.end_time:
+        action = "stopped"
+    elif labor_data.pause_time:
+        action = "paused"
+    elif labor_data.clear_pause:
+        action = "resumed"
+    else:
+        action = "updated"
     create_notification_for_admins(
         db=db,
         notification_type=NotificationType.LABOR_ENTRY_UPDATED,

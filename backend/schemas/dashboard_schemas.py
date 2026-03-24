@@ -33,6 +33,15 @@ class DashboardStats(BaseModel):
     on_hold_travelers: int
     overdue_travelers: int
 
+    # Department trend (labor hours by department per day)
+    department_trend: List[Dict[str, Any]]
+
+    # Stuck travelers (travelers idle too long in a department)
+    stuck_travelers: List[Dict[str, Any]]
+
+    # Forecast data (travelers with plan dates and estimated hours remaining)
+    forecast: List[Dict[str, Any]]
+
     # Real-time Operations
     active_labor_entries: int
 
