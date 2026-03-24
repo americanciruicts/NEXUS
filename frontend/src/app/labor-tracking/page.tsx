@@ -5,7 +5,7 @@ import Layout from '@/components/layout/Layout';
 import Modal from '@/components/Modal';
 import { ClockIcon, UserIcon, DocumentTextIcon, PlayIcon, StopIcon, PencilIcon, TrashIcon, EyeIcon, FunnelIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
-import { formatHoursDualCompact, formatHoursDual } from '@/utils/timeHelpers';
+import { formatHoursDualCompact, formatHoursDual, formatSecondsCompact } from '@/utils/timeHelpers';
 import Autocomplete from '@/components/ui/Autocomplete';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
@@ -1535,11 +1535,28 @@ export default function LaborTrackingPage() {
                           </div>
                           <div>
                             <p className="text-xs text-gray-500 dark:text-slate-400">Pauses</p>
-                            <p className="text-sm text-gray-900 dark:text-slate-100 mt-1">
-                              {(entry.pause_count || 0) > 0
-                                ? `${entry.pause_count}x (${formatHoursDualCompact((entry.total_pause_seconds || 0) / 3600)})`
-                                : '0'}
-                            </p>
+                            {(entry.pause_count || 0) > 0 ? (
+                              <div className="mt-1">
+                                <span className="inline-block px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-md font-semibold text-xs">
+                                  {entry.pause_count}x &middot; {formatSecondsCompact(entry.total_pause_seconds || 0)}
+                                </span>
+                                {(entry.pause_logs || []).length > 0 && (
+                                  <div className="mt-1 space-y-0.5">
+                                    {(entry.pause_logs || []).map((pl, idx) => (
+                                      <div key={pl.id} className="text-[11px] text-gray-600 dark:text-slate-400 flex items-center gap-1">
+                                        <span className="text-gray-400 font-mono">#{idx + 1}</span>
+                                        <span className="font-semibold text-amber-600 dark:text-amber-400">
+                                          {pl.duration_seconds ? formatSecondsCompact(pl.duration_seconds) : 'active'}
+                                        </span>
+                                        {pl.comment && <span className="truncate max-w-[120px]" title={pl.comment}>- {pl.comment}</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">0</p>
+                            )}
                           </div>
                           <div>
                             <p className="text-xs text-gray-500 dark:text-slate-400">End Time</p>
@@ -1662,13 +1679,36 @@ export default function LaborTrackingPage() {
                           <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 ${hasComment ? 'pb-1' : ''}`}>
                             {new Date(entry.start_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}
                           </td>
-                          <td className={`px-4 py-3 whitespace-nowrap text-sm ${hasComment ? 'pb-1' : ''}`}>
+                          <td className={`px-4 py-3 text-sm ${hasComment ? 'pb-1' : ''}`}>
                             {pauseCount > 0 ? (
-                              <div className="flex flex-col items-start gap-0.5">
-                                <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-md font-semibold text-xs">
-                                  {formatHoursDualCompact(totalPauseHours)}
-                                </span>
-                                <span className="text-[10px] text-gray-500 dark:text-slate-400">{pauseCount}x paused</span>
+                              <div className="group relative">
+                                <div className="flex items-center gap-1.5 cursor-default">
+                                  <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-md font-semibold text-xs">
+                                    {formatSecondsCompact(totalPauseSecs)}
+                                  </span>
+                                  <span className="text-[10px] text-gray-500 dark:text-slate-400 whitespace-nowrap">{pauseCount}x</span>
+                                </div>
+                                {/* Hover tooltip showing each individual pause */}
+                                {(entry.pause_logs || []).length > 0 && (
+                                  <div className="hidden group-hover:block absolute z-[9999] left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl p-2.5 min-w-[200px] max-w-[280px]">
+                                    <div className="text-[11px] font-bold text-gray-700 dark:text-slate-200 mb-1.5 border-b border-gray-100 dark:border-slate-700 pb-1">
+                                      {pauseCount} Pause{pauseCount > 1 ? 's' : ''} &middot; Total: {formatSecondsCompact(totalPauseSecs)}
+                                    </div>
+                                    <div className="space-y-1 max-h-[180px] overflow-y-auto">
+                                      {(entry.pause_logs || []).map((pl, idx) => (
+                                        <div key={pl.id} className="flex items-start gap-1.5 text-[11px]">
+                                          <span className="text-gray-400 dark:text-slate-500 font-mono shrink-0">#{idx + 1}</span>
+                                          <span className="font-semibold text-amber-600 dark:text-amber-400 shrink-0">
+                                            {pl.duration_seconds ? formatSecondsCompact(pl.duration_seconds) : 'active'}
+                                          </span>
+                                          {pl.comment && (
+                                            <span className="text-gray-500 dark:text-slate-400 truncate" title={pl.comment}>- {pl.comment}</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-gray-400 dark:text-slate-500">0</span>

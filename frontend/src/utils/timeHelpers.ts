@@ -188,3 +188,24 @@ export function isUnusuallyLong(hours: number): boolean {
 export function isUnusuallyShort(hours: number): boolean {
   return hours < (5 / 60); // 5 minutes
 }
+
+/**
+ * Format seconds into a user-friendly compact duration string.
+ * Handles small durations gracefully (shows seconds for < 1 min, minutes for < 1 hr).
+ * @param seconds - Duration in seconds
+ * @returns Formatted string like "45s", "3m 20s", "1h 15m"
+ */
+export function formatSecondsCompact(seconds: number): string {
+  if (seconds === null || seconds === undefined || isNaN(seconds) || seconds <= 0) {
+    return '0s';
+  }
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.round(seconds % 60);
+
+  if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+  if (hrs > 0) return `${hrs}h`;
+  if (mins > 0 && secs > 0) return `${mins}m ${secs}s`;
+  if (mins > 0) return `${mins}m`;
+  return `${secs}s`;
+}

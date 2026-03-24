@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 interface AutocompleteOption {
   value: string;
@@ -37,7 +38,7 @@ export default function Autocomplete({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [openAbove, setOpenAbove] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -48,10 +49,31 @@ export default function Autocomplete({
   // Keep fetchRef up to date without triggering effects
   fetchRef.current = fetchSuggestions;
 
+  // Calculate dropdown position based on input element
+  const updateDropdownPosition = useCallback(() => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openAbove = spaceBelow < 320 && rect.top > spaceBelow;
+
+    setDropdownStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      ...(openAbove
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+      zIndex: 9999,
+    });
+  }, []);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        // Also check if click was on the portal dropdown
+        const dropdown = document.getElementById('autocomplete-dropdown');
+        if (dropdown && dropdown.contains(event.target as Node)) return;
         setIsOpen(false);
         isFocusedRef.current = false;
       }
@@ -60,6 +82,18 @@ export default function Autocomplete({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Update position on scroll/resize when open
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePositionUpdate = () => updateDropdownPosition();
+    window.addEventListener('scroll', handlePositionUpdate, true);
+    window.addEventListener('resize', handlePositionUpdate);
+    return () => {
+      window.removeEventListener('scroll', handlePositionUpdate, true);
+      window.removeEventListener('resize', handlePositionUpdate);
+    };
+  }, [isOpen, updateDropdownPosition]);
 
   // Fetch suggestions with debounce - only when user is interacting
   useEffect(() => {
@@ -92,6 +126,7 @@ export default function Autocomplete({
         // Only open if still focused
         if (isFocusedRef.current) {
           setIsOpen(results.length > 0);
+          if (results.length > 0) updateDropdownPosition();
         }
         setSelectedIndex(-1);
       } catch (error) {
@@ -108,7 +143,7 @@ export default function Autocomplete({
         clearTimeout(debounceRef.current);
       }
     };
-  }, [value, minChars, debounceMs]);
+  }, [value, minChars, debounceMs, updateDropdownPosition]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     isFocusedRef.current = true;
@@ -157,12 +192,7 @@ export default function Autocomplete({
 
   const handleFocus = async () => {
     isFocusedRef.current = true;
-    // Check if there's more space above or below
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setOpenAbove(spaceBelow < 320 && rect.top > spaceBelow);
-    }
+    updateDropdownPosition();
     // Show suggestions on focus if meets min chars
     if (value.length >= minChars || minChars === 0) {
       setIsLoading(true);
@@ -170,6 +200,7 @@ export default function Autocomplete({
         const results = await fetchRef.current(value);
         setSuggestions(results);
         if (results.length > 0) {
+          updateDropdownPosition();
           setIsOpen(true);
         }
       } catch (error) {
@@ -188,6 +219,31 @@ export default function Autocomplete({
       }
     }, 200);
   };
+
+  const dropdownContent = isOpen && suggestions.length > 0 ? (
+    <ul
+      id="autocomplete-dropdown"
+      style={dropdownStyle}
+      className="bg-white dark:bg-slate-800 border-2 border-blue-200 dark:border-blue-700 rounded-lg shadow-2xl max-h-80 overflow-y-auto"
+    >
+      {suggestions.map((option, index) => (
+        <li
+          key={option.value + index}
+          onClick={() => handleSelect(option)}
+          className={`px-4 py-2 cursor-pointer transition-colors ${
+            index === selectedIndex
+              ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-200'
+              : 'hover:bg-blue-50 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200'
+          }`}
+        >
+          <div className="font-medium">{option.label}</div>
+          {option.description && (
+            <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{option.description}</div>
+          )}
+        </li>
+      ))}
+    </ul>
+  ) : null;
 
   return (
     <div ref={wrapperRef} className="relative w-full">
@@ -231,26 +287,7 @@ export default function Autocomplete({
         </div>
       )}
 
-      {isOpen && suggestions.length > 0 && (
-        <ul className={`absolute z-[100] w-full bg-white dark:bg-slate-800 border-2 border-blue-200 dark:border-blue-700 rounded-lg shadow-xl max-h-80 overflow-y-auto ${openAbove ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-          {suggestions.map((option, index) => (
-            <li
-              key={option.value + index}
-              onClick={() => handleSelect(option)}
-              className={`px-4 py-2 cursor-pointer transition-colors ${
-                index === selectedIndex
-                  ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/40 dark:text-blue-200'
-                  : 'hover:bg-blue-50 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200'
-              }`}
-            >
-              <div className="font-medium">{option.label}</div>
-              {option.description && (
-                <div className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{option.description}</div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      {typeof window !== 'undefined' && dropdownContent && createPortal(dropdownContent, document.body)}
     </div>
   );
 }
