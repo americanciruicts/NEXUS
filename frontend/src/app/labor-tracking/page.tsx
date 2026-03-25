@@ -131,81 +131,41 @@ export default function LaborTrackingPage() {
   const lastStartedWorkCenterRef = useRef<string>('');
   const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Global barcode/QR scanner listener for auto-start and auto-stop
-  // Scanners type characters rapidly (<50ms between chars) and end with Enter
+  // Global scanner listener — ONLY for auto-stop when timer is running
+  // Detects rapid keystrokes (scanner) ending with Enter, extracts work center, stops timer
   const globalScanBufferRef = useRef('');
   const globalScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastScanTimeRef = useRef(0);
   useEffect(() => {
+    if (!isTimerRunning) return; // Only active when timer is running
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      const now = Date.now();
-      const timeSinceLastKey = now - lastScanTimeRef.current;
-      lastScanTimeRef.current = now;
-
-      // If too much time passed since last key, reset buffer (not a scanner)
-      if (timeSinceLastKey > 100 && globalScanBufferRef.current.length > 0) {
-        globalScanBufferRef.current = '';
-      }
-
       if (e.key === 'Enter' && globalScanBufferRef.current.length > 1) {
         const scannedValue = globalScanBufferRef.current.trim();
         globalScanBufferRef.current = '';
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
 
-        // Prevent Enter from submitting forms or triggering buttons
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Blur any focused input
-        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-
-        // Extract work center from QR if it's a NEXUS-STEP format
-        let parsedWorkCenter = '';
-        let parsedJobNumber = '';
-        let parsedStepId: number | undefined;
-
+        // Extract work center from QR code
+        let workCenterFromScan = scannedValue;
         if (scannedValue.startsWith('NEXUS-STEP|')) {
           const parts = scannedValue.split('|');
-          if (parts.length >= 5) {
-            parsedJobNumber = parts[2] || '';
-            parsedWorkCenter = parts[4] || '';
-            parsedStepId = parts.length >= 9 && parts[8] ? parseInt(parts[8]) : undefined;
-          }
-        } else if (scannedValue.startsWith('NEX-')) {
-          const parts = scannedValue.split('-');
-          if (parts.length >= 3) {
-            parsedJobNumber = parts.slice(2).join('-');
-          }
-        } else {
-          // Plain barcode — always treat as job number only
-          parsedJobNumber = scannedValue;
+          if (parts.length >= 5) workCenterFromScan = parts[4];
         }
 
-        if (isTimerRunning) {
-          // AUTO-STOP: compare work center from scan against active work center
-          const wcToCompare = parsedWorkCenter || scannedValue;
-          if (wcToCompare.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
-            stopTimer();
-          }
-        } else {
-          // AUTO-START: fill fields from scan
-          setNewEntry(prev => ({
-            ...prev,
-            job_number: parsedJobNumber || prev.job_number,
-            // Work center ONLY from QR code (NEXUS-STEP), never from plain barcode
-            work_center: parsedWorkCenter || prev.work_center,
-            step_id: parsedStepId || prev.step_id,
-          }));
+        // Compare against active work center
+        if (workCenterFromScan.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          stopTimer();
         }
+
         return;
       }
 
-      // Buffer printable characters
+      // Buffer printable characters with 100ms gap detection (scanner speed)
       if (e.key.length === 1) {
-        globalScanBufferRef.current += e.key;
-
-        // Clear buffer after 100ms of no input
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
+        globalScanBufferRef.current += e.key;
         globalScanTimeoutRef.current = setTimeout(() => {
           globalScanBufferRef.current = '';
         }, 100);
@@ -216,6 +176,7 @@ export default function LaborTrackingPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
       if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
+      globalScanBufferRef.current = '';
     };
   }, [isTimerRunning]);
 
