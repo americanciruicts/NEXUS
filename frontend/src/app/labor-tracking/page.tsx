@@ -130,6 +130,8 @@ export default function LaborTrackingPage() {
   const autoStartTriggeredRef = useRef(false);
   const lastStartedWorkCenterRef = useRef<string>('');
   const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const scanBufferRef = useRef('');
+  const scanDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-fill operator name from signed-in user
   useEffect(() => {
@@ -1225,18 +1227,31 @@ export default function LaborTrackingPage() {
                   <Autocomplete
                     value={newEntry.work_center}
                     onChange={(value) => {
-                      if (!isTimerRunning) {
-                        setNewEntry({ ...newEntry, work_center: value, step_id: undefined });
+                      setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
+                      if (isTimerRunning) {
+                        // Debounce scanner input for auto-stop detection
+                        if (scanDebounceRef.current) clearTimeout(scanDebounceRef.current);
+                        scanDebounceRef.current = setTimeout(() => {
+                          const scanned = value.trim();
+                          if (scanned && scanned.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+                            stopTimer();
+                          } else if (scanned && scanned.length > 1) {
+                            toast.warning('Scan the same work center QR to stop the timer.');
+                          }
+                          // Reset the displayed value back to the active work center
+                          setNewEntry(prev => ({ ...prev, work_center: lastStartedWorkCenterRef.current }));
+                        }, 600);
                       }
                     }}
                     onSelect={(option: any) => {
                       const selectedWC = option.value || option.label;
                       if (isTimerRunning) {
-                        // Auto-stop: same work center scanned again
                         if (selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
                           stopTimer();
                         } else {
-                          toast.warning('Timer is running! Scan the same work center QR to stop, or stop manually first.');
+                          toast.warning('Scan the same work center QR to stop the timer.');
+                          // Reset back to active work center
+                          setNewEntry(prev => ({ ...prev, work_center: lastStartedWorkCenterRef.current }));
                         }
                         return;
                       }
