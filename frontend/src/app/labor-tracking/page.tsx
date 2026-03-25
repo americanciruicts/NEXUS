@@ -160,8 +160,13 @@ export default function LaborTrackingPage() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 
         if (isTimerRunning) {
-          // AUTO-STOP: check if scanned value matches the active work center
-          if (scannedValue.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+          // AUTO-STOP: extract work center from scan and compare
+          let scannedWC = scannedValue;
+          if (scannedValue.startsWith('NEXUS-STEP|')) {
+            const parts = scannedValue.split('|');
+            if (parts.length >= 5) scannedWC = parts[4];
+          }
+          if (scannedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
             stopTimer();
           }
         } else {
