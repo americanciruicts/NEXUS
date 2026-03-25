@@ -128,26 +128,40 @@ interface AnalyticsData {
 }
 
 // Collapsible section wrapper
-function Section({ title, icon, badge, children, defaultOpen = true }: {
+function Section({ title, icon, badge, children, defaultOpen = true, headerGradient }: {
   title: string;
   icon: React.ReactNode;
   badge?: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  headerGradient?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const hasGradient = !!headerGradient;
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-750 hover:from-indigo-50 hover:to-blue-50 dark:hover:from-slate-700 dark:hover:to-slate-700 transition-all duration-200"
+        className={`w-full px-4 py-3 flex items-center justify-between transition-all duration-200 relative overflow-hidden ${
+          hasGradient
+            ? `bg-gradient-to-br ${headerGradient}`
+            : 'bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-750 hover:from-teal-50 hover:to-emerald-50 dark:hover:from-slate-700 dark:hover:to-slate-700'
+        }`}
       >
-        <div className="flex items-center gap-2">
+        {hasGradient && (
+          <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/4" />
+          </div>
+        )}
+        <div className="flex items-center gap-2 relative z-10">
           {icon}
-          <h2 className="text-sm font-bold text-gray-800 dark:text-slate-100">{title}</h2>
+          <h2 className={`text-sm font-bold ${hasGradient ? 'text-white' : 'text-gray-800 dark:text-slate-100'}`}>{title}</h2>
           {badge}
         </div>
-        {open ? <ChevronUpIcon className="w-4 h-4 text-gray-500 dark:text-slate-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-500 dark:text-slate-400" />}
+        {open
+          ? <ChevronUpIcon className={`w-4 h-4 relative z-10 ${hasGradient ? 'text-white/70' : 'text-gray-500 dark:text-slate-400'}`} />
+          : <ChevronDownIcon className={`w-4 h-4 relative z-10 ${hasGradient ? 'text-white/70' : 'text-gray-500 dark:text-slate-400'}`} />
+        }
       </button>
       {open && <div className="border-t border-gray-100 dark:border-slate-700">{children}</div>}
     </div>
@@ -231,20 +245,24 @@ export default function AnalyticsPage() {
 
   return (
     <Layout fullWidth>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-3 sm:p-5">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-3 sm:p-5">
         {/* Header */}
-        <div className="mb-4 bg-gradient-to-br from-indigo-600 via-purple-700 to-violet-800 text-white rounded-xl p-4 shadow-xl">
-          <div className="flex items-center justify-between">
+        <div className="mb-4 bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white rounded-xl p-4 shadow-xl relative overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -translate-y-1/2 translate-x-1/4" />
+            <div className="absolute bottom-0 left-1/4 w-20 h-20 bg-white rounded-full translate-y-1/2" />
+          </div>
+          <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/reports" className="bg-white/15 hover:bg-white/25 p-2 rounded-lg border border-white/20 transition-colors">
+              <Link href="/reports" className="bg-white/15 hover:bg-white/25 backdrop-blur-sm p-2 rounded-lg border border-white/20 transition-colors">
                 <ArrowLeftIcon className="w-4 h-4" />
               </Link>
               <div>
                 <h1 className="text-lg font-extrabold tracking-tight">Production Analytics</h1>
-                <p className="text-xs text-purple-200/80">Labor anomalies, due dates, efficiency, yield, bottlenecks & operator performance</p>
+                <p className="text-xs text-teal-200/80">Labor anomalies, due dates, efficiency, yield, bottlenecks & operator performance</p>
               </div>
             </div>
-            <button onClick={fetchData} className="bg-white/15 hover:bg-white/25 p-2 rounded-lg border border-white/20 transition-colors">
+            <button onClick={fetchData} className="bg-white/15 hover:bg-white/25 backdrop-blur-sm p-2 rounded-lg border border-white/20 transition-colors">
               <ArrowPathIcon className="w-4 h-4" />
             </button>
           </div>
@@ -255,8 +273,9 @@ export default function AnalyticsPage() {
           {/* ===== 1. DAILY SUMMARY ===== */}
           <Section
             title="Daily Summary"
-            icon={<DocumentChartBarIcon className="w-4 h-4 text-indigo-500" />}
-            badge={<span className="text-[10px] font-bold text-gray-400">{new Date().toLocaleDateString()}</span>}
+            icon={<DocumentChartBarIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-indigo-600 via-indigo-700 to-purple-800"
+            badge={<span className="text-[10px] font-bold text-indigo-200/80">{new Date().toLocaleDateString()}</span>}
           >
             <div className="p-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3 mb-4">
@@ -264,7 +283,7 @@ export default function AnalyticsPage() {
                   { label: 'Started', value: daily_summary.entries_started, color: 'text-blue-600' },
                   { label: 'Completed', value: daily_summary.entries_completed, color: 'text-green-600' },
                   { label: 'Hours', value: `${daily_summary.hours_logged}h`, color: 'text-purple-600' },
-                  { label: 'Steps Done', value: daily_summary.steps_completed, color: 'text-indigo-600' },
+                  { label: 'Steps Done', value: daily_summary.steps_completed, color: 'text-teal-600' },
                   { label: 'Jobs Done', value: daily_summary.travelers_completed, color: 'text-emerald-600' },
                   { label: 'Active', value: daily_summary.active_timers, color: 'text-orange-600' },
                   { label: 'Paused', value: daily_summary.paused_timers, color: 'text-amber-600' },
@@ -289,7 +308,7 @@ export default function AnalyticsPage() {
                           <div key={wc.work_center} className="flex items-center gap-2">
                             <span className="text-xs font-medium text-gray-700 dark:text-slate-300 w-28 truncate">{wc.work_center}</span>
                             <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
-                              <div className="h-3 rounded-full bg-indigo-500 transition-all" style={{ width: `${pct}%` }} />
+                              <div className="h-3 rounded-full bg-teal-500 transition-all" style={{ width: `${pct}%` }} />
                             </div>
                             <span className="text-xs font-bold text-gray-700 dark:text-slate-300 w-12 text-right">{wc.hours}h</span>
                             <span className="text-[10px] text-gray-400 w-6 text-right">{wc.entries}</span>
@@ -306,7 +325,7 @@ export default function AnalyticsPage() {
                           <div key={op.name} className="flex items-center gap-2">
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>{i + 1}</span>
                             <span className="text-xs font-medium text-gray-700 dark:text-slate-300 flex-1 truncate">{op.name}</span>
-                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{op.hours}h</span>
+                            <span className="text-xs font-bold text-teal-600 dark:text-teal-400">{op.hours}h</span>
                             <span className="text-[10px] text-gray-400">{op.entries} entries</span>
                           </div>
                         ))}
@@ -321,13 +340,14 @@ export default function AnalyticsPage() {
           {/* ===== 2. LABOR ANOMALY DETECTION ===== */}
           <Section
             title="Labor Anomaly Detection"
-            icon={<ExclamationTriangleIcon className="w-4 h-4 text-red-500" />}
+            icon={<ExclamationTriangleIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-red-600 via-red-700 to-rose-800"
             badge={anomalies.length > 0 ? (
-              <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                 {anomalies.length} {anomalies.length === 1 ? 'issue' : 'issues'}
               </span>
             ) : (
-              <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold px-2 py-0.5 rounded-full">All clear</span>
+              <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">All clear</span>
             )}
           >
             <div className="p-3">
@@ -368,9 +388,10 @@ export default function AnalyticsPage() {
           {/* ===== 3. DUE DATE HEATMAP ===== */}
           <Section
             title="Due Date Heatmap"
-            icon={<CalendarDaysIcon className="w-4 h-4 text-orange-500" />}
+            icon={<CalendarDaysIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-amber-600 via-amber-700 to-orange-800"
             badge={
-              <span className="text-[10px] font-bold text-gray-400">
+              <span className="text-[10px] font-bold text-amber-200/80">
                 {due_date_heatmap.filter(d => d.urgency === 'overdue').length} overdue,{' '}
                 {due_date_heatmap.filter(d => ['due_today', 'critical'].includes(d.urgency)).length} critical
               </span>
@@ -447,9 +468,10 @@ export default function AnalyticsPage() {
           {/* ===== 4. EST VS ACTUAL TIME ===== */}
           <Section
             title="Estimated vs Actual Time"
-            icon={<ClockIcon className="w-4 h-4 text-purple-500" />}
+            icon={<ClockIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-purple-600 via-purple-700 to-violet-800"
             badge={
-              <span className="text-[10px] font-bold text-gray-400">
+              <span className="text-[10px] font-bold text-purple-200/80">
                 {est_vs_actual.filter(e => e.variance_hours > 0).length} over, {est_vs_actual.filter(e => e.variance_hours < 0).length} under
               </span>
             }
@@ -526,8 +548,9 @@ export default function AnalyticsPage() {
           {/* ===== 5. YIELD DASHBOARD ===== */}
           <Section
             title="Yield Dashboard"
-            icon={<CheckBadgeIcon className="w-4 h-4 text-green-500" />}
-            badge={<span className="text-[10px] font-bold text-gray-400">{yield_data.length} travelers with yield data</span>}
+            icon={<CheckBadgeIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-emerald-600 via-emerald-700 to-green-800"
+            badge={<span className="text-[10px] font-bold text-emerald-200/80">{yield_data.length} travelers with yield data</span>}
             defaultOpen={yield_data.length > 0}
           >
             <div className="p-3">
@@ -596,8 +619,9 @@ export default function AnalyticsPage() {
           {/* ===== 6. BOTTLENECK DETECTION ===== */}
           <Section
             title="Bottleneck Detection"
-            icon={<FunnelIcon className="w-4 h-4 text-amber-500" />}
-            badge={<span className="text-[10px] font-bold text-gray-400">{bottlenecks.length} work centers analyzed (30 days)</span>}
+            icon={<FunnelIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-rose-600 via-rose-700 to-pink-800"
+            badge={<span className="text-[10px] font-bold text-rose-200/80">{bottlenecks.length} work centers analyzed (30 days)</span>}
           >
             <div className="p-3">
               {bottlenecks.length === 0 ? (
@@ -638,8 +662,9 @@ export default function AnalyticsPage() {
           {/* ===== 7. OPERATOR SCORECARD ===== */}
           <Section
             title="Operator Scorecard"
-            icon={<UserGroupIcon className="w-4 h-4 text-cyan-500" />}
-            badge={<span className="text-[10px] font-bold text-gray-400">{operator_scorecards.length} operators (30 days)</span>}
+            icon={<UserGroupIcon className="w-4 h-4 text-white" />}
+            headerGradient="from-cyan-600 via-cyan-700 to-teal-800"
+            badge={<span className="text-[10px] font-bold text-cyan-200/80">{operator_scorecards.length} operators (30 days)</span>}
           >
             <div className="p-3">
               {operator_scorecards.length === 0 ? (
@@ -669,7 +694,7 @@ export default function AnalyticsPage() {
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white inline-flex ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>{i + 1}</span>
                           </td>
                           <td className="px-2 py-1.5 font-semibold text-gray-700 dark:text-slate-300">{op.name}</td>
-                          <td className="px-2 py-1.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">{op.total_hours}h</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-teal-600 dark:text-teal-400">{op.total_hours}h</td>
                           <td className="px-2 py-1.5 text-right font-mono text-gray-700 dark:text-slate-300">{op.avg_hours_per_day}h</td>
                           <td className="px-2 py-1.5 text-right">{op.total_entries}</td>
                           <td className="px-2 py-1.5 text-right text-green-600 font-bold">{op.steps_completed}</td>
