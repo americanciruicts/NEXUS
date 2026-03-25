@@ -127,8 +127,9 @@ export default function LaborTrackingPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   // Auto-timer: track scan-based auto-start/stop
-  const autoStartTriggeredRef = useRef(false);  // prevents double-start
-  const lastStartedWorkCenterRef = useRef<string>('');  // for auto-stop detection
+  const autoStartTriggeredRef = useRef(false);
+  const lastStartedWorkCenterRef = useRef<string>('');
+  const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-fill operator name from signed-in user
   useEffect(() => {
@@ -268,7 +269,6 @@ export default function LaborTrackingPage() {
   const handleJobNumberSelect = async (option: any) => {
     const jobNum = option.job_number || option.value;
     setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
-    autoStartReadyRef.current = true;
     const steps = await fetchWorkCentersByJob(jobNum);
     setJobWorkCenterOptions(steps);
   };
@@ -315,22 +315,29 @@ export default function LaborTrackingPage() {
     };
   }, [isTimerRunning, startTime, isPaused]);
 
-  // Auto-start: when both job_number and work_center become filled via selection, start timer
-  // We only auto-start when onSelect fires (sets autoStartReadyRef), not on every keystroke
-  const autoStartReadyRef = useRef(false);
+  // Auto-start: when both job_number and work_center are filled, wait 800ms then start
+  // The debounce prevents triggering while scanner is still typing characters
   useEffect(() => {
-    if (
-      autoStartReadyRef.current &&
-      newEntry.job_number &&
-      newEntry.work_center &&
-      newEntry.operator_name &&
-      !isTimerRunning &&
-      !autoStartTriggeredRef.current
-    ) {
-      autoStartReadyRef.current = false;
-      autoStartTriggeredRef.current = true;
-      startTimer();
+    // Clear any pending auto-start
+    if (autoStartTimerRef.current) {
+      clearTimeout(autoStartTimerRef.current);
+      autoStartTimerRef.current = null;
     }
+
+    const bothFilled = newEntry.job_number && newEntry.work_center && newEntry.operator_name;
+
+    if (bothFilled && !isTimerRunning && !autoStartTriggeredRef.current) {
+      autoStartTimerRef.current = setTimeout(() => {
+        autoStartTriggeredRef.current = true;
+        startTimer();
+      }, 800);
+    }
+
+    return () => {
+      if (autoStartTimerRef.current) {
+        clearTimeout(autoStartTimerRef.current);
+      }
+    };
   }, [newEntry.job_number, newEntry.work_center, newEntry.operator_name, isTimerRunning]);
 
   const formatTime = (seconds: number): string => {
@@ -1217,7 +1224,11 @@ export default function LaborTrackingPage() {
                   </label>
                   <Autocomplete
                     value={newEntry.work_center}
-                    onChange={(value) => setNewEntry({ ...newEntry, work_center: value, step_id: undefined })}
+                    onChange={(value) => {
+                      if (!isTimerRunning) {
+                        setNewEntry({ ...newEntry, work_center: value, step_id: undefined });
+                      }
+                    }}
                     onSelect={(option: any) => {
                       const selectedWC = option.value || option.label;
                       if (isTimerRunning) {
@@ -1230,7 +1241,6 @@ export default function LaborTrackingPage() {
                         return;
                       }
                       setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: option.step_id }));
-                      autoStartReadyRef.current = true;
                     }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps

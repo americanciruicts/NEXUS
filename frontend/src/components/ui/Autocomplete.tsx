@@ -180,6 +180,16 @@ export default function Autocomplete({
         e.preventDefault();
         if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
           handleSelect(suggestions[selectedIndex]);
+        } else if (suggestions.length > 0) {
+          // Auto-select first match (handles barcode/QR scanner Enter)
+          const exactMatch = suggestions.find(s => s.value.toLowerCase() === value.toLowerCase() || s.label.toLowerCase() === value.toLowerCase());
+          handleSelect(exactMatch || suggestions[0]);
+        } else if (value) {
+          // No suggestions but has value (scanner typed full value) — close dropdown and trigger onSelect with raw value
+          setIsOpen(false);
+          if (onSelect) {
+            onSelect({ value, label: value });
+          }
         }
         break;
       case 'Escape':
