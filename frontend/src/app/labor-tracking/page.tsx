@@ -130,8 +130,53 @@ export default function LaborTrackingPage() {
   const autoStartTriggeredRef = useRef(false);
   const lastStartedWorkCenterRef = useRef<string>('');
   const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const scanBufferRef = useRef('');
-  const scanDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Global barcode/QR scanner listener for auto-stop
+  // Scanners type characters rapidly and end with Enter — detect this pattern
+  const globalScanBufferRef = useRef('');
+  const globalScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (!isTimerRunning) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input/textarea (except scanner-speed input)
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+
+      if (e.key === 'Enter' && globalScanBufferRef.current.length > 0) {
+        e.preventDefault();
+        const scannedValue = globalScanBufferRef.current.trim();
+        globalScanBufferRef.current = '';
+        if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
+
+        // Check if scanned value matches the active work center
+        if (scannedValue.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+          // Blur any focused input so the stop modal works cleanly
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          stopTimer();
+        }
+        return;
+      }
+
+      // Only buffer printable characters
+      if (e.key.length === 1) {
+        // If typing in a focused input, still buffer for scanner detection
+        globalScanBufferRef.current += e.key;
+
+        // Reset buffer after 100ms of no input (scanners type < 50ms between chars)
+        if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
+        globalScanTimeoutRef.current = setTimeout(() => {
+          globalScanBufferRef.current = '';
+        }, 100);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
+    };
+  }, [isTimerRunning]);
 
   // Auto-fill operator name from signed-in user
   useEffect(() => {
@@ -1227,31 +1272,16 @@ export default function LaborTrackingPage() {
                   <Autocomplete
                     value={newEntry.work_center}
                     onChange={(value) => {
-                      setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
-                      if (isTimerRunning) {
-                        // Debounce scanner input for auto-stop detection
-                        if (scanDebounceRef.current) clearTimeout(scanDebounceRef.current);
-                        scanDebounceRef.current = setTimeout(() => {
-                          const scanned = value.trim();
-                          if (scanned && scanned.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
-                            stopTimer();
-                          } else if (scanned && scanned.length > 1) {
-                            toast.warning('Scan the same work center QR to stop the timer.');
-                          }
-                          // Reset the displayed value back to the active work center
-                          setNewEntry(prev => ({ ...prev, work_center: lastStartedWorkCenterRef.current }));
-                        }, 600);
+                      if (!isTimerRunning) {
+                        setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
                       }
                     }}
                     onSelect={(option: any) => {
                       const selectedWC = option.value || option.label;
                       if (isTimerRunning) {
+                        // Auto-stop handled by global scanner listener
                         if (selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
                           stopTimer();
-                        } else {
-                          toast.warning('Scan the same work center QR to stop the timer.');
-                          // Reset back to active work center
-                          setNewEntry(prev => ({ ...prev, work_center: lastStartedWorkCenterRef.current }));
                         }
                         return;
                       }
