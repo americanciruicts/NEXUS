@@ -126,6 +126,10 @@ export default function LaborTrackingPage() {
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
 
+  // Auto-timer refs to track scan-based auto-start/stop
+  const autoStartPendingRef = useRef(false);
+  const lastStartedWorkCenterRef = useRef<string>('');
+
   // Auto-fill operator name from signed-in user
   useEffect(() => {
     if (user && !isTimerRunning) {
@@ -264,6 +268,8 @@ export default function LaborTrackingPage() {
   const handleJobNumberSelect = async (option: any) => {
     const jobNum = option.job_number || option.value;
     setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
+    // Flag that a scan/selection happened - if work_center is already set, auto-start will trigger
+    autoStartPendingRef.current = true;
     const steps = await fetchWorkCentersByJob(jobNum);
     setJobWorkCenterOptions(steps);
   };
@@ -309,6 +315,21 @@ export default function LaborTrackingPage() {
       }
     };
   }, [isTimerRunning, startTime, isPaused]);
+
+  // Auto-start: when both job_number and work_center are filled (from scan/select), start timer automatically
+  useEffect(() => {
+    if (
+      autoStartPendingRef.current &&
+      newEntry.job_number &&
+      newEntry.work_center &&
+      newEntry.operator_name &&
+      !isTimerRunning
+    ) {
+      autoStartPendingRef.current = false;
+      lastStartedWorkCenterRef.current = newEntry.work_center;
+      startTimer();
+    }
+  }, [newEntry.job_number, newEntry.work_center, isTimerRunning]);
 
   const formatTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -507,6 +528,7 @@ export default function LaborTrackingPage() {
         setElapsedTime(0);
         setIsTimerRunning(true);
         setTravelerMaxQty(traveler.quantity || null);
+        lastStartedWorkCenterRef.current = newEntry.work_center;
         toast.success('Timer started!');
 
         // Reload entries to show new entry in table
@@ -653,6 +675,7 @@ export default function LaborTrackingPage() {
           date: new Date().toISOString().slice(0, 10),
         });
         setJobWorkCenterOptions([]);
+        lastStartedWorkCenterRef.current = '';
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else {
@@ -1193,7 +1216,21 @@ export default function LaborTrackingPage() {
                     value={newEntry.work_center}
                     onChange={(value) => setNewEntry({ ...newEntry, work_center: value, step_id: undefined })}
                     onSelect={(option: any) => {
-                      setNewEntry(prev => ({ ...prev, work_center: option.value || option.label, step_id: option.step_id }));
+                      const selectedWC = option.value || option.label;
+                      if (isTimerRunning) {
+                        // Auto-stop: same work center scanned again
+                        if (selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+                          stopTimer();
+                        } else {
+                          toast.warning('Timer is running! Scan the same work center QR to stop, or stop manually first.');
+                        }
+                        return;
+                      }
+                      setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: option.step_id }));
+                      // Flag auto-start if job number is already filled
+                      if (newEntry.job_number) {
+                        autoStartPendingRef.current = true;
+                      }
                     }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps
@@ -1211,9 +1248,9 @@ export default function LaborTrackingPage() {
                       }
                       return fetchWorkCenters(query);
                     }}
-                    placeholder="Type, scan QR, or select"
-                    disabled={isTimerRunning}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
+                    placeholder={isTimerRunning ? "Scan QR to stop timer" : "Type, scan QR, or select"}
+                    disabled={false}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all dark:bg-slate-700 dark:text-slate-200"
                     minChars={0}
                   />
                 </div>
@@ -1397,7 +1434,7 @@ export default function LaborTrackingPage() {
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
                   <input
@@ -1429,23 +1466,22 @@ export default function LaborTrackingPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Date Range</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={filter.startDate}
-                      onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
-                      className="w-full px-2 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 text-sm"
-                      placeholder="Start"
-                    />
-                    <input
-                      type="date"
-                      value={filter.endDate}
-                      onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
-                      className="w-full px-2 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 text-sm"
-                      placeholder="End"
-                    />
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Start Date</label>
+                  <input
+                    type="date"
+                    value={filter.startDate}
+                    onChange={(e) => setFilter({ ...filter, startDate: e.target.value })}
+                    className="w-full px-2 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">End Date</label>
+                  <input
+                    type="date"
+                    value={filter.endDate}
+                    onChange={(e) => setFilter({ ...filter, endDate: e.target.value })}
+                    className="w-full px-2 py-2 border-2 border-emerald-200 dark:border-slate-600 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 text-sm"
+                  />
                 </div>
               </div>
             )}
