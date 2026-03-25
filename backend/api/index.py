@@ -132,7 +132,7 @@ app.add_middleware(
 
 # Import and include routers
 try:
-    from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers
+    from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers, analytics
 
     app.include_router(auth.router, prefix="/auth", tags=["authentication"])
     app.include_router(users.router, prefix="/users", tags=["users"])
@@ -145,6 +145,7 @@ try:
     app.include_router(search.router, prefix="/search", tags=["search"])
     app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     app.include_router(work_centers.router, prefix="/work-centers-mgmt", tags=["work-centers"])
+    app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
     logger.info("All routers loaded successfully")
 except Exception as e:
     logger.error(f"Failed to import routers: {e}")

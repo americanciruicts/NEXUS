@@ -347,6 +347,10 @@ export default function Dashboard() {
                   <MapPinIcon className="w-4 h-4" />
                   Track
                 </Link>
+                <Link href="/reports/analytics" className="inline-flex items-center px-3 py-1.5 bg-purple-500/60 hover:bg-purple-500/80 backdrop-blur-sm text-white text-xs font-bold rounded-lg border border-purple-400/30 transition-all gap-1.5">
+                  <BoltIcon className="w-4 h-4" />
+                  Analytics
+                </Link>
               </div>
             </div>
             <DateRangePicker startDate={startDate} endDate={endDate} onDateChange={handleDateChange} />

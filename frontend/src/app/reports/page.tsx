@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
 import { toast } from 'sonner';
 import {
@@ -205,6 +206,13 @@ export default function ReportsPage() {
               </div>
             </div>
             <div className="header-buttons flex items-center gap-2 sm:gap-3">
+              <Link
+                href="/reports/analytics"
+                className="flex items-center justify-center space-x-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-purple-500/80 hover:bg-purple-500 rounded-xl font-semibold border border-purple-400/30 transition-all text-sm text-white"
+              >
+                <ChartBarIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span>Analytics</span>
+              </Link>
               <button
                 onClick={handleRefresh}
                 className="flex items-center justify-center space-x-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white/15 hover:bg-white/25 rounded-xl font-semibold border border-white/20 transition-all text-sm"

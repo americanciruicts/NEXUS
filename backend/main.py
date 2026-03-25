@@ -9,7 +9,7 @@ import re
 
 from database import engine, get_db
 from models import Base
-from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers
+from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers, analytics
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -385,6 +385,7 @@ app.include_router(notifications.router, prefix="/notifications", tags=["notific
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(work_centers.router, prefix="/work-centers-mgmt", tags=["work-centers"])
+app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 
 @app.get("/")
 async def root():
