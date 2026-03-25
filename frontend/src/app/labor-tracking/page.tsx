@@ -131,39 +131,82 @@ export default function LaborTrackingPage() {
   const lastStartedWorkCenterRef = useRef<string>('');
   const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Global barcode/QR scanner listener for auto-stop
-  // Scanners type characters rapidly and end with Enter — detect this pattern
+  // Global barcode/QR scanner listener for auto-start and auto-stop
+  // Scanners type characters rapidly (<50ms between chars) and end with Enter
   const globalScanBufferRef = useRef('');
   const globalScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScanTimeRef = useRef(0);
   useEffect(() => {
-    if (!isTimerRunning) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input/textarea (except scanner-speed input)
-      const target = e.target as HTMLElement;
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+      const now = Date.now();
+      const timeSinceLastKey = now - lastScanTimeRef.current;
+      lastScanTimeRef.current = now;
 
-      if (e.key === 'Enter' && globalScanBufferRef.current.length > 0) {
-        e.preventDefault();
+      // If too much time passed since last key, reset buffer (not a scanner)
+      if (timeSinceLastKey > 100 && globalScanBufferRef.current.length > 0) {
+        globalScanBufferRef.current = '';
+      }
+
+      if (e.key === 'Enter' && globalScanBufferRef.current.length > 1) {
         const scannedValue = globalScanBufferRef.current.trim();
         globalScanBufferRef.current = '';
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
 
-        // Check if scanned value matches the active work center
-        if (scannedValue.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
-          // Blur any focused input so the stop modal works cleanly
-          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-          stopTimer();
+        // Prevent Enter from submitting forms or triggering buttons
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Blur any focused input
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+
+        if (isTimerRunning) {
+          // AUTO-STOP: check if scanned value matches the active work center
+          if (scannedValue.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+            stopTimer();
+          }
+        } else {
+          // AUTO-START: parse scanned value and fill fields
+          if (scannedValue.startsWith('NEXUS-STEP|')) {
+            // QR code: NEXUS-STEP|traveler_id|job_number|work_order|work_center|...
+            const parts = scannedValue.split('|');
+            if (parts.length >= 5) {
+              const jobNumber = parts[2];
+              const workCenter = parts[4];
+              const stepId = parts.length >= 9 && parts[8] ? parseInt(parts[8]) : undefined;
+              setNewEntry(prev => ({
+                ...prev,
+                job_number: jobNumber || prev.job_number,
+                work_center: workCenter || prev.work_center,
+                step_id: stepId || prev.step_id,
+              }));
+            }
+          } else if (scannedValue.startsWith('NEX-')) {
+            // Barcode: NEX-{traveler_id}-{job_number}
+            const parts = scannedValue.split('-');
+            if (parts.length >= 3) {
+              const jobNumber = parts.slice(2).join('-');
+              setNewEntry(prev => ({ ...prev, job_number: jobNumber }));
+            }
+          } else {
+            // Plain value — could be job number or work center code
+            // If job number is already filled, treat as work center; otherwise treat as job number
+            setNewEntry(prev => {
+              if (!prev.job_number) {
+                return { ...prev, job_number: scannedValue };
+              } else {
+                return { ...prev, work_center: scannedValue };
+              }
+            });
+          }
         }
         return;
       }
 
-      // Only buffer printable characters
+      // Buffer printable characters
       if (e.key.length === 1) {
-        // If typing in a focused input, still buffer for scanner detection
         globalScanBufferRef.current += e.key;
 
-        // Reset buffer after 100ms of no input (scanners type < 50ms between chars)
+        // Clear buffer after 100ms of no input
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
         globalScanTimeoutRef.current = setTimeout(() => {
           globalScanBufferRef.current = '';
