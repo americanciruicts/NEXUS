@@ -140,14 +140,14 @@ function Section({ title, icon, badge, children, defaultOpen = true }: {
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-800 hover:from-gray-100 dark:hover:from-slate-750 transition-colors"
+        className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-750 hover:from-indigo-50 hover:to-blue-50 dark:hover:from-slate-700 dark:hover:to-slate-700 transition-all duration-200"
       >
         <div className="flex items-center gap-2">
           {icon}
-          <h2 className="text-sm font-bold text-gray-800 dark:text-slate-200">{title}</h2>
+          <h2 className="text-sm font-bold text-gray-800 dark:text-slate-100">{title}</h2>
           {badge}
         </div>
-        {open ? <ChevronUpIcon className="w-4 h-4 text-gray-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-400" />}
+        {open ? <ChevronUpIcon className="w-4 h-4 text-gray-500 dark:text-slate-400" /> : <ChevronDownIcon className="w-4 h-4 text-gray-500 dark:text-slate-400" />}
       </button>
       {open && <div className="border-t border-gray-100 dark:border-slate-700">{children}</div>}
     </div>
@@ -270,9 +270,9 @@ export default function AnalyticsPage() {
                   { label: 'Paused', value: daily_summary.paused_timers, color: 'text-amber-600' },
                   { label: 'Operators', value: daily_summary.unique_operators, color: 'text-cyan-600' },
                 ].map((item) => (
-                  <div key={item.label} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-2.5 text-center">
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase">{item.label}</p>
-                    <p className={`text-xl font-extrabold ${item.color} dark:opacity-80 leading-tight`}>{item.value}</p>
+                  <div key={item.label} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-2.5 text-center border border-gray-100 dark:border-slate-600">
+                    <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">{item.label}</p>
+                    <p className={`text-xl font-extrabold ${item.color} leading-tight`}>{item.value}</p>
                   </div>
                 ))}
               </div>
@@ -280,14 +280,14 @@ export default function AnalyticsPage() {
               {daily_summary.work_center_breakdown.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-2">Hours by Work Center</p>
+                    <p className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase mb-2">Hours by Work Center</p>
                     <div className="space-y-1.5">
                       {daily_summary.work_center_breakdown.map((wc) => {
                         const maxHours = Math.max(...daily_summary.work_center_breakdown.map(w => w.hours));
                         const pct = maxHours > 0 ? (wc.hours / maxHours * 100) : 0;
                         return (
                           <div key={wc.work_center} className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-600 dark:text-slate-400 w-28 truncate">{wc.work_center}</span>
+                            <span className="text-xs font-medium text-gray-700 dark:text-slate-300 w-28 truncate">{wc.work_center}</span>
                             <div className="flex-1 bg-gray-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
                               <div className="h-3 rounded-full bg-indigo-500 transition-all" style={{ width: `${pct}%` }} />
                             </div>
@@ -300,7 +300,7 @@ export default function AnalyticsPage() {
                   </div>
                   {daily_summary.top_operators.length > 0 && (
                     <div>
-                      <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-2">Top Operators Today</p>
+                      <p className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase mb-2">Top Operators Today</p>
                       <div className="space-y-1.5">
                         {daily_summary.top_operators.map((op, i) => (
                           <div key={op.name} className="flex items-center gap-2">
@@ -348,7 +348,7 @@ export default function AnalyticsPage() {
                               </span>
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sev.bg} ${sev.text} border border-current/10`}>{a.severity}</span>
                             </div>
-                            <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">{a.message}</p>
+                            <p className="text-xs text-gray-700 dark:text-slate-300 mt-0.5">{a.message}</p>
                             <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500 dark:text-slate-500">
                               <span className="font-semibold text-blue-600 dark:text-blue-400">{a.job_number}</span>
                               <span>{a.employee_name}</span>
@@ -395,26 +395,26 @@ export default function AnalyticsPage() {
               {due_date_heatmap.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-slate-900/50">
+                    <thead className="bg-gray-100 dark:bg-slate-900">
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Job</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Part</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Due Date</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Days</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Urgency</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Progress</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Job</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Part</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Due Date</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Days</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Urgency</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Progress</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                       {due_date_heatmap.map(d => {
                         const uc = urgencyColors[d.urgency] || urgencyColors.on_track;
                         return (
-                          <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                          <tr key={d.id} className="hover:bg-blue-50 dark:hover:bg-slate-700">
                             <td className="px-2 py-1.5">
                               <Link href={`/travelers/${d.id}`} className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">{d.job_number}</Link>
                             </td>
-                            <td className="px-2 py-1.5 text-gray-600 dark:text-slate-400 truncate max-w-[120px]">{d.part_number}</td>
-                            <td className="px-2 py-1.5 text-gray-600 dark:text-slate-400 font-mono">{d.due_date}</td>
+                            <td className="px-2 py-1.5 text-gray-700 dark:text-slate-300 truncate max-w-[120px]">{d.part_number}</td>
+                            <td className="px-2 py-1.5 text-gray-700 dark:text-slate-300 font-mono">{d.due_date}</td>
                             <td className="px-2 py-1.5">
                               <span className={`font-bold ${d.days_until < 0 ? 'text-red-600' : d.days_until <= 2 ? 'text-orange-600' : 'text-gray-600'}`}>
                                 {d.days_until < 0 ? `${Math.abs(d.days_until)}d late` : d.days_until === 0 ? 'Today' : `${d.days_until}d`}
@@ -431,7 +431,7 @@ export default function AnalyticsPage() {
                                     backgroundColor: d.percent_complete >= 100 ? '#16a34a' : d.percent_complete >= 50 ? '#2563eb' : '#f59e0b'
                                   }} />
                                 </div>
-                                <span className="font-bold text-gray-600 dark:text-slate-400">{d.percent_complete}%</span>
+                                <span className="font-bold text-gray-700 dark:text-slate-300">{d.percent_complete}%</span>
                               </div>
                             </td>
                           </tr>
@@ -456,31 +456,31 @@ export default function AnalyticsPage() {
           >
             <div className="p-3">
               {est_vs_actual.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">No traveler data with labor hours available</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-4">No traveler data with labor hours available</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-slate-900/50">
+                    <thead className="bg-gray-100 dark:bg-slate-900">
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Job</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Part</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Est.</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Actual</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Variance</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">%</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Job</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Part</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Est.</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Actual</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Variance</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">%</th>
                         <th className="px-2 py-1.5 w-10"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                       {est_vs_actual.map(e => (
                         <>
-                          <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 cursor-pointer" onClick={() => toggleRow(e.id)}>
+                          <tr key={e.id} className="hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer" onClick={() => toggleRow(e.id)}>
                             <td className="px-2 py-1.5">
                               <Link href={`/travelers/${e.id}`} className="font-semibold text-blue-600 dark:text-blue-400 hover:underline" onClick={ev => ev.stopPropagation()}>{e.job_number}</Link>
                             </td>
-                            <td className="px-2 py-1.5 text-gray-600 dark:text-slate-400 truncate max-w-[120px]">{e.part_number}</td>
-                            <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-slate-400">{e.estimated_hours}h</td>
-                            <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-slate-400">{e.actual_hours}h</td>
+                            <td className="px-2 py-1.5 text-gray-700 dark:text-slate-300 truncate max-w-[120px]">{e.part_number}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-gray-700 dark:text-slate-300">{e.estimated_hours}h</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-gray-700 dark:text-slate-300">{e.actual_hours}h</td>
                             <td className="px-2 py-1.5 text-right">
                               <span className={`font-bold ${e.variance_hours > 0 ? 'text-red-600' : e.variance_hours < -1 ? 'text-green-600' : 'text-gray-600'}`}>
                                 {e.variance_hours > 0 ? '+' : ''}{e.variance_hours}h
@@ -502,7 +502,7 @@ export default function AnalyticsPage() {
                                   {e.steps.map((s, i) => (
                                     <div key={i} className="flex items-center gap-2 text-[11px]">
                                       <span className={`w-1.5 h-1.5 rounded-full ${s.is_completed ? 'bg-green-500' : 'bg-blue-500'}`} />
-                                      <span className="text-gray-600 dark:text-slate-400 truncate flex-1">{s.operation}</span>
+                                      <span className="text-gray-700 dark:text-slate-300 truncate flex-1">{s.operation}</span>
                                       <span className="font-mono text-gray-400">{s.estimated}h</span>
                                       <span className="font-mono text-gray-600 dark:text-slate-300">{s.actual}h</span>
                                       <span className={`font-bold ${s.variance > 0 ? 'text-red-500' : s.variance < 0 ? 'text-green-500' : 'text-gray-400'}`}>
@@ -534,10 +534,10 @@ export default function AnalyticsPage() {
               {/* Department yield summary */}
               {department_yield.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-2">Yield by Department</p>
+                  <p className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase mb-2">Yield by Department</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {department_yield.map(dy => (
-                      <div key={dy.department} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-2.5 flex items-center gap-3">
+                      <div key={dy.department} className="bg-gray-50 dark:bg-slate-700 border border-gray-100 dark:border-slate-600 rounded-lg p-2.5 flex items-center gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-gray-700 dark:text-slate-300 truncate">{dy.department}</p>
                           <p className="text-[10px] text-gray-400">
@@ -557,23 +557,23 @@ export default function AnalyticsPage() {
               {yield_data.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-slate-900/50">
+                    <thead className="bg-gray-100 dark:bg-slate-900">
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Job</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Part</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Qty</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Accepted</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Rejected</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Yield</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Job</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Part</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Qty</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Accepted</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Rejected</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Yield</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                       {yield_data.map(y => (
-                        <tr key={y.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <tr key={y.id} className="hover:bg-blue-50 dark:hover:bg-slate-700">
                           <td className="px-2 py-1.5">
                             <Link href={`/travelers/${y.id}`} className="font-semibold text-blue-600 hover:underline">{y.job_number}</Link>
                           </td>
-                          <td className="px-2 py-1.5 text-gray-600 dark:text-slate-400 truncate max-w-[120px]">{y.part_number}</td>
+                          <td className="px-2 py-1.5 text-gray-700 dark:text-slate-300 truncate max-w-[120px]">{y.part_number}</td>
                           <td className="px-2 py-1.5 text-right font-mono">{y.quantity}</td>
                           <td className="px-2 py-1.5 text-right font-mono text-green-600">{y.accepted}</td>
                           <td className="px-2 py-1.5 text-right font-mono text-red-600">{y.rejected}</td>
@@ -588,7 +588,7 @@ export default function AnalyticsPage() {
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 text-center py-4">No yield data available. Accepted/rejected quantities will appear here once steps are completed with qty data.</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-4">No yield data available. Accepted/rejected quantities will appear here once steps are completed with qty data.</p>
               )}
             </div>
           </Section>
@@ -601,7 +601,7 @@ export default function AnalyticsPage() {
           >
             <div className="p-3">
               {bottlenecks.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Not enough data to detect bottlenecks yet.</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-4">Not enough data to detect bottlenecks yet.</p>
               ) : (
                 <div className="space-y-2">
                   {bottlenecks.map((b, i) => {
@@ -609,7 +609,7 @@ export default function AnalyticsPage() {
                     const pct = Math.min((b.bottleneck_score / maxScore) * 100, 100);
                     const isHot = i < 3;
                     return (
-                      <div key={b.work_center} className={`rounded-lg p-3 border ${isHot ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-slate-700/30 border-gray-100 dark:border-slate-700'}`}>
+                      <div key={b.work_center} className={`rounded-lg p-3 border ${isHot ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700' : 'bg-gray-50 dark:bg-slate-700 border-gray-200 dark:border-slate-600'}`}>
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2">
                             {isHot && <span className="text-[10px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">#{i + 1}</span>}
@@ -643,34 +643,34 @@ export default function AnalyticsPage() {
           >
             <div className="p-3">
               {operator_scorecards.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">No operator data in the last 30 days.</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-4">No operator data in the last 30 days.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 dark:bg-slate-900/50">
+                    <thead className="bg-gray-100 dark:bg-slate-900">
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">#</th>
-                        <th className="px-2 py-1.5 text-left font-bold text-gray-500 uppercase">Operator</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Total Hrs</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Avg/Day</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Entries</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Steps</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Jobs</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Days</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Pauses</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Pause Time</th>
-                        <th className="px-2 py-1.5 text-right font-bold text-gray-500 uppercase">Pause %</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">#</th>
+                        <th className="px-2 py-1.5 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Operator</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Total Hrs</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Avg/Day</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Entries</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Steps</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Jobs</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Days</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Pauses</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Pause Time</th>
+                        <th className="px-2 py-1.5 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Pause %</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                       {operator_scorecards.map((op, i) => (
-                        <tr key={op.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <tr key={op.id} className="hover:bg-blue-50 dark:hover:bg-slate-700">
                           <td className="px-2 py-1.5">
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white inline-flex ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>{i + 1}</span>
                           </td>
                           <td className="px-2 py-1.5 font-semibold text-gray-700 dark:text-slate-300">{op.name}</td>
                           <td className="px-2 py-1.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">{op.total_hours}h</td>
-                          <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-slate-400">{op.avg_hours_per_day}h</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-gray-700 dark:text-slate-300">{op.avg_hours_per_day}h</td>
                           <td className="px-2 py-1.5 text-right">{op.total_entries}</td>
                           <td className="px-2 py-1.5 text-right text-green-600 font-bold">{op.steps_completed}</td>
                           <td className="px-2 py-1.5 text-right">{op.unique_jobs}</td>

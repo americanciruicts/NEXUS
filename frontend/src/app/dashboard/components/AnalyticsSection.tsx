@@ -67,7 +67,7 @@ function Section({ title, icon, badge, children, defaultOpen = false }: {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
       <button onClick={() => setOpen(!open)}
-        className="w-full px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-800 hover:from-gray-100 dark:hover:from-slate-750 transition-colors">
+        className="w-full px-4 py-2.5 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800 dark:to-slate-800 hover:from-indigo-50 hover:to-blue-50 dark:hover:from-slate-700 dark:hover:to-slate-700 transition-colors">
         <div className="flex items-center gap-2">
           {icon}
           <h2 className="text-xs font-bold text-gray-800 dark:text-slate-200">{title}</h2>
@@ -152,7 +152,7 @@ export default function AnalyticsSection() {
               { label: 'Paused', value: daily_summary.paused_timers, color: 'text-amber-600' },
               { label: 'Operators', value: daily_summary.unique_operators, color: 'text-cyan-600' },
             ].map((item) => (
-              <div key={item.label} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-2 text-center">
+              <div key={item.label} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-2 text-center">
                 <p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase">{item.label}</p>
                 <p className={`text-lg font-extrabold ${item.color} dark:opacity-80 leading-tight`}>{item.value}</p>
               </div>
@@ -161,7 +161,7 @@ export default function AnalyticsSection() {
           {daily_summary.work_center_breakdown.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">Hours by Work Center</p>
+                <p className="text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1.5">Hours by Work Center</p>
                 <div className="space-y-1">
                   {daily_summary.work_center_breakdown.map((wc) => {
                     const maxH = Math.max(...daily_summary.work_center_breakdown.map(w => w.hours));
@@ -179,7 +179,7 @@ export default function AnalyticsSection() {
               </div>
               {daily_summary.top_operators.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">Top Operators Today</p>
+                  <p className="text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1.5">Top Operators Today</p>
                   <div className="space-y-1">
                     {daily_summary.top_operators.map((op, i) => (
                       <div key={op.name} className="flex items-center gap-1.5">
@@ -255,21 +255,21 @@ export default function AnalyticsSection() {
           {due_date_heatmap.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
-                <thead className="bg-gray-50 dark:bg-slate-900/50">
+                <thead className="bg-gray-100 dark:bg-slate-900">
                   <tr>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Job</th>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Part</th>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Due</th>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Days</th>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Urgency</th>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Progress</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Job</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Part</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Due</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Days</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Urgency</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Progress</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                   {due_date_heatmap.map(d => {
                     const uc = urgencyColors[d.urgency] || urgencyColors.on_track;
                     return (
-                      <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                      <tr key={d.id} className="hover:bg-blue-50 dark:hover:bg-slate-700">
                         <td className="px-2 py-1"><Link href={`/travelers/${d.id}`} className="font-semibold text-blue-600 hover:underline">{d.job_number}</Link></td>
                         <td className="px-2 py-1 text-gray-600 dark:text-slate-400 truncate max-w-[100px]">{d.part_number}</td>
                         <td className="px-2 py-1 text-gray-600 font-mono">{d.due_date}</td>
@@ -302,20 +302,20 @@ export default function AnalyticsSection() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
-                <thead className="bg-gray-50 dark:bg-slate-900/50">
+                <thead className="bg-gray-100 dark:bg-slate-900">
                   <tr>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Job</th>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Part</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">Est.</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">Actual</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">Var</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">%</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Job</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Part</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Est.</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Actual</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Var</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">%</th>
                     <th className="px-2 py-1 w-6"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                   {est_vs_actual.map(e => (
-                    <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 cursor-pointer" onClick={() => e.steps.length > 0 && toggleRow(e.id)}>
+                    <tr key={e.id} className="hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer" onClick={() => e.steps.length > 0 && toggleRow(e.id)}>
                       <td className="px-2 py-1"><Link href={`/travelers/${e.id}`} className="font-semibold text-blue-600 hover:underline" onClick={ev => ev.stopPropagation()}>{e.job_number}</Link></td>
                       <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{e.part_number}</td>
                       <td className="px-2 py-1 text-right font-mono text-gray-600">{e.estimated_hours}h</td>
@@ -356,10 +356,10 @@ export default function AnalyticsSection() {
         <div className="p-3">
           {department_yield.length > 0 && (
             <div className="mb-3">
-              <p className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">By Department</p>
+              <p className="text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase mb-1.5">By Department</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                 {department_yield.map(dy => (
-                  <div key={dy.department} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-2 flex items-center gap-2">
+                  <div key={dy.department} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-2 flex items-center gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-bold text-gray-700 dark:text-slate-300 truncate">{dy.department}</p>
                       <p className="text-[9px] text-gray-400"><span className="text-green-600">{dy.accepted} ok</span> / <span className="text-red-500">{dy.rejected} rej</span></p>
@@ -373,13 +373,13 @@ export default function AnalyticsSection() {
           {yield_data.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
-                <thead className="bg-gray-50 dark:bg-slate-900/50">
+                <thead className="bg-gray-100 dark:bg-slate-900">
                   <tr>
-                    <th className="px-2 py-1 text-left font-bold text-gray-500 uppercase">Job</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">Qty</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">OK</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">Rej</th>
-                    <th className="px-2 py-1 text-right font-bold text-gray-500 uppercase">Yield</th>
+                    <th className="px-2 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Job</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Qty</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">OK</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Rej</th>
+                    <th className="px-2 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Yield</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
@@ -447,24 +447,24 @@ export default function AnalyticsSection() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
-                <thead className="bg-gray-50 dark:bg-slate-900/50">
+                <thead className="bg-gray-100 dark:bg-slate-900">
                   <tr>
-                    <th className="px-1.5 py-1 text-left font-bold text-gray-500 uppercase">#</th>
-                    <th className="px-1.5 py-1 text-left font-bold text-gray-500 uppercase">Operator</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Hours</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Avg/Day</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Entries</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Steps</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Jobs</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Days</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Pauses</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">Pause</th>
-                    <th className="px-1.5 py-1 text-right font-bold text-gray-500 uppercase">%</th>
+                    <th className="px-1.5 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">#</th>
+                    <th className="px-1.5 py-1 text-left font-bold text-gray-600 dark:text-slate-300 uppercase">Operator</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Hours</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Avg/Day</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Entries</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Steps</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Jobs</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Days</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Pauses</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">Pause</th>
+                    <th className="px-1.5 py-1 text-right font-bold text-gray-600 dark:text-slate-300 uppercase">%</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-700/50">
                   {operator_scorecards.map((op, i) => (
-                    <tr key={op.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                    <tr key={op.id} className="hover:bg-blue-50 dark:hover:bg-slate-700">
                       <td className="px-1.5 py-1">
                         <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white inline-flex ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>{i + 1}</span>
                       </td>
