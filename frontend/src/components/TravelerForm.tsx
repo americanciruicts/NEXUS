@@ -1313,7 +1313,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         {/* Main Form - Page 1 */}
         <div className="bg-white dark:bg-slate-800 shadow-lg rounded-lg border-2 border-indigo-100 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8 mb-3 sm:mb-4 md:mb-6">
           {/* Top Row - Responsive */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
             <div>
               <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">
                 Job No * {isLeadFree && <span className="text-green-600">(L)</span>}{isITAR && <span className="text-red-600">(M)</span>}

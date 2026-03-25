@@ -2114,7 +2114,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             {/* Department Progress Grid */}
             <div>
               <div className="text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-2">Department Progress</div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                 {departmentProgress.map((dept) => {
                   const barColor = DEPARTMENT_BAR_COLORS[dept.department] || DEPARTMENT_BAR_COLORS['Other'];
                   const colors = DEPARTMENT_COLORS[dept.department] || DEPARTMENT_COLORS['Other'];

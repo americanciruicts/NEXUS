@@ -259,7 +259,7 @@ export default function AnalyticsPage() {
             badge={<span className="text-[10px] font-bold text-gray-400">{new Date().toLocaleDateString()}</span>}
           >
             <div className="p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3 mb-4">
                 {[
                   { label: 'Started', value: daily_summary.entries_started, color: 'text-blue-600' },
                   { label: 'Completed', value: daily_summary.entries_completed, color: 'text-green-600' },
@@ -498,7 +498,7 @@ export default function AnalyticsPage() {
                           {expandedRows.has(e.id) && e.steps.length > 0 && (
                             <tr key={`${e.id}-steps`}>
                               <td colSpan={7} className="px-4 py-2 bg-gray-50/50 dark:bg-slate-900/30">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                                   {e.steps.map((s, i) => (
                                     <div key={i} className="flex items-center gap-2 text-[11px]">
                                       <span className={`w-1.5 h-1.5 rounded-full ${s.is_completed ? 'bg-green-500' : 'bg-blue-500'}`} />
@@ -535,7 +535,7 @@ export default function AnalyticsPage() {
               {department_yield.length > 0 && (
                 <div className="mb-4">
                   <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase mb-2">Yield by Department</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {department_yield.map(dy => (
                       <div key={dy.department} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-2.5 flex items-center gap-3">
                         <div className="flex-1 min-w-0">

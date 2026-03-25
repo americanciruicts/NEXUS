@@ -644,7 +644,7 @@ function TravelersPage() {
             <>
 
             {/* Desktop Table View - hidden on mobile, shown on lg+ */}
-            <div className="hidden lg:block w-full relative overflow-x-auto">
+            <div className="hidden md:block w-full relative overflow-x-auto">
               <div className="absolute top-0 left-0 right-0 h-14 overflow-hidden pointer-events-none z-20">
                 <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
@@ -892,7 +892,7 @@ function TravelersPage() {
             </div>
 
             {/* Mobile/Tablet Card View - shown below lg */}
-            <div className="block lg:hidden w-full">
+            <div className="block md:hidden w-full">
               <div className="p-3 space-y-4">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${

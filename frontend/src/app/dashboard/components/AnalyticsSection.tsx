@@ -141,7 +141,7 @@ export default function AnalyticsSection() {
       <Section title="Daily Summary" icon={<DocumentChartBarIcon className="w-3.5 h-3.5 text-indigo-500" />}
         badge={<span className="text-[10px] font-bold text-gray-400">{daily_summary.hours_logged}h logged today</span>} defaultOpen={true}>
         <div className="p-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 mb-3">
             {[
               { label: 'Started', value: daily_summary.entries_started, color: 'text-blue-600' },
               { label: 'Completed', value: daily_summary.entries_completed, color: 'text-green-600' },
@@ -331,7 +331,7 @@ export default function AnalyticsSection() {
               {est_vs_actual.filter(e => expandedRows.has(e.id) && e.steps.length > 0).map(e => (
                 <div key={`exp-${e.id}`} className="px-3 py-2 bg-gray-50/50 dark:bg-slate-900/30 border-t border-gray-100 dark:border-slate-700">
                   <p className="text-[10px] font-bold text-gray-500 mb-1">{e.job_number} — Step Breakdown</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1">
                     {e.steps.map((s, i) => (
                       <div key={i} className="flex items-center gap-1.5 text-[10px]">
                         <span className={`w-1.5 h-1.5 rounded-full ${s.is_completed ? 'bg-green-500' : 'bg-blue-500'}`} />
@@ -357,7 +357,7 @@ export default function AnalyticsSection() {
           {department_yield.length > 0 && (
             <div className="mb-3">
               <p className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">By Department</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                 {department_yield.map(dy => (
                   <div key={dy.department} className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-2 flex items-center gap-2">
                     <div className="flex-1 min-w-0">

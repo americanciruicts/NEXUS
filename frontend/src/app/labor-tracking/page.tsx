@@ -126,9 +126,9 @@ export default function LaborTrackingPage() {
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
 
-  // Auto-timer refs to track scan-based auto-start/stop
-  const autoStartPendingRef = useRef(false);
-  const lastStartedWorkCenterRef = useRef<string>('');
+  // Auto-timer: track scan-based auto-start/stop
+  const autoStartTriggeredRef = useRef(false);  // prevents double-start
+  const lastStartedWorkCenterRef = useRef<string>('');  // for auto-stop detection
 
   // Auto-fill operator name from signed-in user
   useEffect(() => {
@@ -268,8 +268,7 @@ export default function LaborTrackingPage() {
   const handleJobNumberSelect = async (option: any) => {
     const jobNum = option.job_number || option.value;
     setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
-    // Flag that a scan/selection happened - if work_center is already set, auto-start will trigger
-    autoStartPendingRef.current = true;
+    autoStartReadyRef.current = true;
     const steps = await fetchWorkCentersByJob(jobNum);
     setJobWorkCenterOptions(steps);
   };
@@ -316,20 +315,23 @@ export default function LaborTrackingPage() {
     };
   }, [isTimerRunning, startTime, isPaused]);
 
-  // Auto-start: when both job_number and work_center are filled (from scan/select), start timer automatically
+  // Auto-start: when both job_number and work_center become filled via selection, start timer
+  // We only auto-start when onSelect fires (sets autoStartReadyRef), not on every keystroke
+  const autoStartReadyRef = useRef(false);
   useEffect(() => {
     if (
-      autoStartPendingRef.current &&
+      autoStartReadyRef.current &&
       newEntry.job_number &&
       newEntry.work_center &&
       newEntry.operator_name &&
-      !isTimerRunning
+      !isTimerRunning &&
+      !autoStartTriggeredRef.current
     ) {
-      autoStartPendingRef.current = false;
-      lastStartedWorkCenterRef.current = newEntry.work_center;
+      autoStartReadyRef.current = false;
+      autoStartTriggeredRef.current = true;
       startTimer();
     }
-  }, [newEntry.job_number, newEntry.work_center, isTimerRunning]);
+  }, [newEntry.job_number, newEntry.work_center, newEntry.operator_name, isTimerRunning]);
 
   const formatTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -676,6 +678,7 @@ export default function LaborTrackingPage() {
         });
         setJobWorkCenterOptions([]);
         lastStartedWorkCenterRef.current = '';
+        autoStartTriggeredRef.current = false;
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else {
@@ -1096,7 +1099,7 @@ export default function LaborTrackingPage() {
           </div>
 
           {/* Dashboard Grid - Timer and Stats */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Circular Timer - Takes 2 columns on large screens */}
             <div className="lg:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1192,7 +1195,7 @@ export default function LaborTrackingPage() {
               )}
 
               {/* Input Form */}
-              <div className="relative z-[50] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+              <div className="relative z-[50] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 <div>
                   <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Job Number <span className="text-red-500">*</span>
@@ -1227,10 +1230,7 @@ export default function LaborTrackingPage() {
                         return;
                       }
                       setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: option.step_id }));
-                      // Flag auto-start if job number is already filled
-                      if (newEntry.job_number) {
-                        autoStartPendingRef.current = true;
-                      }
+                      autoStartReadyRef.current = true;
                     }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps
@@ -1392,7 +1392,7 @@ export default function LaborTrackingPage() {
                   </svg>
                   Job Summary
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
                   {groups.map((group, index) => (
                     <div
                       key={index}
@@ -1434,7 +1434,7 @@ export default function LaborTrackingPage() {
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
                   <input
