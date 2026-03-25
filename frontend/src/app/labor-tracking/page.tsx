@@ -159,50 +159,43 @@ export default function LaborTrackingPage() {
         // Blur any focused input
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 
-        if (isTimerRunning) {
-          // AUTO-STOP: extract work center from scan and compare
-          let scannedWC = scannedValue;
-          if (scannedValue.startsWith('NEXUS-STEP|')) {
-            const parts = scannedValue.split('|');
-            if (parts.length >= 5) scannedWC = parts[4];
+        // Extract work center from QR if it's a NEXUS-STEP format
+        let parsedWorkCenter = '';
+        let parsedJobNumber = '';
+        let parsedStepId: number | undefined;
+
+        if (scannedValue.startsWith('NEXUS-STEP|')) {
+          const parts = scannedValue.split('|');
+          if (parts.length >= 5) {
+            parsedJobNumber = parts[2] || '';
+            parsedWorkCenter = parts[4] || '';
+            parsedStepId = parts.length >= 9 && parts[8] ? parseInt(parts[8]) : undefined;
           }
-          if (scannedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+        } else if (scannedValue.startsWith('NEX-')) {
+          const parts = scannedValue.split('-');
+          if (parts.length >= 3) {
+            parsedJobNumber = parts.slice(2).join('-');
+          }
+        } else {
+          // Plain barcode — always treat as job number only
+          parsedJobNumber = scannedValue;
+        }
+
+        if (isTimerRunning) {
+          // AUTO-STOP: compare work center from scan against active work center
+          const wcToCompare = parsedWorkCenter || scannedValue;
+          if (wcToCompare.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
             stopTimer();
           }
         } else {
-          // AUTO-START: parse scanned value and fill fields
-          if (scannedValue.startsWith('NEXUS-STEP|')) {
-            // QR code: NEXUS-STEP|traveler_id|job_number|work_order|work_center|...
-            const parts = scannedValue.split('|');
-            if (parts.length >= 5) {
-              const jobNumber = parts[2];
-              const workCenter = parts[4];
-              const stepId = parts.length >= 9 && parts[8] ? parseInt(parts[8]) : undefined;
-              setNewEntry(prev => ({
-                ...prev,
-                job_number: jobNumber || prev.job_number,
-                work_center: workCenter || prev.work_center,
-                step_id: stepId || prev.step_id,
-              }));
-            }
-          } else if (scannedValue.startsWith('NEX-')) {
-            // Barcode: NEX-{traveler_id}-{job_number}
-            const parts = scannedValue.split('-');
-            if (parts.length >= 3) {
-              const jobNumber = parts.slice(2).join('-');
-              setNewEntry(prev => ({ ...prev, job_number: jobNumber }));
-            }
-          } else {
-            // Plain value — could be job number or work center code
-            // If job number is already filled, treat as work center; otherwise treat as job number
-            setNewEntry(prev => {
-              if (!prev.job_number) {
-                return { ...prev, job_number: scannedValue };
-              } else {
-                return { ...prev, work_center: scannedValue };
-              }
-            });
-          }
+          // AUTO-START: fill fields from scan
+          setNewEntry(prev => ({
+            ...prev,
+            job_number: parsedJobNumber || prev.job_number,
+            // Work center ONLY from QR code (NEXUS-STEP), never from plain barcode
+            work_center: parsedWorkCenter || prev.work_center,
+            step_id: parsedStepId || prev.step_id,
+          }));
         }
         return;
       }
