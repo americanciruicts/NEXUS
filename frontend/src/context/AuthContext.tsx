@@ -67,10 +67,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
             } else {
               const derivedFirstName = parsed.first_name || (parsed.username?.includes('@') ? parsed.username.split('@')[0].charAt(0).toUpperCase() + parsed.username.split('@')[0].slice(1) : parsed.username);
               setUser({
+                id: parsed.id,
                 username: parsed.username,
+                email: parsed.email,
                 first_name: derivedFirstName,
                 role: parsed.role,
-                isApprover: parsed.isApprover || false
+                isApprover: parsed.isApprover || false,
+                isItar: parsed.isItar || false
               });
             }
           }
@@ -88,6 +91,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (!isLoading && !user && pathname !== '/auth/login' && !pathname.startsWith('/sso/')) {
+      // If offline, don't redirect — let user browse cached pages
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return;
+      }
       // Detect if we're on local network
       const isLocal = typeof window !== 'undefined' && (
         window.location.hostname.includes('.local') ||
@@ -135,6 +142,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const remaining = SESSION_TIMEOUT_MS - elapsed;
 
           if (remaining <= 0) {
+            // Don't auto-logout when offline — let user keep working
+            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+              return;
+            }
             console.log('Session expired after 14 hours - auto logout');
             toast.warning('Your session has expired. Please log in again.');
             logout();
@@ -201,10 +212,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
           localStorage.setItem('nexus_token', accessToken);
           localStorage.setItem('nexus_auth', JSON.stringify({
+            id: userData.id,
             username: userData.username,
+            email: userData.email,
             first_name: userData.first_name,
             role: userData.role,
             isApprover: userData.isApprover,
+            isItar: userData.isItar,
             isAuthenticated: true,
             loginTime: Date.now()
           }));

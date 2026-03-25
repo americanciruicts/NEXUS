@@ -9,6 +9,7 @@ import { formatHoursDualCompact, formatHoursDual, formatSecondsCompact } from '@
 import Autocomplete from '@/components/ui/Autocomplete';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
+import { offlineFetch } from '@/lib/offlineSync';
 
 interface LaborEntry {
   id: number;
@@ -570,17 +571,23 @@ export default function LaborTrackingPage() {
         requestBody.employee_id = newEntry.operator_id;
       }
 
-      const response = await fetch(`${API_BASE_URL}/labor/`, {
+      const response = await offlineFetch(`${API_BASE_URL}/labor/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token || 'mock-token'}`
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        offlineType: 'labor_start'
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+      if (data.offline && data.queued) {
+        setStartTime(now);
+        setElapsedTime(0);
+        setIsTimerRunning(true);
+        toast.info('Offline: Timer saved locally. Will sync when back online.');
+      } else if (response.ok) {
         setActiveEntryId(data.id);
         setStartTime(now);
         setElapsedTime(0);
@@ -588,12 +595,9 @@ export default function LaborTrackingPage() {
         setTravelerMaxQty(traveler.quantity || null);
         lastStartedWorkCenterRef.current = newEntry.work_center;
         toast.success('Timer started!');
-
-        // Reload entries to show new entry in table
         fetchLaborEntries();
       } else {
-        const error = await response.json();
-        toast.error(`Error: ${error.detail || 'Failed to start timer'}`);
+        toast.error(`Error: ${data.detail || 'Failed to start timer'}`);
       }
     } catch (error) {
       console.error('Error starting timer:', error);
@@ -617,7 +621,7 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
       const currentPauseTime = new Date();
 
-      const response = await fetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
+      const response = await offlineFetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -626,17 +630,22 @@ export default function LaborTrackingPage() {
         body: JSON.stringify({
           pause_time: currentPauseTime.toISOString(),
           pause_comment: comment || null
-        })
+        }),
+        offlineType: 'labor_pause'
       });
 
-      if (response.ok) {
+      const data = await response.json();
+      if (data.offline && data.queued) {
+        setIsPaused(true);
+        setPauseTime(currentPauseTime);
+        toast.info('Offline: Pause saved locally.');
+      } else if (response.ok) {
         setIsPaused(true);
         setPauseTime(currentPauseTime);
         toast.info('Timer paused!');
         fetchLaborEntries();
       } else {
-        const error = await response.json();
-        toast.error(`Error: ${error.detail || 'Failed to pause timer'}`);
+        toast.error(`Error: ${data.detail || 'Failed to pause timer'}`);
       }
     } catch (error) {
       console.error('Error pausing timer:', error);
@@ -657,7 +666,7 @@ export default function LaborTrackingPage() {
     if (!activeEntryId) return;
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
+      const response = await offlineFetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -666,17 +675,22 @@ export default function LaborTrackingPage() {
         body: JSON.stringify({
           clear_pause: true,
           pause_comment: comment || null
-        })
+        }),
+        offlineType: 'labor_resume'
       });
 
-      if (response.ok) {
+      const data = await response.json();
+      if (data.offline && data.queued) {
+        setIsPaused(false);
+        setPauseTime(null);
+        toast.info('Offline: Resume saved locally.');
+      } else if (response.ok) {
         setIsPaused(false);
         setPauseTime(null);
         toast.info('Timer resumed!');
         fetchLaborEntries();
       } else {
-        const error = await response.json();
-        toast.error(`Error: ${error.detail || 'Failed to resume timer'}`);
+        toast.error(`Error: ${data.detail || 'Failed to resume timer'}`);
       }
     } catch (error) {
       console.error('Error resuming timer:', error);
@@ -702,7 +716,7 @@ export default function LaborTrackingPage() {
       const token = localStorage.getItem('nexus_token');
       const endTime = new Date();
 
-      const response = await fetch(`${API_BASE_URL}/labor/${pendingStopEntryId}`, {
+      const response = await offlineFetch(`${API_BASE_URL}/labor/${pendingStopEntryId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -713,10 +727,21 @@ export default function LaborTrackingPage() {
           is_completed: true,
           qty_completed: qtyCompleted ? parseInt(qtyCompleted) : null,
           comment: stopComment || null
-        })
+        }),
+        offlineType: 'labor_stop'
       });
 
-      if (response.ok) {
+      const respData = await response.json().catch(() => ({}));
+      if (respData.offline && respData.queued) {
+        setIsTimerRunning(false);
+        setIsPaused(false);
+        setElapsedTime(0);
+        setStartTime(null);
+        setPauseTime(null);
+        setActiveEntryId(null);
+        setIsQtyModalOpen(false);
+        toast.info('Offline: Stop saved locally. Will sync when back online.');
+      } else if (response.ok) {
         setIsTimerRunning(false);
         setIsPaused(false);
         setElapsedTime(0);
