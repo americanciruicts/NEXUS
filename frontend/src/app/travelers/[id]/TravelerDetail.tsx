@@ -1808,13 +1808,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             {createMode ? (
               <>
                 <button
-                  onClick={handlePrint}
-                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
-                >
-                  <PrinterIcon className="h-5 w-5" />
-                  <span>Print</span>
-                </button>
-                <button
                   onClick={handleSaveDraft}
                   className="flex items-center justify-center space-x-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                 >
@@ -1986,13 +1979,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </>
             ) : (
               <>
-                <button
-                  onClick={handlePrint}
-                  className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
-                >
-                  <PrinterIcon className="h-5 w-5" />
-                  <span>Print</span>
-                </button>
                 <button
                   onClick={handleCancel}
                   className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
