@@ -1289,265 +1289,112 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
       <style>{`
+        /* Print-only view is hidden on screen */
+        #traveler-print-view { display: none; }
+
         @media print {
           /* Force light mode for print */
           html { color-scheme: light !important; }
           html.dark, html.dark body { background: white !important; color: black !important; }
           body { background: white !important; color: black !important; font-size: 10px !important; margin: 0 !important; padding: 0 !important; }
 
-          /* Strip dark mode backgrounds */
-          .dark .bg-slate-900, .dark .bg-slate-800, .dark .bg-slate-700,
-          .dark .bg-gray-900, .dark .bg-gray-800, .dark .bg-gray-700,
-          [class*="dark:bg-slate"], [class*="dark:bg-gray"] {
-            background-color: white !important;
-          }
-
-          /* Force all text to black */
-          .dark .text-white, .dark .text-slate-100, .dark .text-slate-200,
-          .dark .text-slate-300, .dark .text-slate-400,
-          .dark .text-gray-100, .dark .text-gray-200, .dark .text-gray-300,
-          [class*="dark:text-white"], [class*="dark:text-slate"], [class*="dark:text-gray"] {
-            color: black !important;
-            -webkit-text-fill-color: black !important;
-          }
-
-          /* Force dark mode borders to visible gray */
-          .dark .border-slate-600, .dark .border-slate-700, .dark .border-slate-800,
-          [class*="dark:border-slate"] {
-            border-color: #9ca3af !important;
-          }
-
-          /* Fix gradient backgrounds */
-          [class*="dark:from-"], [class*="dark:to-"], [class*="dark:via-"] {
-            background-image: none !important;
-          }
-
-          @page {
-            margin: 0.25in;
-            size: letter;
-          }
+          @page { margin: 0.25in; size: letter; }
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             font-family: Arial, Helvetica, sans-serif !important;
             color: black !important;
-            box-decoration-break: clone !important;
-            -webkit-box-decoration-break: clone !important;
           }
 
-          /* Hide non-print elements */
-          .no-print { display: none !important; }
-          button { display: none !important; }
+          /* Hide toasts */
           [data-sonner-toaster], [data-sonner-toast] { display: none !important; }
+          .no-print { display: none !important; }
 
-          /* Hide the form gradient header, action buttons, type selector, auto-save status */
-          .bg-gradient-to-br.from-teal-600 { display: none !important; }
+          /* Hide the entire form, show the print-only view */
+          #traveler-form-screen { display: none !important; }
+          #traveler-print-view {
+            display: block !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
 
           /* Reset page container */
           .min-h-screen { min-height: auto !important; background: white !important; padding: 0 !important; }
-          .max-w-7xl { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-          .p-2, .p-3, .p-4, .p-6, .p-8 { padding: 0 !important; }
-          .sm\\:p-4, .lg\\:p-6, .md\\:p-6, .lg\\:p-8, .md\\:p-8 { padding: 0 !important; }
-          .mb-3, .mb-4, .mb-6, .sm\\:mb-4, .sm\\:mb-6, .md\\:mb-6 { margin-bottom: 0 !important; }
-          .shadow-lg, .shadow-md, .shadow-sm, .shadow-2xl { box-shadow: none !important; }
-          .rounded-lg, .rounded-xl, .rounded-2xl { border-radius: 0 !important; }
 
-          /* Show print header (hidden on screen) */
-          .hidden.print\\:block { display: block !important; }
-
-          /* Print header styling - match TravelerDetail */
-          .bg-gray-100.border-b-2 { padding: 0.2rem 0.5rem !important; }
-          .bg-gray-100 .grid {
+          /* Print view internal styles */
+          #traveler-print-view .print-header { padding: 0.2rem 0.5rem; }
+          #traveler-print-view .print-header .grid {
             display: grid !important;
             grid-template-columns: 1fr 1fr 1fr !important;
             gap: 0 !important;
-            align-items: center !important;
           }
-          .bg-gray-100 .grid > div:first-child { text-align: left !important; padding-right: 0.5rem !important; }
-          .bg-gray-100 .grid > div:nth-child(2) {
-            text-align: center !important;
-            padding: 0 0.5rem !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-          }
-          .bg-gray-100 .grid > div:last-child { text-align: right !important; padding-left: 0.5rem !important; }
-          .bg-gray-100 .space-y-1 { row-gap: 0.2rem !important; margin: 0 !important; }
-          .bg-gray-100 .flex { gap: 0.25rem !important; margin: 0 !important; align-items: baseline !important; }
-          .bg-gray-100 span { font-size: 12px !important; line-height: 1.4 !important; margin: 0 !important; padding: 0 !important; }
-          .bg-gray-100 .font-bold { font-size: 12px !important; }
+          #traveler-print-view span { font-size: 12px !important; line-height: 1.4 !important; }
+          #traveler-print-view .font-bold { font-size: 12px !important; }
 
-          /* Main form card - remove decorative styling */
-          .bg-white.shadow-lg.rounded-lg.border-2.border-indigo-100,
-          .bg-white.dark\\:bg-slate-800.shadow-lg {
-            background: white !important;
-            border: none !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            padding: 0.2rem !important;
-          }
+          /* Section headers */
+          #traveler-print-view .section-header-yellow { background-color: #fde68a !important; padding: 0.05rem 0.2rem !important; }
+          #traveler-print-view .section-header-blue { background-color: #bfdbfe !important; padding: 0.05rem 0.2rem !important; }
+          #traveler-print-view .section-header-purple { background-color: #e9d5ff !important; padding: 0.05rem 0.2rem !important; }
+          #traveler-print-view .section-header-yellow h2,
+          #traveler-print-view .section-header-blue h2,
+          #traveler-print-view .section-header-purple h2 { font-size: 12px !important; font-weight: bold !important; margin: 0 !important; }
 
-          /* Form labels - compact and match TravelerDetail style */
-          label {
-            font-size: 10px !important;
-            font-weight: bold !important;
-            color: black !important;
-            margin-bottom: 0 !important;
-            padding: 0 !important;
-          }
+          /* Specs content */
+          #traveler-print-view .specs-content { padding: 0.05rem 0.1rem !important; font-size: 9px !important; background-color: #fefce8 !important; }
 
-          /* All inputs, selects, textareas - look like plain text (match TravelerDetail) */
-          input, select, textarea {
-            border: none !important;
-            background: transparent !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            font-size: 11px !important;
-            font-weight: bold !important;
-            color: black !important;
-            -webkit-appearance: none !important;
-            -moz-appearance: none !important;
-            appearance: none !important;
-            box-shadow: none !important;
-            outline: none !important;
-            border-radius: 0 !important;
-            min-height: 0 !important;
-            height: auto !important;
-          }
-          textarea { resize: none !important; overflow: hidden !important; }
-          input[type="date"] { font-size: 10px !important; }
-          input[type="date"]::-webkit-calendar-picker-indicator { display: none !important; }
-          input[type="date"]::-webkit-inner-spin-button { display: none !important; }
-          input[type="number"] { -moz-appearance: textfield !important; }
-          input[type="number"]::-webkit-outer-spin-button,
-          input[type="number"]::-webkit-inner-spin-button { display: none !important; }
-          select::-ms-expand { display: none !important; }
-          input[type="checkbox"] { display: none !important; }
+          /* Table */
+          #traveler-print-view table { table-layout: fixed !important; width: 100% !important; }
+          #traveler-print-view thead th { padding: 0.2rem !important; font-size: 12px !important; font-weight: bold !important; }
+          #traveler-print-view tbody td { padding: 0.2rem !important; }
+          #traveler-print-view .border { border-width: 2px !important; }
 
-          /* Form grid layout - compact */
-          .grid { gap: 0.2rem !important; }
-          .gap-2, .gap-3, .gap-4, .gap-6 { gap: 0.2rem !important; }
-          .space-y-3 > *, .space-y-4 > *, .space-y-6 > * { margin-top: 0.1rem !important; }
+          /* Routing column widths */
+          #traveler-print-view .routing-table th:nth-child(1),
+          #traveler-print-view .routing-table td:nth-child(1) { width: 28px !important; }
+          #traveler-print-view .routing-table th:nth-child(2),
+          #traveler-print-view .routing-table td:nth-child(2) { width: 130px !important; }
+          #traveler-print-view .routing-table th:nth-child(3),
+          #traveler-print-view .routing-table td:nth-child(3) { width: 150px !important; }
+          #traveler-print-view .routing-table th:nth-child(4),
+          #traveler-print-view .routing-table td:nth-child(4) { width: 48px !important; }
+          #traveler-print-view .routing-table th:nth-child(5),
+          #traveler-print-view .routing-table td:nth-child(5) { width: 48px !important; }
+          #traveler-print-view .routing-table th:nth-child(6),
+          #traveler-print-view .routing-table td:nth-child(6) { width: 48px !important; }
+          #traveler-print-view .routing-table th:nth-child(7),
+          #traveler-print-view .routing-table td:nth-child(7) { width: 48px !important; }
+          #traveler-print-view .routing-table th:nth-child(8),
+          #traveler-print-view .routing-table td:nth-child(8) { width: 55px !important; }
+          #traveler-print-view .routing-table th:nth-child(9),
+          #traveler-print-view .routing-table td:nth-child(9) { width: 55px !important; }
 
-          /* Hide decorative option checkboxes section */
-          .bg-gradient-to-br.from-indigo-50.to-purple-50 { display: none !important; }
-
-          /* Specifications section - match TravelerDetail yellow style */
-          .bg-yellow-50 {
-            background-color: #fefce8 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            border: 2px solid black !important;
-            border-radius: 0 !important;
-            padding: 0.15rem 0.3rem !important;
-            margin: 0 !important;
-          }
-          .bg-yellow-50 textarea {
-            font-size: 9px !important;
-            font-weight: normal !important;
-          }
-
-          /* Stock & Shipping section - match TravelerDetail */
-          .bg-blue-50 {
-            border: 2px solid black !important;
-            border-radius: 0 !important;
-            padding: 0.15rem 0.3rem !important;
-            margin: 0 !important;
-          }
-          .bg-blue-50 h3 { font-size: 12px !important; margin-bottom: 0.1rem !important; }
-
-          /* Process Steps section - transform cards into table-like layout */
-          .bg-gradient-to-br.from-teal-50.to-emerald-50 {
-            background: white !important;
-            border: 2px solid black !important;
-            border-radius: 0 !important;
-            padding: 0.1rem !important;
-            margin: 0 !important;
-          }
-          .bg-gradient-to-br.from-teal-50.to-emerald-50 h3 {
-            font-size: 12px !important;
-            margin-bottom: 0.1rem !important;
-          }
-
-          /* Step cards - compact like table rows */
-          .bg-white.border-2.border-indigo-200.rounded-lg {
-            background: white !important;
-            border: 1px solid #9ca3af !important;
-            border-radius: 0 !important;
-            padding: 0.2rem !important;
-            margin-bottom: 0.1rem !important;
-            box-shadow: none !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-
-          /* Step header border */
-          .border-b.border-gray-200 { padding-bottom: 0.1rem !important; margin-bottom: 0.1rem !important; }
-
-          /* Step badge */
-          .bg-blue-600.text-white.font-bold {
-            font-size: 10px !important;
-            padding: 0.1rem 0.3rem !important;
-            background-color: #2563eb !important;
-            color: white !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-
-          /* SEQ # highlight */
-          .bg-yellow-100.border-2.border-yellow-400 {
-            background: transparent !important;
-            border: none !important;
-            padding: 0 !important;
-          }
-          .bg-yellow-100 label { font-size: 9px !important; }
-          .bg-yellow-100 input { font-size: 12px !important; text-align: center !important; }
-
-          /* Step fields grid - compact */
-          .grid.grid-cols-2.sm\\:grid-cols-3.md\\:grid-cols-5 {
+          /* Bottom info */
+          #traveler-print-view .bottom-info {
             display: grid !important;
-            grid-template-columns: repeat(5, 1fr) !important;
-            gap: 0.2rem !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            padding: 0.2rem !important;
+            gap: 0.3rem !important;
+            font-size: 10px !important;
           }
-          .col-span-2.sm\\:col-span-1 { grid-column: span 1 !important; }
 
-          /* Comments section */
-          .bg-green-50 {
-            border: 2px solid black !important;
-            border-radius: 0 !important;
-            padding: 0.15rem 0.3rem !important;
-            margin: 0 !important;
-          }
-          .bg-green-50 label { font-size: 12px !important; margin-bottom: 0.1rem !important; }
-          .bg-green-50 textarea { font-size: 9px !important; font-weight: normal !important; }
+          /* Additional instructions space */
+          #traveler-print-view .additional-instructions { min-height: 750px !important; padding: 0.2rem !important; }
 
-          /* Action buttons rows at top and bottom */
-          .grid.grid-cols-1.sm\\:grid-cols-3 { display: none !important; }
+          /* Labor hours table */
+          #traveler-print-view .labor-section { break-before: page !important; }
+          #traveler-print-view .labor-section h2 { font-size: 24px !important; }
+          #traveler-print-view .labor-section th { font-size: 18px !important; padding: 0.5rem 1rem !important; }
+          #traveler-print-view .labor-section td { font-size: 16px !important; padding: 0.5rem 1rem !important; }
 
-          /* Auto-save status indicator */
-          .flex.items-center.justify-end.mb-2 { display: none !important; }
+          /* Barcode sizing */
+          #traveler-print-view .barcode-container img { width: 180px !important; height: 55px !important; }
 
-          /* Bottom action buttons row with border-t */
-          .border-t-2.border-gray-200 { display: none !important; }
-
-          /* Drag handle buttons and remove buttons */
-          .cursor-grab, .bg-red-600 { display: none !important; }
-
-          /* Work order selector */
-          .bg-amber-50 { display: none !important; }
-
-          /* Reduce spacing */
-          .space-y-3, .space-y-4 { gap: 0 !important; }
-          .mb-3, .mb-4 { margin-bottom: 0.1rem !important; }
-
-          /* Keep sections together */
-          .bg-yellow-50, .bg-blue-50, .bg-green-50 {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
+          /* Page break control */
+          #traveler-print-view .no-break { page-break-inside: avoid !important; break-inside: avoid !important; }
         }
       `}</style>
-      <div className="w-full max-w-7xl mx-auto overflow-x-hidden">
+      <div id="traveler-form-screen" className="w-full max-w-7xl mx-auto overflow-x-hidden">
         {/* Header with Type Badge - NO PRINT */}
         <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-2xl rounded-2xl p-4 sm:p-5 md:p-8 mb-3 sm:mb-4 md:mb-6 no-print relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
@@ -1596,68 +1443,6 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           >
             <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
           </button>
-        </div>
-
-        {/* Print Header with Barcode - PRINT ONLY */}
-        <div className="hidden print:block bg-gray-100 border-b-2 border-black p-3 mb-0">
-          <div className="grid grid-cols-3 gap-4 text-xs">
-            {/* Left */}
-            <div className="space-y-1">
-              <div className="flex">
-                <span className="font-bold w-24">Cust. Code:</span>
-                <span>{formData.customerCode || '-'}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold w-24">Cust. Name:</span>
-                <span>{formData.customerName || '-'}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold w-24">Work Order:</span>
-                <span>{formData.workOrderNumber || '-'}</span>
-              </div>
-            </div>
-
-            {/* Center - Barcode with Details */}
-            <div className="flex items-center justify-center">
-              <div className="text-center">
-                <div className="border border-black bg-white inline-block" style={{padding: '1px 2px', marginBottom: '0px', lineHeight: '0'}}>
-                  <svg width="28" height="10" style={{display: 'block', margin: '0'}}>
-                    <rect x="1" y="1" width="0.6" height="6" fill="black"/>
-                    <rect x="2" y="1" width="0.4" height="6" fill="black"/>
-                    <rect x="3" y="1" width="0.8" height="6" fill="black"/>
-                    <rect x="4.5" y="1" width="0.4" height="6" fill="black"/>
-                    <rect x="5.5" y="1" width="0.6" height="6" fill="black"/>
-                    <rect x="6.5" y="1" width="0.4" height="6" fill="black"/>
-                    <rect x="7.5" y="1" width="0.8" height="6" fill="black"/>
-                    <rect x="9" y="1" width="0.6" height="6" fill="black"/>
-                    <rect x="10" y="1" width="0.4" height="6" fill="black"/>
-                    <rect x="11" y="1" width="0.6" height="6" fill="black"/>
-                    <text x="14" y="8.5" fontSize="2" textAnchor="middle" fontWeight="bold">*{formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}*</text>
-                  </svg>
-                </div>
-                <div style={{fontSize: '5px', fontWeight: 'bold', lineHeight: '1', marginTop: '1px'}}>Job: {formData.jobNumber}{isLeadFree && 'L'}{isITAR && 'M'}</div>
-                <div style={{fontSize: '4px', lineHeight: '1'}}>Cust: {formData.customerName}</div>
-                <div style={{fontSize: '4px', lineHeight: '1'}}>WO: {formData.workOrderNumber}</div>
-                <div style={{fontSize: '4px', lineHeight: '1'}}>Qty: {formData.quantity}</div>
-              </div>
-            </div>
-
-            {/* Right */}
-            <div className="space-y-1">
-              <div className="flex">
-                <span className="font-bold w-24">Start Date:</span>
-                <span>{formData.startDate || '-'}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold w-24">Due Date:</span>
-                <span>{formData.dueDate || '-'}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold w-24">Ship Date:</span>
-                <span>{formData.shipDate || '-'}</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Main Form - Page 1 */}
@@ -2306,6 +2091,270 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
           >
             <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          PRINT-ONLY VIEW - Mirrors TravelerDetail's view mode layout
+          Hidden on screen, shown only during print
+          ═══════════════════════════════════════════════════════════════ */}
+      <div id="traveler-print-view">
+        {/* Border wrapper matching TravelerDetail */}
+        <div style={{border: '2px solid black'}}>
+
+          {/* Header - 3 column grid with customer info, barcode, dates */}
+          <div className="print-header bg-gray-100" style={{borderBottom: '2px solid black', padding: '0.3rem 0.5rem'}}>
+            <div className="grid grid-cols-3" style={{gap: 0, alignItems: 'center'}}>
+              {/* Left Column */}
+              <div style={{display: 'flex', flexDirection: 'column', gap: '0.15rem'}}>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', minWidth: '70px', fontSize: '12px'}}>Cust. Code:</span>
+                  <span style={{fontSize: '12px'}}>{formData.customerCode || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', minWidth: '70px', fontSize: '12px'}}>Cust. Name:</span>
+                  <span style={{fontSize: '12px'}}>{formData.customerName || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', minWidth: '70px', fontSize: '12px'}}>Work Order:</span>
+                  <span style={{fontSize: '12px'}}>{formData.workOrderNumber || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', minWidth: '70px', fontSize: '12px'}}>Quantity:</span>
+                  <span style={{fontSize: '12px'}}>{formData.quantity}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', minWidth: '70px', fontSize: '12px'}}>PO Number:</span>
+                  <span style={{fontSize: '12px'}}>{formData.poNumber || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', minWidth: '70px', fontSize: '12px'}}>Part No:</span>
+                  <span style={{fontSize: '12px'}}>{formData.partNumber || '-'}</span>
+                </div>
+              </div>
+
+              {/* Center - Job Number & Barcode */}
+              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
+                <div style={{fontWeight: 900, fontSize: '14px', marginBottom: '2px'}}>
+                  Job: {formData.jobNumber}{isLeadFree ? 'L' : ''}{isITAR ? 'M' : ''}
+                </div>
+                <div className="barcode-container" style={{border: '2px solid black', padding: '2px', background: 'white', display: 'inline-block'}}>
+                  <svg width="180" height="55" style={{display: 'block'}}>
+                    <rect x="5" y="5" width="3" height="35" fill="black"/>
+                    <rect x="10" y="5" width="2" height="35" fill="black"/>
+                    <rect x="15" y="5" width="4" height="35" fill="black"/>
+                    <rect x="22" y="5" width="2" height="35" fill="black"/>
+                    <rect x="27" y="5" width="3" height="35" fill="black"/>
+                    <rect x="33" y="5" width="2" height="35" fill="black"/>
+                    <rect x="38" y="5" width="4" height="35" fill="black"/>
+                    <rect x="45" y="5" width="3" height="35" fill="black"/>
+                    <rect x="50" y="5" width="2" height="35" fill="black"/>
+                    <rect x="55" y="5" width="3" height="35" fill="black"/>
+                    <rect x="61" y="5" width="2" height="35" fill="black"/>
+                    <rect x="66" y="5" width="4" height="35" fill="black"/>
+                    <rect x="73" y="5" width="2" height="35" fill="black"/>
+                    <rect x="78" y="5" width="3" height="35" fill="black"/>
+                    <rect x="84" y="5" width="2" height="35" fill="black"/>
+                    <rect x="89" y="5" width="4" height="35" fill="black"/>
+                    <rect x="96" y="5" width="3" height="35" fill="black"/>
+                    <rect x="102" y="5" width="2" height="35" fill="black"/>
+                    <rect x="107" y="5" width="4" height="35" fill="black"/>
+                    <rect x="114" y="5" width="2" height="35" fill="black"/>
+                    <rect x="119" y="5" width="3" height="35" fill="black"/>
+                    <rect x="125" y="5" width="2" height="35" fill="black"/>
+                    <rect x="130" y="5" width="4" height="35" fill="black"/>
+                    <rect x="137" y="5" width="3" height="35" fill="black"/>
+                    <rect x="143" y="5" width="2" height="35" fill="black"/>
+                    <rect x="148" y="5" width="4" height="35" fill="black"/>
+                    <rect x="155" y="5" width="3" height="35" fill="black"/>
+                    <rect x="161" y="5" width="2" height="35" fill="black"/>
+                    <rect x="166" y="5" width="4" height="35" fill="black"/>
+                    <text x="90" y="50" fontSize="8" textAnchor="middle" fontWeight="bold">*{formData.jobNumber}{isLeadFree ? 'L' : ''}{isITAR ? 'M' : ''}*</text>
+                  </svg>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div style={{display: 'flex', flexDirection: 'column', gap: '0.15rem', alignItems: 'flex-end'}}>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', fontSize: '12px'}}>Description:</span>
+                  <span style={{fontSize: '12px'}}>{formData.partDescription || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', fontSize: '12px'}}>Trav. Rev:</span>
+                  <span style={{fontSize: '12px'}}>{formData.revision || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', fontSize: '12px'}}>Cust. Rev:</span>
+                  <span style={{fontSize: '12px'}}>{formData.customerRevision || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', fontSize: '12px'}}>Start Date:</span>
+                  <span style={{fontSize: '12px'}}>{formData.startDate || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', fontSize: '12px'}}>Due Date:</span>
+                  <span style={{fontSize: '12px'}}>{formData.dueDate || '-'}</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+                  <span style={{fontWeight: 'bold', fontSize: '12px'}}>Ship Date:</span>
+                  <span style={{fontSize: '12px'}}>{formData.shipDate || '-'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Specifications Section */}
+          <div className="no-break" style={{borderBottom: '1px solid black'}}>
+            <div className="section-header-yellow" style={{borderBottom: '1px solid black', padding: '0.05rem 0.2rem'}}>
+              <h2 style={{fontSize: '12px', fontWeight: 'bold', color: 'black'}}>SPECIFICATIONS</h2>
+            </div>
+            <div className="specs-content" style={{padding: '0.1rem 0.2rem', fontSize: '9px', backgroundColor: '#fefce8'}}>
+              {formData.specs ? (
+                <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                  <div style={{whiteSpace: 'pre-wrap', flex: 1, fontSize: '9px'}}>{formData.specs}</div>
+                  {formData.specsDate && <div style={{fontWeight: 'bold', marginLeft: '8px', fontSize: '9px'}}>{formData.specsDate}</div>}
+                </div>
+              ) : (
+                <div style={{color: '#9ca3af', fontSize: '9px'}}>No specifications</div>
+              )}
+            </div>
+          </div>
+
+          {/* Routing Section */}
+          <div style={{borderBottom: '2px solid black'}}>
+            <div className="section-header-blue" style={{borderBottom: '1px solid black', padding: '0.05rem 0.2rem'}}>
+              <h2 style={{fontSize: '12px', fontWeight: 'bold', color: 'black'}}>ROUTING</h2>
+            </div>
+            <table className="routing-table" style={{width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', border: '2px solid #9ca3af'}}>
+              <thead>
+                <tr style={{backgroundColor: '#e5e7eb', borderBottom: '2px solid #9ca3af'}}>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '28px'}}>SQ</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'left', fontWeight: 'bold', fontSize: '12px', width: '130px'}}>WORK CENTER</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'left', fontWeight: 'bold', fontSize: '12px', width: '150px'}}>INSTRUCTIONS</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '48px'}}>TIME</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '48px'}}>QTY</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '48px'}}>REJ</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '48px'}}>ACC</th>
+                  <th style={{borderRight: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '55px'}}>SIGN</th>
+                  <th style={{padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', width: '55px'}}>DATE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formSteps.map((step, index) => (
+                  <tr key={index} style={{borderBottom: '1px solid #9ca3af'}}>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontWeight: 'bold', fontSize: '10px'}}>{step.sequence}</td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', fontWeight: '600', fontSize: '9px', wordWrap: 'break-word' as const}}>{step.workCenter.replace(/_/g, ' ')}</td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', fontSize: '9px', wordWrap: 'break-word' as const}}>
+                      {step.instruction || <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>}
+                    </td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontSize: '9px'}}>
+                      <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                    </td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontSize: '10px', fontWeight: 'bold'}}>
+                      <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                    </td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontSize: '10px', fontWeight: 'bold'}}>
+                      <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                    </td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontSize: '10px', fontWeight: 'bold'}}>
+                      <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                    </td>
+                    <td style={{borderRight: '2px solid #9ca3af', borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontSize: '10px', fontWeight: 'bold'}}>
+                      <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                    </td>
+                    <td style={{borderBottom: '2px solid #9ca3af', padding: '0.2rem', textAlign: 'center', fontSize: '9px'}}>
+                      <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                    </td>
+                  </tr>
+                ))}
+                {formSteps.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{textAlign: 'center', padding: '1rem', color: '#9ca3af'}}>No process steps</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Bottom Info - Stock & Shipping */}
+          <div className="bottom-info" style={{backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '0.2rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.3rem'}}>
+            <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+              <span style={{fontWeight: 'bold', fontSize: '10px', minWidth: '60px'}}>From Stock:</span>
+              <span style={{fontSize: '10px'}}>{formData.fromStock || '-'}</span>
+            </div>
+            <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+              <span style={{fontWeight: 'bold', fontSize: '10px', minWidth: '60px'}}>To Stock:</span>
+              <span style={{fontSize: '10px'}}>{formData.toStock || '-'}</span>
+            </div>
+            <div style={{display: 'flex', alignItems: 'baseline', gap: '0.25rem'}}>
+              <span style={{fontWeight: 'bold', fontSize: '10px', minWidth: '60px'}}>Ship Via:</span>
+              <span style={{fontSize: '10px'}}>{formData.shipVia || '-'}</span>
+            </div>
+          </div>
+
+          {/* Comments & Notes */}
+          <div style={{borderBottom: '2px solid black'}}>
+            <div className="section-header-purple" style={{borderBottom: '1px solid black', padding: '0.1rem 0.3rem'}}>
+              <h2 style={{fontSize: '12px', fontWeight: 'bold', color: 'black'}}>COMMENTS & NOTES</h2>
+            </div>
+            <div style={{backgroundColor: '#faf5ff', padding: '0.2rem 0.3rem', minHeight: '40px'}}>
+              <div style={{whiteSpace: 'pre-wrap', fontSize: '9px'}}>{formData.comments || <span style={{color: '#9ca3af', fontStyle: 'italic'}}>No comments</span>}</div>
+            </div>
+          </div>
+
+          {/* Additional Instructions/Comments Space */}
+          <div style={{borderBottom: '2px solid black'}}>
+            <div className="additional-instructions" style={{backgroundColor: '#f9fafb', padding: '0.3rem', minHeight: '120px'}}>
+              <div style={{color: '#9ca3af', fontSize: '9px'}}>Additional Instructions/Comments:</div>
+            </div>
+          </div>
+
+          {/* Labor Hours Tracking - Page 2 */}
+          {includeLaborHours && (
+            <div className="labor-section" style={{breakBefore: 'page'}}>
+              <div style={{backgroundColor: '#e9d5ff', borderBottom: '4px solid black', padding: '0.5rem 1rem'}}>
+                <h2 style={{fontWeight: 'bold', fontSize: '24px', color: 'black'}}>LABOR HOURS TRACKING</h2>
+              </div>
+              <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                <thead>
+                  <tr style={{backgroundColor: '#f3e8ff', borderBottom: '4px solid black'}}>
+                    <th style={{borderRight: '4px solid black', padding: '0.5rem 1rem', textAlign: 'left', fontWeight: 'bold', fontSize: '18px'}}>WORK CENTER</th>
+                    <th style={{borderRight: '4px solid black', padding: '0.5rem 1rem', textAlign: 'left', fontWeight: 'bold', fontSize: '18px'}}>OPERATOR NAME</th>
+                    <th style={{borderRight: '4px solid black', padding: '0.5rem 1rem', textAlign: 'center', fontWeight: 'bold', fontSize: '18px'}}>START TIME</th>
+                    <th style={{borderRight: '4px solid black', padding: '0.5rem 1rem', textAlign: 'center', fontWeight: 'bold', fontSize: '18px'}}>END TIME</th>
+                    <th style={{padding: '0.5rem 1rem', textAlign: 'center', fontWeight: 'bold', fontSize: '18px'}}>TOTAL HOURS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({length: 15}).map((_, i) => (
+                    <tr key={i} style={{borderBottom: '4px solid #4b5563', height: '65px'}}>
+                      <td style={{borderRight: '4px solid #4b5563', padding: '0.25rem 1rem', fontSize: '16px'}}>
+                        <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                      </td>
+                      <td style={{borderRight: '4px solid #4b5563', padding: '0.25rem 1rem', fontSize: '16px'}}>
+                        <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                      </td>
+                      <td style={{borderRight: '4px solid #4b5563', padding: '0.25rem 1rem', textAlign: 'center', fontSize: '16px'}}>
+                        <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                      </td>
+                      <td style={{borderRight: '4px solid #4b5563', padding: '0.25rem 1rem', textAlign: 'center', fontSize: '16px'}}>
+                        <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                      </td>
+                      <td style={{padding: '0.25rem 1rem', textAlign: 'center', fontSize: '16px'}}>
+                        <span style={{display: 'inline-block', width: '100%', borderBottom: '1px solid #9ca3af', minHeight: '16px'}}>&nbsp;</span>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{backgroundColor: '#e9d5ff', borderTop: '4px solid black', height: '70px'}}>
+                    <td colSpan={3} style={{borderRight: '4px solid black', padding: '0.5rem 1rem', textAlign: 'right', fontWeight: 'bold', fontSize: '18px'}}>TOTAL HOURS:</td>
+                    <td style={{borderRight: '4px solid black', padding: '0.5rem 1rem', fontSize: '18px'}}></td>
+                    <td style={{padding: '0.5rem 1rem', fontSize: '18px'}}></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
