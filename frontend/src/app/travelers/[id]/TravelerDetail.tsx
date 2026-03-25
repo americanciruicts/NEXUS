@@ -455,6 +455,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   }, [autoEdit, traveler]);
 
   const handlePrint = () => {
+    // Dismiss all toasts so they don't appear in print output
+    toast.dismiss();
     const wasDark = document.documentElement.classList.contains('dark');
     if (wasDark) {
       // Temporarily remove dark class so print uses light mode styles
@@ -463,7 +465,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     window.addEventListener('afterprint', () => {
       if (wasDark) document.documentElement.classList.add('dark');
     }, { once: true });
-    window.print();
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   const handleEdit = () => {

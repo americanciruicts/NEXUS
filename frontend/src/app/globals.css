@@ -217,7 +217,10 @@ textarea {
   header,
   footer,
   button:not(.print-show),
-  .print-hide {
+  .print-hide,
+  [data-sonner-toaster],
+  .sonner-toast-container,
+  [data-sonner-toast] {
     display: none !important;
   }
 

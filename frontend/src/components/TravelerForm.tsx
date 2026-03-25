@@ -637,10 +637,19 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       toast.warning('Please enter a Job Number before printing.');
       return;
     }
-    toast.info(`Printing Traveler: ${formData.jobNumber}`);
+    // Dismiss all toasts before printing so they don't appear in print output
+    toast.dismiss();
+    const wasDark = document.documentElement.classList.contains('dark');
+    if (wasDark) {
+      document.documentElement.classList.remove('dark');
+    }
+    window.addEventListener('afterprint', () => {
+      if (wasDark) document.documentElement.classList.add('dark');
+    }, { once: true });
+    // Small delay to let toasts dismiss
     setTimeout(() => {
       window.print();
-    }, 500);
+    }, 100);
   };
 
   const handleSubmit = async () => {
@@ -1279,6 +1288,265 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   // Main form
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
+      <style>{`
+        @media print {
+          /* Force light mode for print */
+          html { color-scheme: light !important; }
+          html.dark, html.dark body { background: white !important; color: black !important; }
+          body { background: white !important; color: black !important; font-size: 10px !important; margin: 0 !important; padding: 0 !important; }
+
+          /* Strip dark mode backgrounds */
+          .dark .bg-slate-900, .dark .bg-slate-800, .dark .bg-slate-700,
+          .dark .bg-gray-900, .dark .bg-gray-800, .dark .bg-gray-700,
+          [class*="dark:bg-slate"], [class*="dark:bg-gray"] {
+            background-color: white !important;
+          }
+
+          /* Force all text to black */
+          .dark .text-white, .dark .text-slate-100, .dark .text-slate-200,
+          .dark .text-slate-300, .dark .text-slate-400,
+          .dark .text-gray-100, .dark .text-gray-200, .dark .text-gray-300,
+          [class*="dark:text-white"], [class*="dark:text-slate"], [class*="dark:text-gray"] {
+            color: black !important;
+            -webkit-text-fill-color: black !important;
+          }
+
+          /* Force dark mode borders to visible gray */
+          .dark .border-slate-600, .dark .border-slate-700, .dark .border-slate-800,
+          [class*="dark:border-slate"] {
+            border-color: #9ca3af !important;
+          }
+
+          /* Fix gradient backgrounds */
+          [class*="dark:from-"], [class*="dark:to-"], [class*="dark:via-"] {
+            background-image: none !important;
+          }
+
+          @page {
+            margin: 0.25in;
+            size: letter;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+            color: black !important;
+            box-decoration-break: clone !important;
+            -webkit-box-decoration-break: clone !important;
+          }
+
+          /* Hide non-print elements */
+          .no-print { display: none !important; }
+          button { display: none !important; }
+          [data-sonner-toaster], [data-sonner-toast] { display: none !important; }
+
+          /* Hide the form gradient header, action buttons, type selector, auto-save status */
+          .bg-gradient-to-br.from-teal-600 { display: none !important; }
+
+          /* Reset page container */
+          .min-h-screen { min-height: auto !important; background: white !important; padding: 0 !important; }
+          .max-w-7xl { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+          .p-2, .p-3, .p-4, .p-6, .p-8 { padding: 0 !important; }
+          .sm\\:p-4, .lg\\:p-6, .md\\:p-6, .lg\\:p-8, .md\\:p-8 { padding: 0 !important; }
+          .mb-3, .mb-4, .mb-6, .sm\\:mb-4, .sm\\:mb-6, .md\\:mb-6 { margin-bottom: 0 !important; }
+          .shadow-lg, .shadow-md, .shadow-sm, .shadow-2xl { box-shadow: none !important; }
+          .rounded-lg, .rounded-xl, .rounded-2xl { border-radius: 0 !important; }
+
+          /* Show print header (hidden on screen) */
+          .hidden.print\\:block { display: block !important; }
+
+          /* Print header styling - match TravelerDetail */
+          .bg-gray-100.border-b-2 { padding: 0.2rem 0.5rem !important; }
+          .bg-gray-100 .grid {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            gap: 0 !important;
+            align-items: center !important;
+          }
+          .bg-gray-100 .grid > div:first-child { text-align: left !important; padding-right: 0.5rem !important; }
+          .bg-gray-100 .grid > div:nth-child(2) {
+            text-align: center !important;
+            padding: 0 0.5rem !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+          }
+          .bg-gray-100 .grid > div:last-child { text-align: right !important; padding-left: 0.5rem !important; }
+          .bg-gray-100 .space-y-1 { row-gap: 0.2rem !important; margin: 0 !important; }
+          .bg-gray-100 .flex { gap: 0.25rem !important; margin: 0 !important; align-items: baseline !important; }
+          .bg-gray-100 span { font-size: 12px !important; line-height: 1.4 !important; margin: 0 !important; padding: 0 !important; }
+          .bg-gray-100 .font-bold { font-size: 12px !important; }
+
+          /* Main form card - remove decorative styling */
+          .bg-white.shadow-lg.rounded-lg.border-2.border-indigo-100,
+          .bg-white.dark\\:bg-slate-800.shadow-lg {
+            background: white !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            padding: 0.2rem !important;
+          }
+
+          /* Form labels - compact and match TravelerDetail style */
+          label {
+            font-size: 10px !important;
+            font-weight: bold !important;
+            color: black !important;
+            margin-bottom: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* All inputs, selects, textareas - look like plain text (match TravelerDetail) */
+          input, select, textarea {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 11px !important;
+            font-weight: bold !important;
+            color: black !important;
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            appearance: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+            border-radius: 0 !important;
+            min-height: 0 !important;
+            height: auto !important;
+          }
+          textarea { resize: none !important; overflow: hidden !important; }
+          input[type="date"] { font-size: 10px !important; }
+          input[type="date"]::-webkit-calendar-picker-indicator { display: none !important; }
+          input[type="date"]::-webkit-inner-spin-button { display: none !important; }
+          input[type="number"] { -moz-appearance: textfield !important; }
+          input[type="number"]::-webkit-outer-spin-button,
+          input[type="number"]::-webkit-inner-spin-button { display: none !important; }
+          select::-ms-expand { display: none !important; }
+          input[type="checkbox"] { display: none !important; }
+
+          /* Form grid layout - compact */
+          .grid { gap: 0.2rem !important; }
+          .gap-2, .gap-3, .gap-4, .gap-6 { gap: 0.2rem !important; }
+          .space-y-3 > *, .space-y-4 > *, .space-y-6 > * { margin-top: 0.1rem !important; }
+
+          /* Hide decorative option checkboxes section */
+          .bg-gradient-to-br.from-indigo-50.to-purple-50 { display: none !important; }
+
+          /* Specifications section - match TravelerDetail yellow style */
+          .bg-yellow-50 {
+            background-color: #fefce8 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            border: 2px solid black !important;
+            border-radius: 0 !important;
+            padding: 0.15rem 0.3rem !important;
+            margin: 0 !important;
+          }
+          .bg-yellow-50 textarea {
+            font-size: 9px !important;
+            font-weight: normal !important;
+          }
+
+          /* Stock & Shipping section - match TravelerDetail */
+          .bg-blue-50 {
+            border: 2px solid black !important;
+            border-radius: 0 !important;
+            padding: 0.15rem 0.3rem !important;
+            margin: 0 !important;
+          }
+          .bg-blue-50 h3 { font-size: 12px !important; margin-bottom: 0.1rem !important; }
+
+          /* Process Steps section - transform cards into table-like layout */
+          .bg-gradient-to-br.from-teal-50.to-emerald-50 {
+            background: white !important;
+            border: 2px solid black !important;
+            border-radius: 0 !important;
+            padding: 0.1rem !important;
+            margin: 0 !important;
+          }
+          .bg-gradient-to-br.from-teal-50.to-emerald-50 h3 {
+            font-size: 12px !important;
+            margin-bottom: 0.1rem !important;
+          }
+
+          /* Step cards - compact like table rows */
+          .bg-white.border-2.border-indigo-200.rounded-lg {
+            background: white !important;
+            border: 1px solid #9ca3af !important;
+            border-radius: 0 !important;
+            padding: 0.2rem !important;
+            margin-bottom: 0.1rem !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* Step header border */
+          .border-b.border-gray-200 { padding-bottom: 0.1rem !important; margin-bottom: 0.1rem !important; }
+
+          /* Step badge */
+          .bg-blue-600.text-white.font-bold {
+            font-size: 10px !important;
+            padding: 0.1rem 0.3rem !important;
+            background-color: #2563eb !important;
+            color: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* SEQ # highlight */
+          .bg-yellow-100.border-2.border-yellow-400 {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+          }
+          .bg-yellow-100 label { font-size: 9px !important; }
+          .bg-yellow-100 input { font-size: 12px !important; text-align: center !important; }
+
+          /* Step fields grid - compact */
+          .grid.grid-cols-2.sm\\:grid-cols-3.md\\:grid-cols-5 {
+            display: grid !important;
+            grid-template-columns: repeat(5, 1fr) !important;
+            gap: 0.2rem !important;
+          }
+          .col-span-2.sm\\:col-span-1 { grid-column: span 1 !important; }
+
+          /* Comments section */
+          .bg-green-50 {
+            border: 2px solid black !important;
+            border-radius: 0 !important;
+            padding: 0.15rem 0.3rem !important;
+            margin: 0 !important;
+          }
+          .bg-green-50 label { font-size: 12px !important; margin-bottom: 0.1rem !important; }
+          .bg-green-50 textarea { font-size: 9px !important; font-weight: normal !important; }
+
+          /* Action buttons rows at top and bottom */
+          .grid.grid-cols-1.sm\\:grid-cols-3 { display: none !important; }
+
+          /* Auto-save status indicator */
+          .flex.items-center.justify-end.mb-2 { display: none !important; }
+
+          /* Bottom action buttons row with border-t */
+          .border-t-2.border-gray-200 { display: none !important; }
+
+          /* Drag handle buttons and remove buttons */
+          .cursor-grab, .bg-red-600 { display: none !important; }
+
+          /* Work order selector */
+          .bg-amber-50 { display: none !important; }
+
+          /* Reduce spacing */
+          .space-y-3, .space-y-4 { gap: 0 !important; }
+          .mb-3, .mb-4 { margin-bottom: 0.1rem !important; }
+
+          /* Keep sections together */
+          .bg-yellow-50, .bg-blue-50, .bg-green-50 {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
       <div className="w-full max-w-7xl mx-auto overflow-x-hidden">
         {/* Header with Type Badge - NO PRINT */}
         <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 shadow-2xl rounded-2xl p-4 sm:p-5 md:p-8 mb-3 sm:mb-4 md:mb-6 no-print relative overflow-hidden">
@@ -2016,7 +2284,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
         )}
 
         {/* Action Buttons - Bottom of Form */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200 dark:border-slate-700">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200 dark:border-slate-700 no-print">
           <button
             onClick={handlePrint}
             className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
