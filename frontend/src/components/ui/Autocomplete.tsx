@@ -178,6 +178,17 @@ export default function Autocomplete({
         break;
       case 'Enter':
         e.preventDefault();
+        // Detect QR code scan — pass raw value to onSelect for the parent to parse
+        if (value.startsWith('NEXUS-STEP|')) {
+          justSelectedRef.current = true;
+          isFocusedRef.current = false;
+          setIsOpen(false);
+          setSuggestions([]);
+          if (onSelect) {
+            onSelect({ value, label: value });
+          }
+          break;
+        }
         if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
           handleSelect(suggestions[selectedIndex]);
         } else if (suggestions.length > 0) {

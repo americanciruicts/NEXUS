@@ -100,6 +100,7 @@ class LaborEntryResponse(BaseModel):
     description: str
     is_completed: bool
     work_center: Optional[str] = None
+    work_center_code: Optional[str] = None
     sequence_number: Optional[int] = None
     qty_completed: Optional[int] = None
     comment: Optional[str] = None
@@ -755,6 +756,20 @@ async def get_active_labor_entry(
     if not active_entry:
         return None
 
+    # Get the work_center_code from the linked process step (for QR auto-stop matching)
+    work_center_code = active_entry.work_center or ''
+    if active_entry.step_id:
+        step = db.query(ProcessStep).filter(ProcessStep.id == active_entry.step_id).first()
+        if step:
+            work_center_code = step.work_center_code or ''
+
+    # Get the traveler's quantity for the qty modal
+    traveler_qty = None
+    if active_entry.traveler_id:
+        traveler = db.query(Traveler).filter(Traveler.id == active_entry.traveler_id).first()
+        if traveler:
+            traveler_qty = traveler.quantity
+
     entry_dict = {
         "id": active_entry.id,
         "traveler_id": active_entry.traveler_id,
@@ -768,9 +783,11 @@ async def get_active_labor_entry(
         "description": active_entry.description,
         "is_completed": active_entry.is_completed,
         "work_center": active_entry.work_center,
+        "work_center_code": work_center_code,
         "sequence_number": active_entry.sequence_number,
         "comment": active_entry.comment,
         "created_at": active_entry.created_at,
+        "quantity": traveler_qty,
         **get_pause_data(db, active_entry.id)
     }
 

@@ -132,6 +132,8 @@ export default function LaborTrackingPage() {
   // Auto-timer: track scan-based auto-start/stop
   const autoStartTriggeredRef = useRef(false);
   const lastStartedWorkCenterRef = useRef<string>('');
+  const lastStartedWorkCenterCodeRef = useRef<string>(''); // e.g. PCB_ASSEMBLY_13_FEEDER_LOAD
+  const lastStartedStepIdRef = useRef<number | undefined>(undefined);
   const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Global scanner listener — ONLY for auto-stop when timer is running
@@ -147,15 +149,31 @@ export default function LaborTrackingPage() {
         globalScanBufferRef.current = '';
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
 
-        // Extract work center from QR code
-        let workCenterFromScan = scannedValue;
+        // Extract work center info from QR code
+        // QR format: NEXUS-STEP|traveler_id|job_number|work_order|work_center_code|step_number|operation|step_type|step_id|company
+        let shouldStop = false;
         if (scannedValue.startsWith('NEXUS-STEP|')) {
           const parts = scannedValue.split('|');
-          if (parts.length >= 5) workCenterFromScan = parts[4];
+          const qrWorkCenterCode = parts[4] || ''; // e.g. PCB_ASSEMBLY_13_FEEDER_LOAD
+          const qrOperation = parts[6] || '';       // e.g. FEEDER LOAD
+          const qrStepId = parts[8] ? parseInt(parts[8]) : 0;
+
+          // Match by step_id (most precise), work_center_code, or operation name
+          if (qrStepId && qrStepId === lastStartedStepIdRef.current) {
+            shouldStop = true;
+          } else if (qrWorkCenterCode && qrWorkCenterCode.toLowerCase() === lastStartedWorkCenterCodeRef.current.toLowerCase()) {
+            shouldStop = true;
+          } else if (qrOperation && qrOperation.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+            shouldStop = true;
+          }
+        } else {
+          // Raw text scan (not QR format) — compare directly
+          if (scannedValue.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+            shouldStop = true;
+          }
         }
 
-        // Compare against active work center
-        if (workCenterFromScan.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+        if (shouldStop) {
           e.preventDefault();
           e.stopPropagation();
           if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -480,14 +498,19 @@ export default function LaborTrackingPage() {
           // Extract job number and work center from description
           const parts = data.description.split(' - ');
           if (parts.length >= 2) {
+            const workCenterName = parts[0] || '';
             setNewEntry({
               job_number: data.job_number || '',
-              work_center: parts[0] || '',
+              work_center: workCenterName,
               step_id: data.step_id || undefined,
               operator_name: parts[1] || '',
               operator_id: data.employee_id || user?.id,
               date: start.toISOString().slice(0, 10),
             });
+            // Set refs for QR auto-stop matching
+            lastStartedWorkCenterRef.current = workCenterName;
+            lastStartedWorkCenterCodeRef.current = data.work_center_code || workCenterName;
+            lastStartedStepIdRef.current = data.step_id || undefined;
           }
         }
       }
@@ -595,7 +618,13 @@ export default function LaborTrackingPage() {
         setElapsedTime(0);
         setIsTimerRunning(true);
         setTravelerMaxQty(traveler.quantity || null);
-        lastStartedWorkCenterRef.current = newEntry.work_center;
+        lastStartedWorkCenterRef.current = newEntry.work_center; // display name e.g. "FEEDER LOAD"
+        // Find the matching work center code from job steps for QR auto-stop matching
+        const matchingStep = jobWorkCenterOptions.find((s: any) =>
+          s.value === newEntry.work_center || s.operation === newEntry.work_center || s.step_id === newEntry.step_id
+        );
+        lastStartedWorkCenterCodeRef.current = matchingStep?.work_center_code || matchingStep?.value || newEntry.work_center;
+        lastStartedStepIdRef.current = newEntry.step_id;
         toast.success('Timer started!');
         fetchLaborEntries();
       } else {
@@ -761,6 +790,8 @@ export default function LaborTrackingPage() {
         });
         setJobWorkCenterOptions([]);
         lastStartedWorkCenterRef.current = '';
+        lastStartedWorkCenterCodeRef.current = '';
+        lastStartedStepIdRef.current = undefined;
         autoStartTriggeredRef.current = false;
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
@@ -783,6 +814,8 @@ export default function LaborTrackingPage() {
         });
         setJobWorkCenterOptions([]);
         lastStartedWorkCenterRef.current = '';
+        lastStartedWorkCenterCodeRef.current = '';
+        lastStartedStepIdRef.current = undefined;
         autoStartTriggeredRef.current = false;
         toast.warning('Timer entry no longer exists. Timer has been reset.');
         fetchLaborEntries();
@@ -1323,30 +1356,49 @@ export default function LaborTrackingPage() {
                     value={newEntry.work_center}
                     onChange={(value) => {
                       if (!isTimerRunning) {
-                        // Parse QR code format: NEXUS-STEP|jobNum|stepNum|operation|workCenter
-                        let parsedValue = value;
-                        if (value.startsWith('NEXUS-STEP|')) {
-                          const parts = value.split('|');
-                          if (parts.length >= 5) parsedValue = parts[4];
-                        }
-                        setNewEntry(prev => ({ ...prev, work_center: parsedValue, step_id: undefined }));
+                        // Don't update state with partial QR scan — let onSelect handle the full QR
+                        if (value.includes('NEXUS-STEP|')) return;
+                        setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
                       }
                     }}
                     onSelect={(option: any) => {
                       let selectedWC = option.value || option.label;
-                      // Parse QR code format: NEXUS-STEP|jobNum|stepNum|operation|workCenter
+                      let stepId = option.step_id;
+
+                      // Parse QR code format: NEXUS-STEP|traveler_id|job_number|work_order|work_center_code|step_number|operation|step_type|step_id|company
                       if (selectedWC.startsWith('NEXUS-STEP|')) {
                         const parts = selectedWC.split('|');
-                        if (parts.length >= 5) selectedWC = parts[4];
+                        const qrWorkCenterCode = parts[4] || '';
+                        const qrOperation = parts[6] || '';
+                        stepId = parts[8] ? parseInt(parts[8]) : undefined;
+                        // Use the operation name as the display value (e.g. "FEEDER LOAD")
+                        selectedWC = qrOperation || qrWorkCenterCode;
+
+                        // Also auto-fill job number if empty
+                        const qrJobNumber = parts[2] || '';
+                        if (qrJobNumber && !newEntry.job_number) {
+                          setNewEntry(prev => ({ ...prev, job_number: qrJobNumber }));
+                        }
                       }
+
                       if (isTimerRunning) {
-                        // Auto-stop handled by global scanner listener
-                        if (selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
+                        // Check if scanned QR matches the running timer's work center
+                        const qrParts = (option.value || '').split('|');
+                        const qrWCCode = qrParts[4] || '';
+                        const qrOp = qrParts[6] || '';
+                        const qrSid = qrParts[8] ? parseInt(qrParts[8]) : 0;
+
+                        const matchesCode = qrWCCode && qrWCCode.toLowerCase() === lastStartedWorkCenterCodeRef.current.toLowerCase();
+                        const matchesOp = qrOp && qrOp.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase();
+                        const matchesStep = qrSid && qrSid === lastStartedStepIdRef.current;
+                        const matchesName = selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase();
+
+                        if (matchesStep || matchesCode || matchesOp || matchesName) {
                           stopTimer();
                         }
                         return;
                       }
-                      setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: option.step_id }));
+                      setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: stepId }));
                     }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps
