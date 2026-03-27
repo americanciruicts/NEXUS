@@ -1356,8 +1356,6 @@ export default function LaborTrackingPage() {
                     value={newEntry.work_center}
                     onChange={(value) => {
                       if (!isTimerRunning) {
-                        // Don't update state with partial QR scan — let onSelect handle the full QR
-                        if (value.includes('NEXUS-STEP|')) return;
                         setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
                       }
                     }}
@@ -1416,8 +1414,8 @@ export default function LaborTrackingPage() {
                       }
                       return fetchWorkCenters(query);
                     }}
-                    placeholder={isTimerRunning ? "Scan QR to stop timer" : "Type, scan QR, or select"}
-                    disabled={false}
+                    placeholder={isTimerRunning ? "Timer running — scan QR to stop" : "Type, scan QR, or select"}
+                    disabled={isTimerRunning}
                     className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all dark:bg-slate-700 dark:text-slate-200"
                     minChars={0}
                   />

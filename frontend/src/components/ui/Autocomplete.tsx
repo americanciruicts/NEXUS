@@ -163,6 +163,37 @@ export default function Autocomplete({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Always handle Enter for QR codes — even if dropdown is closed or no suggestions
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Check both React state value AND the actual DOM input value (scanner may outpace React)
+      const inputValue = e.currentTarget.value || value;
+      if (inputValue.includes('NEXUS-STEP|')) {
+        justSelectedRef.current = true;
+        isFocusedRef.current = false;
+        setIsOpen(false);
+        setSuggestions([]);
+        onChange(inputValue); // Sync React state with actual input
+        if (onSelect) {
+          onSelect({ value: inputValue, label: inputValue });
+        }
+        return;
+      }
+      // Normal Enter handling
+      if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        handleSelect(suggestions[selectedIndex]);
+      } else if (suggestions.length > 0) {
+        const exactMatch = suggestions.find(s => s.value.toLowerCase() === value.toLowerCase() || s.label.toLowerCase() === value.toLowerCase());
+        handleSelect(exactMatch || suggestions[0]);
+      } else if (value) {
+        setIsOpen(false);
+        if (onSelect) {
+          onSelect({ value, label: value });
+        }
+      }
+      return;
+    }
+
     if (!isOpen || suggestions.length === 0) return;
 
     switch (e.key) {
@@ -175,33 +206,6 @@ export default function Autocomplete({
       case 'ArrowUp':
         e.preventDefault();
         setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        // Detect QR code scan — pass raw value to onSelect for the parent to parse
-        if (value.startsWith('NEXUS-STEP|')) {
-          justSelectedRef.current = true;
-          isFocusedRef.current = false;
-          setIsOpen(false);
-          setSuggestions([]);
-          if (onSelect) {
-            onSelect({ value, label: value });
-          }
-          break;
-        }
-        if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
-          handleSelect(suggestions[selectedIndex]);
-        } else if (suggestions.length > 0) {
-          // Auto-select first match (handles barcode/QR scanner Enter)
-          const exactMatch = suggestions.find(s => s.value.toLowerCase() === value.toLowerCase() || s.label.toLowerCase() === value.toLowerCase());
-          handleSelect(exactMatch || suggestions[0]);
-        } else if (value) {
-          // No suggestions but has value (scanner typed full value) — close dropdown and trigger onSelect with raw value
-          setIsOpen(false);
-          if (onSelect) {
-            onSelect({ value, label: value });
-          }
-        }
         break;
       case 'Escape':
         e.preventDefault();
