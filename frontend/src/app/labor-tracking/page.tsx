@@ -1543,31 +1543,32 @@ export default function LaborTrackingPage() {
                   </button>
 
                   {jobListExpanded && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                       {visibleJobs.length > 0 ? visibleJobs.map((job) => (
                         <button
                           key={job}
                           onClick={() => {
                             if (selectedJobChip === job) {
-                              // Deselect
                               setSelectedJobChip(null);
                               setFilter(prev => ({ ...prev, jobNumber: '' }));
                             } else {
-                              // Select
                               setSelectedJobChip(job);
                               setFilter(prev => ({ ...prev, jobNumber: job }));
                             }
                           }}
-                          className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-all cursor-pointer ${
+                          className={`flex flex-col items-center justify-center px-3 py-3 rounded-xl border-2 transition-all cursor-pointer ${
                             selectedJobChip === job
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105'
-                              : 'bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600'
+                              ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-500 shadow-lg scale-[1.03] ring-2 ring-blue-300 dark:ring-blue-800'
+                              : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-200 border-gray-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md hover:scale-[1.02]'
                           }`}
                         >
-                          {job}
+                          <svg className={`w-5 h-5 mb-1 ${selectedJobChip === job ? 'text-blue-200' : 'text-blue-500 dark:text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="text-sm font-bold tracking-wide">{job}</span>
                         </button>
                       )) : (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 italic">No jobs match your search</p>
+                        <p className="col-span-full text-sm text-gray-400 dark:text-slate-500 italic text-center py-2">No jobs match your search</p>
                       )}
                     </div>
                   )}
