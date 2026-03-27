@@ -765,8 +765,7 @@ export default function LaborTrackingPage() {
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else {
-        const error = await response.json();
-        toast.error(`Error: ${error.detail || 'Failed to stop timer'}`);
+        toast.error(`Error: ${respData.detail || 'Failed to stop timer'}`);
       }
     } catch (error) {
       console.error('Error stopping timer:', error);
@@ -1302,11 +1301,22 @@ export default function LaborTrackingPage() {
                     value={newEntry.work_center}
                     onChange={(value) => {
                       if (!isTimerRunning) {
-                        setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
+                        // Parse QR code format: NEXUS-STEP|jobNum|stepNum|operation|workCenter
+                        let parsedValue = value;
+                        if (value.startsWith('NEXUS-STEP|')) {
+                          const parts = value.split('|');
+                          if (parts.length >= 5) parsedValue = parts[4];
+                        }
+                        setNewEntry(prev => ({ ...prev, work_center: parsedValue, step_id: undefined }));
                       }
                     }}
                     onSelect={(option: any) => {
-                      const selectedWC = option.value || option.label;
+                      let selectedWC = option.value || option.label;
+                      // Parse QR code format: NEXUS-STEP|jobNum|stepNum|operation|workCenter
+                      if (selectedWC.startsWith('NEXUS-STEP|')) {
+                        const parts = selectedWC.split('|');
+                        if (parts.length >= 5) selectedWC = parts[4];
+                      }
                       if (isTimerRunning) {
                         // Auto-stop handled by global scanner listener
                         if (selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
@@ -2258,7 +2268,7 @@ export default function LaborTrackingPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-slate-400">
-            How many units did you complete during this time? <span className="text-red-500 font-semibold">*</span>
+            How many units did you complete during this time? <span className="text-gray-400 text-xs">(optional)</span>
             {travelerMaxQty != null && (
               <span className="block mt-1 font-semibold text-blue-600 dark:text-blue-400">
                 Traveler quantity: {travelerMaxQty}
@@ -2282,7 +2292,7 @@ export default function LaborTrackingPage() {
             className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:bg-slate-700 dark:text-white"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && qtyCompleted) confirmStopTimer();
+              if (e.key === 'Enter') confirmStopTimer();
             }}
           />
           {qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty && (
@@ -2314,7 +2324,7 @@ export default function LaborTrackingPage() {
             </button>
             <button
               onClick={confirmStopTimer}
-              disabled={!qtyCompleted || !!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
+              disabled={!!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
               Stop Timer
