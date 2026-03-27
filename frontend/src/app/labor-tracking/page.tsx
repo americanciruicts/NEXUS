@@ -764,6 +764,28 @@ export default function LaborTrackingPage() {
         autoStartTriggeredRef.current = false;
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
+      } else if (response.status === 404) {
+        // Entry was deleted or doesn't exist — reset timer state
+        setIsTimerRunning(false);
+        setIsPaused(false);
+        setElapsedTime(0);
+        setStartTime(null);
+        setPauseTime(null);
+        setActiveEntryId(null);
+        const fullName = user ? (`${user.first_name || user.username}`.trim()) : '';
+        setNewEntry({
+          job_number: '',
+          work_center: '',
+          step_id: undefined,
+          operator_name: fullName,
+          operator_id: user?.id,
+          date: new Date().toISOString().slice(0, 10),
+        });
+        setJobWorkCenterOptions([]);
+        lastStartedWorkCenterRef.current = '';
+        autoStartTriggeredRef.current = false;
+        toast.warning('Timer entry no longer exists. Timer has been reset.');
+        fetchLaborEntries();
       } else {
         toast.error(`Error: ${respData.detail || 'Failed to stop timer'}`);
       }
