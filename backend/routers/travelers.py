@@ -232,6 +232,17 @@ async def create_traveler(
     otherwise falls back to system user for backward compatibility.
     """
     try:
+        # Check for duplicate job_number + revision
+        existing = db.query(Traveler).filter(
+            Traveler.job_number == traveler_data.job_number,
+            Traveler.revision == traveler_data.revision
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A traveler with Job# {traveler_data.job_number} Rev {traveler_data.revision} already exists (ID: {existing.id})"
+            )
+
         # Determine labor hours based on traveler type
         # PCB parts don't need labor hours, all others do by default
         include_labor_hours = traveler_data.include_labor_hours if traveler_data.traveler_type != "PCB" else False

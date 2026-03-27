@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -93,6 +93,9 @@ class Part(Base):
 
 class Traveler(Base):
     __tablename__ = "travelers"
+    __table_args__ = (
+        UniqueConstraint('job_number', 'revision', name='uq_traveler_job_revision'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     job_number = Column(String(50), nullable=False, index=True)

@@ -2703,70 +2703,70 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             placeholder="Enter instructions..."
                             rows={1}
                           />
-                          <span className="print-only" style={{fontSize: '9px'}}>{step.instruction || <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{fontSize: '9px', minHeight: '16px'}}>{step.instruction || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedTime || ''}
                             onChange={(e) => updateStep(index, 'completedTime', e.target.value)}
-                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-xs text-center screen-only"
+                            className="w-full border-b-2 border-gray-400 dark:border-slate-500 text-xs text-center bg-transparent screen-only"
                             style={{padding: '1px 2px'}}
                             placeholder="Hrs"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{step.completedTime || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.quantity}
                             onChange={(e) => updateStep(index, 'quantity', e.target.value)}
-                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-center text-sm font-bold bg-gray-50 dark:bg-slate-900 screen-only"
+                            className="w-full border-b-2 border-gray-400 dark:border-slate-500 text-center text-sm font-bold bg-transparent screen-only"
                             style={{padding: '1px 2px'}}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{step.quantity || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.rejected}
                             onChange={(e) => updateStep(index, 'rejected', e.target.value)}
-                            className="w-full border border-red-400 rounded text-center text-sm font-bold text-red-700 bg-red-50 screen-only"
+                            className="w-full border-b-2 border-red-400 text-center text-sm font-bold text-red-700 bg-transparent screen-only"
                             style={{padding: '1px 2px'}}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold text-red-700" style={{minHeight: '16px'}}>{step.rejected || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.accepted}
                             onChange={(e) => updateStep(index, 'accepted', e.target.value)}
-                            className="w-full border border-green-400 rounded text-center text-sm font-bold text-green-700 bg-green-50 screen-only"
+                            className="w-full border-b-2 border-green-400 text-center text-sm font-bold text-green-700 bg-transparent screen-only"
                             style={{padding: '1px 2px'}}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold text-green-700" style={{minHeight: '16px'}}>{step.accepted || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
                             type="text"
                             value={step.sign}
                             onChange={(e) => updateStep(index, 'sign', e.target.value)}
-                            className="w-full border border-purple-400 rounded text-center text-sm font-bold bg-purple-50 screen-only"
+                            className="w-full border-b-2 border-purple-400 text-center text-sm font-bold bg-transparent screen-only"
                             style={{padding: '1px 2px'}}
                             placeholder="Sign"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{step.sign || '\u00A0'}</span>
                         </td>
                         <td className="px-0.5 py-0">
                           <input
                             type="text"
                             value={step.completedDate}
                             onChange={(e) => updateStep(index, 'completedDate', e.target.value)}
-                            className="w-full border border-gray-300 dark:border-slate-600 rounded text-xs text-center screen-only"
+                            className="w-full border-b-2 border-gray-400 dark:border-slate-500 text-xs text-center bg-transparent screen-only"
                             style={{padding: '1px 1px'}}
                             placeholder="Date"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[9px]" style={{minHeight: '16px'}}>{step.completedDate || '\u00A0'}</span>
                         </td>
                   </tr>
                     )}
@@ -2796,25 +2796,25 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           </div>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '120px'}}>
-                          {step.instruction ? step.instruction : <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>}
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.instruction || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.completedTime || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.quantity || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold text-red-700 print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.rejected || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold text-green-700 print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.accepted || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.sign || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>&nbsp;</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.completedDate || '\u00A0'}</span>
                         </td>
                   </tr>
                   );
