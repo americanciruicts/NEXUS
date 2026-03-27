@@ -405,6 +405,8 @@ async def update_labor_entry(
             )
 
         labor_entry.hours_worked = hours_worked
+        # Auto-mark as completed when end_time is set (e.g. admin editing an active entry)
+        labor_entry.is_completed = True
 
     # When labor entry is completed, update linked step and traveler progress
     if labor_data.end_time and labor_entry.is_completed:
