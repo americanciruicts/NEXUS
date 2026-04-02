@@ -3,8 +3,8 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Layout from '@/components/layout/Layout';
-import { ArrowLeftIcon, PrinterIcon, CheckIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon, Bars3Icon, DocumentTextIcon, CpuChipIcon, WrenchScrewdriverIcon, BoltIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
-import { getWorkCentersByType, WorkCenterItem, DEPARTMENT_BAR_COLORS, DEPARTMENT_COLORS } from '@/data/workCenters';
+import { ArrowLeftIcon, PrinterIcon, CheckIcon, XMarkIcon, PlusIcon, TrashIcon, PencilIcon, Bars3Icon, DocumentTextIcon, CpuChipIcon, WrenchScrewdriverIcon, BoltIcon, ShoppingCartIcon, ArrowPathIcon, ArrowsRightLeftIcon, WrenchIcon } from '@heroicons/react/24/outline';
+import { getWorkCentersByType, WorkCenterItem, DEPARTMENT_BAR_COLORS, DEPARTMENT_COLORS, isRmaType } from '@/data/workCenters';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
@@ -72,6 +72,25 @@ interface LaborEntry {
   totalHours: string;
 }
 
+interface RmaUnit {
+  id?: number;
+  unit_number: number;
+  serial_number: string;
+  customer_complaint: string;
+  incoming_inspection_notes: string;
+  disposition: string;
+  troubleshooting_notes: string;
+  repairing_notes: string;
+  final_inspection_notes: string;
+  customer_ncr?: string;
+  original_po_number?: string;
+  original_wo_number?: string;
+  customer_revision_sent?: string;
+  customer_revision_received?: string;
+  original_built_quantity?: number;
+  units_shipped?: number;
+}
+
 interface Traveler {
   id: string;
   travelerId: number;
@@ -101,6 +120,22 @@ interface Traveler {
   isActive: boolean;
   includeLaborHours: boolean;
   priority: string;
+  // RMA-specific fields
+  customerContact?: string;
+  originalWoNumber?: string;
+  originalPoNumber?: string;
+  returnPoNumber?: string;
+  rmaPoNumber?: string;
+  invoiceNumber?: string;
+  customerNcr?: string;
+  originalBuiltQuantity?: number;
+  unitsShipped?: number;
+  quantityRmaIssued?: number;
+  unitsReceived?: number;
+  customerRevisionSent?: string;
+  customerRevisionReceived?: string;
+  rmaNotes?: string;
+  rmaUnits?: RmaUnit[];
 }
 
 // Sortable table row wrapper for drag-and-drop in desktop view
@@ -192,6 +227,27 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: number]: HTMLTableRowElement | null }>({});
+  const suffixInputRef = useRef<HTMLInputElement | null>(null);
+  const suffixInputRef2 = useRef<HTMLInputElement | null>(null);
+  // Focus whichever suffix input is visible
+  const focusSuffixInput = (cursorPos: number) => {
+    requestAnimationFrame(() => {
+      // Try the desktop ref first, then mobile, then RMA
+      const refs = [suffixInputRef2, suffixInputRef];
+      for (const ref of refs) {
+        if (ref.current && ref.current.offsetParent !== null) {
+          ref.current.focus();
+          ref.current.setSelectionRange(cursorPos, cursorPos);
+          return;
+        }
+      }
+      // Fallback: just try the first one
+      if (suffixInputRef.current) {
+        suffixInputRef.current.focus();
+        suffixInputRef.current.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
+  };
   // Debounce timer for step sequence reordering
   const seqReorderTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -224,7 +280,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   useEffect(() => {
     const typeToUse = createMode ? selectedType : traveler?.travelerType;
     if (!typeToUse) return;
-    const typeMap: Record<string, string> = { 'PCB_ASSEMBLY': 'PCB_ASSEMBLY', 'PCB': 'PCB', 'CABLE': 'CABLE', 'CABLES': 'CABLE', 'ASSY': 'PCB_ASSEMBLY', 'PURCHASING': 'PURCHASING' };
+    const typeMap: Record<string, string> = { 'PCB_ASSEMBLY': 'PCB_ASSEMBLY', 'PCB': 'PCB', 'CABLE': 'CABLE', 'CABLES': 'CABLE', 'ASSY': 'PCB_ASSEMBLY', 'PURCHASING': 'PURCHASING', 'RMA_SAME': 'RMA_SAME', 'RMA_DIFF': 'RMA_DIFF', 'MODIFICATION': 'MODIFICATION' };
     const dbType = typeMap[typeToUse] || 'PCB_ASSEMBLY';
     const fetchWC = async () => {
       try {
@@ -323,7 +379,29 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               startTime: '',
               endTime: '',
               totalHours: ''
-            }))
+            })),
+            // RMA-specific fields
+            customerContact: String(data.customer_contact || ''),
+            originalWoNumber: String(data.original_wo_number || ''),
+            originalPoNumber: String(data.original_po_number || ''),
+            returnPoNumber: String(data.return_po_number || ''),
+            rmaPoNumber: String(data.rma_po_number || ''),
+            invoiceNumber: String(data.invoice_number || ''),
+            customerNcr: String(data.customer_ncr || ''),
+            originalBuiltQuantity: data.original_built_quantity || undefined,
+            unitsShipped: data.units_shipped || undefined,
+            quantityRmaIssued: data.quantity_rma_issued || undefined,
+            unitsReceived: data.units_received || undefined,
+            customerRevisionSent: String(data.customer_revision_sent || ''),
+            customerRevisionReceived: String(data.customer_revision_received || ''),
+            rmaNotes: String(data.rma_notes || ''),
+            rmaUnits: (data.rma_units || []).length > 0
+              ? (data.rma_units as RmaUnit[])
+              : Array.from({ length: 5 }, (_, i) => ({
+                  unit_number: i + 1, serial_number: '', customer_complaint: '',
+                  incoming_inspection_notes: '', disposition: '',
+                  troubleshooting_notes: '', repairing_notes: '', final_inspection_notes: '',
+                })),
           };
           setTraveler(formattedTraveler);
           setEditedTraveler(formattedTraveler);
@@ -391,33 +469,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
     const fetchStepQRCodes = async (travelerDbId: number) => {
       try {
-        const token = localStorage.getItem('nexus_token');
-        console.log('Fetching QR codes for traveler', travelerDbId, 'with token:', token ? 'exists' : 'missing');
-
-        const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`, {
-          headers: {
-            'Authorization': `Bearer ${token || ''}`
-          }
-        });
-
-        console.log('QR code API response status:', response.status);
+        // No auth needed for QR endpoint — fetch without token to avoid auth issues
+        const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`);
 
         if (response.ok) {
           const data = await response.json();
           const qrCodeMap: Record<number, string> = {};
 
-          // Map process steps QR codes
           if (data.process_steps) {
-            console.log('Found', data.process_steps.length, 'process steps');
             data.process_steps.forEach((step: {step_id: number; qr_code_image: string}) => {
               if (step.qr_code_image) {
                 qrCodeMap[step.step_id] = step.qr_code_image;
-                console.log('Added QR code for step', step.step_id, '- length:', step.qr_code_image.length);
               }
             });
           }
 
-          // Map manual steps QR codes
           if (data.manual_steps) {
             data.manual_steps.forEach((step: {step_id: number; qr_code_image: string}) => {
               if (step.qr_code_image) {
@@ -426,23 +492,67 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             });
           }
 
-          console.log('✅ Successfully loaded QR codes for', Object.keys(qrCodeMap).length, 'steps');
-          console.log('Step IDs with QR codes:', Object.keys(qrCodeMap));
           setStepQRCodes(qrCodeMap);
         } else {
-          console.error('❌ Failed to fetch QR codes, status:', response.status);
-          if (response.status === 401) {
-            console.error('⚠️ AUTHENTICATION REQUIRED - Please log out and log back in to get a valid token');
-          }
+          // Retry once after 2 seconds
+          setTimeout(async () => {
+            try {
+              const retryRes = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`);
+              if (retryRes.ok) {
+                const data = await retryRes.json();
+                const qrMap: Record<number, string> = {};
+                (data.process_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
+                  if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
+                });
+                (data.manual_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
+                  if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
+                });
+                setStepQRCodes(qrMap);
+              }
+            } catch { /* silent retry */ }
+          }, 2000);
         }
       } catch (error) {
-        console.error('❌ Error fetching QR codes:', error);
+        console.error('Error fetching QR codes:', error);
       }
     };
 
     if (travelerId && !createMode) {
       fetchTraveler();
     }
+  }, [travelerId, createMode]);
+
+  // Auto-refresh traveler data every 3 minutes (silent — no loading spinner)
+  // Reduced from 60s to cut API load. QR codes rarely change.
+  useEffect(() => {
+    if (!travelerId || createMode) return;
+    const pollInterval = setInterval(() => {
+      const token = localStorage.getItem('nexus_token');
+      fetch(`${API_BASE_URL}/travelers/${travelerId}`, {
+        headers: { 'Authorization': `Bearer ${token || ''}` }
+      }).then(res => {
+        if (res.ok) return res.json();
+      }).then(data => {
+        if (!data) return;
+        fetch(`${API_BASE_URL}/barcodes/traveler/${data.id}/steps-qr`, {
+          headers: { 'Authorization': `Bearer ${token || ''}` }
+        }).then(r => r.ok ? r.json() : null).then(qrData => {
+          if (qrData?.process_steps) {
+            const qrMap: Record<number, string> = {};
+            qrData.process_steps.forEach((s: {step_id: number; qr_code_image: string}) => {
+              if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
+            });
+            if (qrData.manual_steps) {
+              qrData.manual_steps.forEach((s: {step_id: number; qr_code_image: string}) => {
+                if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
+              });
+            }
+            setStepQRCodes(qrMap);
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }, 180000);
+    return () => clearInterval(pollInterval);
   }, [travelerId, createMode]);
 
   // Auto-enter edit mode when ?edit=true is in URL, then clean the URL
@@ -590,11 +700,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       console.log('Response body:', responseText);
 
       if (response.ok) {
-        setTraveler(editedTraveler);
-        setIsEditing(false);
         toast.success('Traveler updated successfully!');
-        // Update URL without full page reload to prevent re-entering edit mode
-        router.replace(`/travelers/${editedTraveler.travelerId}`);
+        // Full reload to get fresh step IDs + QR codes immediately
+        window.location.href = `/travelers/${travelerId}`;
+        return;
       } else {
         let errorMessage = 'Failed to update traveler';
         try {
@@ -715,6 +824,37 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     setEditedTraveler({ ...editedTraveler, steps: renumberedSteps });
   };
 
+  // RMA Unit Tracking helpers
+  const updateRmaUnit = (index: number, field: keyof RmaUnit, value: string | number) => {
+    if (!editedTraveler || !editedTraveler.rmaUnits) return;
+    const newUnits = [...editedTraveler.rmaUnits];
+    newUnits[index] = { ...newUnits[index], [field]: value };
+    setEditedTraveler({ ...editedTraveler, rmaUnits: newUnits });
+  };
+
+  const addRmaUnit = () => {
+    if (!editedTraveler) return;
+    const units = editedTraveler.rmaUnits || [];
+    const newUnit: RmaUnit = {
+      unit_number: units.length + 1,
+      serial_number: '',
+      customer_complaint: '',
+      incoming_inspection_notes: '',
+      disposition: '',
+      troubleshooting_notes: '',
+      repairing_notes: '',
+      final_inspection_notes: '',
+    };
+    setEditedTraveler({ ...editedTraveler, rmaUnits: [...units, newUnit] });
+  };
+
+  const removeRmaUnit = (index: number) => {
+    if (!editedTraveler || !editedTraveler.rmaUnits) return;
+    const newUnits = editedTraveler.rmaUnits.filter((_, i) => i !== index);
+    const renumbered = newUnits.map((u, i) => ({ ...u, unit_number: i + 1 }));
+    setEditedTraveler({ ...editedTraveler, rmaUnits: renumbered });
+  };
+
   const addSpecification = () => {
     if (!editedTraveler) return;
     const newSpec: Specification = {
@@ -775,6 +915,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     { value: 'PCB', label: 'PCB', description: 'Bare circuit board fabrication', subtitle: 'Etching, Drilling, Plating, Solder Mask', gradient: 'from-emerald-600 to-green-700', borderColor: 'border-green-400', iconBg: 'bg-white/20', bubbleColor: 'bg-green-400/20', icon: WrenchScrewdriverIcon },
     { value: 'CABLE', label: 'Cable Assembly', description: 'Cable and wire harness assembly', subtitle: 'Cutting, Stripping, Crimping, Testing', gradient: 'from-purple-600 to-violet-700', borderColor: 'border-purple-400', iconBg: 'bg-white/20', bubbleColor: 'bg-purple-400/20', icon: BoltIcon },
     { value: 'PURCHASING', label: 'Purchasing', description: 'Parts and components procurement', subtitle: 'Sourcing, Receiving, QC Inspection', gradient: 'from-orange-500 to-amber-700', borderColor: 'border-orange-400', iconBg: 'bg-white/20', bubbleColor: 'bg-orange-400/20', icon: ShoppingCartIcon },
+    { value: 'RMA_SAME', label: 'RMA Router Same Job', description: 'RMA from same job or revision', subtitle: 'Inspection, Repair, Testing, Shipping', gradient: 'from-red-600 to-rose-700', borderColor: 'border-red-400', iconBg: 'bg-white/20', bubbleColor: 'bg-red-400/20', icon: ArrowPathIcon },
+    { value: 'RMA_DIFF', label: 'RMA Router Diff Job', description: 'RMA from different jobs or revisions', subtitle: 'Multi-Job Tracking, Repair, Testing', gradient: 'from-pink-600 to-fuchsia-700', borderColor: 'border-pink-400', iconBg: 'bg-white/20', bubbleColor: 'bg-pink-400/20', icon: ArrowsRightLeftIcon },
+    { value: 'MODIFICATION', label: 'Modification RMA', description: 'Board modification and rework', subtitle: 'Modification, Testing, Inspection', gradient: 'from-amber-600 to-yellow-700', borderColor: 'border-amber-400', iconBg: 'bg-white/20', bubbleColor: 'bg-amber-400/20', icon: WrenchIcon },
   ];
 
   const handleTypeSelect = (type: TravelerType) => {
@@ -795,6 +938,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     }));
 
     const today = new Date().toISOString().split('T')[0];
+    const isRma = isRmaType(type);
     const emptyTraveler: Traveler = {
       id: '',
       travelerId: 0,
@@ -829,8 +973,35 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       })),
       travelerType: type,
       isActive: true,
-      includeLaborHours: type !== 'PCB',
-      priority: 'NORMAL'
+      includeLaborHours: type !== 'PCB' && !isRma,
+      priority: 'NORMAL',
+      // RMA-specific defaults
+      ...(isRma ? {
+        customerContact: '',
+        originalWoNumber: '',
+        originalPoNumber: '',
+        returnPoNumber: '',
+        rmaPoNumber: '',
+        invoiceNumber: '',
+        customerNcr: '',
+        originalBuiltQuantity: undefined,
+        unitsShipped: undefined,
+        quantityRmaIssued: undefined,
+        unitsReceived: undefined,
+        customerRevisionSent: '',
+        customerRevisionReceived: '',
+        rmaNotes: '',
+        rmaUnits: Array.from({ length: 5 }, (_, i) => ({
+          unit_number: i + 1,
+          serial_number: '',
+          customer_complaint: '',
+          incoming_inspection_notes: i === 0 ? 'No other visual defects found.' : '',
+          disposition: i === 0 ? 'Troubleshoot, repair and test.' : '',
+          troubleshooting_notes: '',
+          repairing_notes: '',
+          final_inspection_notes: '',
+        })),
+      } : {}),
     };
 
     setEditedTraveler(emptyTraveler);
@@ -863,7 +1034,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       const custRevChanged = (editedTraveler.customerRevision || '') !== autoFilledFrom.customerRevision;
 
       if (!woChanged && !revChanged && !custRevChanged) {
-        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Traveler Rev, or Customer Rev before saving.');
+        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.');
         return;
       }
     }
@@ -924,18 +1095,83 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         completed_date: step.completedDate || null,
         sub_steps: []
       })),
-      manual_steps: []
+      manual_steps: [],
+      // RMA-specific fields
+      ...(isRmaType(selectedType || '') ? {
+        customer_contact: editedTraveler.customerContact || '',
+        original_wo_number: editedTraveler.originalWoNumber || '',
+        original_po_number: editedTraveler.originalPoNumber || '',
+        return_po_number: editedTraveler.returnPoNumber || '',
+        rma_po_number: editedTraveler.rmaPoNumber || '',
+        invoice_number: editedTraveler.invoiceNumber || '',
+        customer_ncr: editedTraveler.customerNcr || '',
+        original_built_quantity: editedTraveler.originalBuiltQuantity || null,
+        units_shipped: editedTraveler.unitsShipped || null,
+        quantity_rma_issued: editedTraveler.quantityRmaIssued || null,
+        units_received: editedTraveler.unitsReceived || null,
+        customer_revision_sent: editedTraveler.customerRevisionSent || '',
+        customer_revision_received: editedTraveler.customerRevisionReceived || '',
+        rma_notes: editedTraveler.rmaNotes || '',
+        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint).map(u => ({
+          unit_number: u.unit_number,
+          serial_number: u.serial_number || '',
+          customer_complaint: u.customer_complaint || '',
+          incoming_inspection_notes: u.incoming_inspection_notes || '',
+          disposition: u.disposition || '',
+          troubleshooting_notes: u.troubleshooting_notes || '',
+          repairing_notes: u.repairing_notes || '',
+          final_inspection_notes: u.final_inspection_notes || '',
+          ...(selectedType === 'RMA_DIFF' ? {
+            customer_ncr: u.customer_ncr || '',
+            original_po_number: u.original_po_number || '',
+            original_wo_number: u.original_wo_number || '',
+            customer_revision_sent: u.customer_revision_sent || '',
+            customer_revision_received: u.customer_revision_received || '',
+            original_built_quantity: u.original_built_quantity || null,
+            units_shipped: u.units_shipped || null,
+          } : {}),
+        })),
+      } : {}),
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/travelers/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
-        },
-        body: JSON.stringify(travelerData)
-      });
+      const token = localStorage.getItem('nexus_token') || '';
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
+      // Check if a DRAFT already exists for this job_number + revision → update it instead of creating duplicate
+      let existingDraftId: number | null = null;
+      try {
+        const checkResp = await fetch(
+          `${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(fullJobNumber)}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        if (checkResp.ok) {
+          const existing = await checkResp.json();
+          if (existing && existing.status === 'DRAFT' && (existing.revision || 'A') === (travelerData.revision || 'A')) {
+            existingDraftId = existing.id;
+          }
+        }
+      } catch { /* ignore check failure, will create new */ }
+
+      let response;
+      if (existingDraftId) {
+        // Update the existing DRAFT → CREATED
+        response = await fetch(`${API_BASE_URL}/travelers/${existingDraftId}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ ...travelerData, status: 'CREATED', is_active: true })
+        });
+      } else {
+        // No existing draft — create new
+        response = await fetch(`${API_BASE_URL}/travelers/`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(travelerData)
+        });
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -945,7 +1181,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       }
 
       const result = await response.json();
-      toast.success(`Traveler Created! Job: ${fullJobNumber} | Part: ${editedTraveler.partNumber}`);
+      toast.success(`Traveler ${existingDraftId ? 'Updated from Draft' : 'Created'}! Job: ${fullJobNumber} | Part: ${editedTraveler.partNumber}`);
       setTimeout(() => {
         const id = result.id || result.traveler_id;
         window.location.href = id ? `/travelers/${id}` : '/travelers';
@@ -979,7 +1215,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       const custRevChanged = (editedTraveler.customerRevision || '') !== autoFilledFrom.customerRevision;
 
       if (!woChanged && !revChanged && !custRevChanged) {
-        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Traveler Rev, or Customer Rev before saving.');
+        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.');
         return;
       }
     }
@@ -1039,7 +1275,34 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         completed_date: step.completedDate || null,
         sub_steps: []
       })),
-      manual_steps: []
+      manual_steps: [],
+      // RMA-specific fields for draft
+      ...(isRmaType(selectedType || '') ? {
+        customer_contact: editedTraveler.customerContact || '',
+        original_wo_number: editedTraveler.originalWoNumber || '',
+        original_po_number: editedTraveler.originalPoNumber || '',
+        return_po_number: editedTraveler.returnPoNumber || '',
+        rma_po_number: editedTraveler.rmaPoNumber || '',
+        invoice_number: editedTraveler.invoiceNumber || '',
+        customer_ncr: editedTraveler.customerNcr || '',
+        original_built_quantity: editedTraveler.originalBuiltQuantity || null,
+        units_shipped: editedTraveler.unitsShipped || null,
+        quantity_rma_issued: editedTraveler.quantityRmaIssued || null,
+        units_received: editedTraveler.unitsReceived || null,
+        customer_revision_sent: editedTraveler.customerRevisionSent || '',
+        customer_revision_received: editedTraveler.customerRevisionReceived || '',
+        rma_notes: editedTraveler.rmaNotes || '',
+        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint).map(u => ({
+          unit_number: u.unit_number,
+          serial_number: u.serial_number || '',
+          customer_complaint: u.customer_complaint || '',
+          incoming_inspection_notes: u.incoming_inspection_notes || '',
+          disposition: u.disposition || '',
+          troubleshooting_notes: u.troubleshooting_notes || '',
+          repairing_notes: u.repairing_notes || '',
+          final_inspection_notes: u.final_inspection_notes || '',
+        })),
+      } : {}),
     };
 
     try {
@@ -1187,7 +1450,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customerRevision: data.customer_revision || '',
       });
 
-      toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. You must change at least one of: Work Order, Traveler Rev, or Customer Rev before saving.`);
+      toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.`);
     } catch (error) {
       console.error('Error looking up job number:', error);
       toast.error('Error looking up job number.');
@@ -1230,7 +1493,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 max-w-3xl w-full px-2 sm:px-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 max-w-5xl w-full px-2 sm:px-0">
             {travelerTypes.map((type) => {
               const IconComponent = type.icon;
               return (
@@ -1450,6 +1713,33 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             margin: 0.25in;
             size: letter;
           }
+          /* RMA travelers print in landscape */
+          @page rma-landscape {
+            size: letter landscape;
+            margin: 0.15in 0.2in;
+          }
+          .rma-landscape-print {
+            page: rma-landscape;
+          }
+          /* RMA print-specific overrides */
+          .rma-landscape-print table { font-size: 9px !important; }
+          .rma-landscape-print table td,
+          .rma-landscape-print table th { padding: 2px 4px !important; }
+          .rma-landscape-print .bg-gray-100 { padding: 4px 8px !important; }
+          .rma-landscape-print .bg-gray-50 { padding: 2px 6px !important; }
+          /* RMA: Keep header + routing steps on page 1, unit tracking on page 2 */
+          .rma-landscape-print .rma-page1-content { page-break-inside: avoid !important; break-inside: avoid !important; }
+          .rma-landscape-print .rma-page2-content { page-break-before: always !important; break-before: page !important; }
+          /* RMA barcode in print - ensure visible */
+          .rma-landscape-print img[alt*="Barcode"] { width: auto !important; height: 36px !important; max-width: 180px !important; }
+          .rma-landscape-print .rma-header-table td { padding: 1px 6px !important; font-size: 9px !important; line-height: 1.3 !important; }
+          .rma-landscape-print .rma-header-table .font-bold { font-size: 8px !important; }
+          /* Compact routing table for print */
+          .rma-landscape-print .routing-table-desktop td { padding: 1px 3px !important; font-size: 8px !important; height: 22px !important; }
+          .rma-landscape-print .routing-table-desktop th { padding: 1px 3px !important; font-size: 8px !important; }
+          /* Compact notes for print */
+          .rma-landscape-print .rma-notes-section { padding: 2px 6px !important; }
+          .rma-landscape-print .rma-notes-section span { font-size: 8px !important; }
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -1793,7 +2083,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-purple-200.border-t-4 td { font-size: 12px !important; padding: 0.3rem !important; }
         }
       `}</style>
-      <div className="max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+      <div className={`mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 ${isRmaType(displayTraveler.travelerType) ? 'max-w-full' : 'max-w-7xl'}`}>
         {/* Action Bar - Screen Only */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3 no-print bg-white dark:bg-slate-800 shadow-md rounded-lg p-2 sm:p-4">
           <button
@@ -2160,9 +2450,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         )}
 
         {/* Main Traveler Form */}
-        <div className="bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black text-black dark:text-white print:!text-black" style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
+        <div className={`bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black text-black dark:text-white print:!text-black ${isRmaType(displayTraveler.travelerType) ? 'rma-landscape-print' : ''}`} style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
           <div>
-          {/* Header Section */}
+          {/* Standard Header Section - hidden for RMA types */}
+          {!isRmaType(displayTraveler.travelerType) && (
           <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
             {/* Mobile Layout - shown below md */}
             <div className="block md:hidden print:hidden mb-4">
@@ -2217,14 +2508,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-1" style={{gridColumn: 'span 2'}}><span className="font-semibold" style={{flexShrink: 0}}>WO:</span> <span className="text-black dark:text-white">{isEditing ? (
                       <span className="flex items-center gap-1">
-                        <input type="text" value={workOrderPrefix} onChange={(e) => { setWorkOrderPrefix(e.target.value); const wo = e.target.value && workOrderSuffix ? `${e.target.value}-${workOrderSuffix}` : e.target.value || workOrderSuffix; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-center text-black dark:text-white" style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} placeholder="Prefix" />
+                        <input type="text" value={workOrderPrefix} onFocus={(e) => e.target.select()} onKeyDown={(e) => { const input = e.target as HTMLInputElement; const hasSelection = input.selectionStart !== input.selectionEnd; if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) { e.preventDefault(); const newSuffix = e.key + workOrderSuffix; setWorkOrderSuffix(newSuffix); updateField('workOrder', workOrderPrefix + '-' + newSuffix); focusSuffixInput(1); } }} onChange={(e) => { const val = e.target.value.slice(0, 5); setWorkOrderPrefix(val); const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val || workOrderSuffix; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-center text-black dark:text-white" style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} placeholder="Prefix" />
                         <span className="text-gray-400 dark:text-slate-500 font-bold">-</span>
-                        <input type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-sm text-black dark:text-white" style={{width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
+                        <input ref={suffixInputRef} type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-sm text-black dark:text-white" style={{width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
                       </span>
                     ) : (displayTraveler.workOrder || '-')}</span></div>
                     <div className="flex justify-between"><span className="font-semibold">PO:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.poNumber || ''} onChange={(e) => updateField('poNumber', e.target.value)} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.poNumber || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Quantity:</span> <span className="text-black dark:text-white">{isEditing ? <input type="number" value={editData.quantity} onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : displayTraveler.quantity}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Traveler Rev:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.revision || '- -')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Quantity:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" inputMode="numeric" pattern="[0-9]*" value={editData.quantity === 0 ? '' : editData.quantity} onFocus={(e) => { if (e.target.value === '0') e.target.select(); }} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); updateField('quantity', v === '' ? 0 : parseInt(v)); }} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : displayTraveler.quantity}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Job Rev:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.revision || '- -')}</span></div>
                   </div>
                 </div>
 
@@ -2287,9 +2578,22 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         <input
                           type="text"
                           value={workOrderPrefix}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const hasSelection = input.selectionStart !== input.selectionEnd;
+                            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) {
+                              e.preventDefault();
+                              const newSuffix = e.key + workOrderSuffix;
+                              setWorkOrderSuffix(newSuffix);
+                              updateField('workOrder', workOrderPrefix + '-' + newSuffix);
+                              focusSuffixInput(1);
+                            }
+                          }}
                           onChange={(e) => {
-                            setWorkOrderPrefix(e.target.value);
-                            const wo = e.target.value && workOrderSuffix ? `${e.target.value}-${workOrderSuffix}` : e.target.value || workOrderSuffix;
+                            const val = e.target.value.slice(0, 5);
+                            setWorkOrderPrefix(val);
+                            const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val || workOrderSuffix;
                             updateField('workOrder', wo);
                           }}
                           className="w-20 sm:w-[90px] min-w-0 border border-gray-300 dark:border-slate-600 rounded text-center text-black dark:text-white"
@@ -2298,11 +2602,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         />
                         <span className="text-gray-400 dark:text-slate-500 text-xs flex-shrink-0">-</span>
                         <input
+                          ref={suffixInputRef2}
                           type="text"
                           value={workOrderSuffix}
                           onChange={(e) => {
                             setWorkOrderSuffix(e.target.value);
-                            const wo = workOrderPrefix && e.target.value ? `${workOrderPrefix}-${e.target.value}` : workOrderPrefix || e.target.value;
+                            const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix || e.target.value;
                             updateField('workOrder', wo);
                           }}
                           className="w-16 sm:w-24 min-w-0 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-black dark:text-white"
@@ -2317,9 +2622,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Quantity:</span>
                   {isEditing ? (
                     <input
-                      type="number"
-                      value={editData.quantity}
-                      onChange={(e) => updateField('quantity', parseInt(e.target.value) || 0)}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={editData.quantity === 0 ? '' : editData.quantity}
+                      onFocus={(e) => { if (e.target.value === '0') e.target.select(); }}
+                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); updateField('quantity', v === '' ? 0 : parseInt(v)); }}
                       className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
                     />
                   ) : (
@@ -2408,7 +2716,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1 ">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Traveler Rev:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Job Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"
@@ -2514,6 +2822,145 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </div>
             </div>
           </div>
+          )}
+
+          {/* RMA Header - Word Document Layout */}
+          {isRmaType(displayTraveler.travelerType) && (
+          <div className="border-b-2 border-black dark:border-slate-600 print:break-inside-avoid">
+            {/* Top banner: RMA Job No. + Barcode | RMA ROUTING | To Stock / From Stock / Ship VIA */}
+            <div className="bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600">
+              <table className="w-full border-collapse" style={{tableLayout: 'fixed'}}>
+                <tbody>
+                  <tr>
+                    {/* Left: Job No + Barcode */}
+                    <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-2 print:py-1 align-middle" style={{width: '40%'}}>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div>
+                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[7px]">
+                            {displayTraveler.travelerType === 'MODIFICATION' ? 'Modification' : 'RMA'} Job No.
+                          </div>
+                          <div className="text-xl font-black text-black dark:text-white print:text-[14px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
+                            {isEditing ? (
+                              <input type="text" value={editData.jobNumber} onChange={(e) => updateField('jobNumber', e.target.value)} className="w-40 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-xl font-black text-black dark:text-white" />
+                            ) : (displayTraveler.jobNumber)}
+                          </div>
+                        </div>
+                        <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
+                          {headerBarcode ? (
+                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14 print:h-10" style={{ objectFit: 'contain', width: 'auto', maxWidth: '200px' }} />
+                          ) : (
+                            <div className="flex items-center justify-center h-14 print:h-10" style={{width: '160px'}}>
+                              <span className="text-[10px] text-gray-400">{createMode ? 'Barcode after save' : 'Loading...'}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    {/* Center: RMA ROUTING title */}
+                    <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-2 print:py-1 text-center align-middle" style={{width: '25%'}}>
+                      <div className="text-2xl font-black text-black dark:text-white print:text-[14px] tracking-wider" style={{fontWeight: '900'}}>RMA</div>
+                      <div className="text-lg font-bold text-black dark:text-white print:text-[11px] tracking-widest">ROUTING</div>
+                    </td>
+                    {/* Right: To Stock / From Stock / Ship VIA */}
+                    <td className="px-4 py-3 print:px-2 print:py-1 align-middle text-sm print:text-[9px]" style={{width: '35%'}}>
+                      <div className="space-y-1.5 print:space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-black dark:text-white min-w-[85px] print:min-w-[65px]">To Stock:</span>
+                          {isEditing ? <input type="text" value={editData.toStock} onChange={(e) => updateField('toStock', e.target.value)} className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : <span className="flex-1 border-b border-gray-300 dark:border-slate-600 min-h-[20px] text-black dark:text-white">{displayTraveler.toStock || ''}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-black dark:text-white min-w-[85px] print:min-w-[65px]">From Stock:</span>
+                          {isEditing ? <input type="text" value={editData.fromStock} onChange={(e) => updateField('fromStock', e.target.value)} className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : <span className="flex-1 border-b border-gray-300 dark:border-slate-600 min-h-[20px] text-black dark:text-white">{displayTraveler.fromStock || ''}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-black dark:text-white min-w-[85px] print:min-w-[65px]">Ship VIA:</span>
+                          {isEditing ? <input type="text" value={editData.shipVia} onChange={(e) => updateField('shipVia', e.target.value)} className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : <span className="flex-1 border-b border-gray-300 dark:border-slate-600 min-h-[20px] text-black dark:text-white">{displayTraveler.shipVia || ''}</span>}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {/* RMA Details - proper 4-column table: Label | Value | Label | Value */}
+            <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600">
+              <table className="w-full border-collapse text-sm print:text-[9px] rma-header-table">
+                <colgroup>
+                  <col style={{width: '18%'}} />
+                  <col style={{width: '32%'}} />
+                  <col style={{width: '18%'}} />
+                  <col style={{width: '32%'}} />
+                </colgroup>
+                <tbody>
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Name:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerName} onChange={(e) => updateField('customerName', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerName || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Part Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.partNumber} onChange={(e) => updateField('partNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.partNumber || '-')}</td>
+                  </tr>
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Contact:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerContact || ''} onChange={(e) => updateField('customerContact', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerContact || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Part No. Desc:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.description || ''} onChange={(e) => updateField('description', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.description || '-')}</td>
+                  </tr>
+                  {displayTraveler.travelerType === 'RMA_SAME' && (
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Original WO Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.originalWoNumber || ''} onChange={(e) => updateField('originalWoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalWoNumber || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Original Built Quantity:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="number" value={editData.originalBuiltQuantity || ''} onChange={(e) => updateField('originalBuiltQuantity', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalBuiltQuantity || '-')}</td>
+                  </tr>
+                  )}
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Work Order Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white"><span className="font-bold text-red-700 dark:text-red-400 mr-1">RMA</span>{isEditing ? (<span className="inline-flex items-center gap-1"><input type="text" value={workOrderPrefix} onFocus={(e) => e.target.select()} onKeyDown={(e) => { const input = e.target as HTMLInputElement; const hasSelection = input.selectionStart !== input.selectionEnd; if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) { e.preventDefault(); const newSuffix = e.key + workOrderSuffix; setWorkOrderSuffix(newSuffix); updateField('workOrder' as keyof Traveler, workOrderPrefix + '-' + newSuffix); focusSuffixInput(1); } }} onChange={(e) => { const val = e.target.value.slice(0, 5); setWorkOrderPrefix(val); const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val; updateField('workOrder' as keyof Traveler, wo); }} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm font-mono text-black dark:text-white" /><span className="text-gray-400">-</span><input ref={suffixInputRef} type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix; updateField('workOrder' as keyof Traveler, wo); }} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" placeholder="Suffix" /></span>) : (displayTraveler.workOrder || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{displayTraveler.travelerType === 'RMA_SAME' ? 'Number of units shipped:' : 'Quantity RMA issued for:'}</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{displayTraveler.travelerType === 'RMA_SAME' ? (isEditing ? <input type="number" value={editData.unitsShipped || ''} onChange={(e) => updateField('unitsShipped', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.unitsShipped || '-')) : (isEditing ? <input type="number" value={editData.quantityRmaIssued || ''} onChange={(e) => updateField('quantityRmaIssued', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.quantityRmaIssued || '-'))}</td>
+                  </tr>
+                  {displayTraveler.travelerType === 'RMA_SAME' && (
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Original PO Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.originalPoNumber || ''} onChange={(e) => updateField('originalPoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalPoNumber || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Quantity RMA issued for:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="number" value={editData.quantityRmaIssued || ''} onChange={(e) => updateField('quantityRmaIssued', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.quantityRmaIssued || '-')}</td>
+                  </tr>
+                  )}
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA Traveler Issued on:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <><input type="date" value={editData.createdAt} onChange={(e) => updateField('createdAt', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm screen-only text-black dark:text-white" /><span className="print-only">{formatDateDisplay(editData.createdAt)}</span></> : (formatDateDisplay(displayTraveler.createdAt) || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA Traveler Due Date:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <><input type="date" value={editData.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm screen-only text-black dark:text-white" /><span className="print-only">{formatDateDisplay(editData.dueDate) || 'NA'}</span></> : (formatDateDisplay(displayTraveler.dueDate) || 'NA')}</td>
+                  </tr>
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Return PO Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.returnPoNumber || ''} onChange={(e) => updateField('returnPoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.returnPoNumber || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Units Received:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="number" value={editData.unitsReceived || ''} onChange={(e) => updateField('unitsReceived', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.unitsReceived || '-')}</td>
+                  </tr>
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA PO Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.rmaPoNumber || ''} onChange={(e) => updateField('rmaPoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.rmaPoNumber || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA Priority:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <select value={editData.priority || 'NORMAL'} onChange={(e) => updateField('priority', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white bg-white dark:bg-slate-700"><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select> : <span className={`font-bold ${displayTraveler.priority === 'URGENT' ? 'text-red-700' : displayTraveler.priority === 'HIGH' ? 'text-orange-700' : ''}`}>{displayTraveler.priority === 'HIGH' ? 'High' : displayTraveler.priority === 'URGENT' ? 'Urgent' : 'Normal'}</span>}</td>
+                  </tr>
+                  <tr className="border-b border-gray-300 dark:border-slate-600">
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Invoice Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.invoiceNumber || ''} onChange={(e) => updateField('invoiceNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.invoiceNumber || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Revision sent:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerRevisionSent || ''} onChange={(e) => updateField('customerRevisionSent', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerRevisionSent || '-')}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer NCR#:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerNcr || ''} onChange={(e) => updateField('customerNcr', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerNcr || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Revision Received:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerRevisionReceived || ''} onChange={(e) => updateField('customerRevisionReceived', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerRevisionReceived || '-')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          )}
 
           {/* Specifications Section */}
           <div className="border-b border-black dark:border-slate-600 print:break-inside-avoid">
@@ -2686,7 +3133,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 src={`data:image/png;base64,${stepQRCodes[step.id]}`}
                                 alt={`QR Code for ${step.workCenter}`}
                                 className="border border-gray-200 dark:border-gray-600 flex-shrink-0 rounded bg-white"
-                                style={{ width: '40px', height: '40px', padding: '2px' }}
+                                style={{ width: '70px', height: '70px', padding: '1px' }}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -2784,8 +3231,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                               <img
                                 src={`data:image/png;base64,${stepQRCodes[step.id]}`}
                                 alt={`QR Code for ${step.workCenter}`}
-                                className="border border-gray-200 dark:border-slate-600 flex-shrink-0 print:w-[25px] print:h-[25px] bg-white rounded"
-                                style={{ width: '40px', height: '40px', padding: '2px' }}
+                                className="border border-gray-200 dark:border-slate-600 flex-shrink-0 print:w-[50px] print:h-[50px] bg-white rounded"
+                                style={{ width: '70px', height: '70px', padding: '1px' }}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -3034,7 +3481,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           src={`data:image/png;base64,${stepQRCodes[step.id]}`}
                           alt={`QR Code for ${step.workCenter}`}
                           className="border border-gray-200 dark:border-gray-600 rounded bg-white"
-                          style={{ width: '60px', height: '60px', padding: '3px' }}
+                          style={{ width: '80px', height: '80px', padding: '1px' }}
                           onError={() => {
                             console.error('Failed to load QR code for step', step.id);
                           }}
@@ -3090,8 +3537,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </SortableContext>
             </DndContext>
 
-            {/* Bottom Info */}
-            <div className="bg-gray-50 dark:bg-slate-900 px-2 sm:px-3 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px] print:!grid-cols-3">
+            {/* Bottom Info - hidden for RMA types (already in RMA header) */}
+            <div className={`bg-gray-50 dark:bg-slate-900 px-2 sm:px-3 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px] print:!grid-cols-3 ${isRmaType(displayTraveler.travelerType) ? 'hidden' : ''}`}>
               <div className="flex flex-row items-baseline gap-1 print:gap-0.5">
                 <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">From Stock:</span>
                 {isEditing ? (
@@ -3146,8 +3593,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
           </div>
 
-          {/* Labor Hours Toggle - Edit Mode Only - NO PRINT */}
-          {isEditing && (
+          {/* Labor Hours Toggle - Edit Mode Only - NO PRINT - Hidden for RMA types */}
+          {isEditing && !isRmaType(displayTraveler.travelerType) && (
             <div className="border-b-2 border-black dark:border-slate-600 no-print">
               <div className="bg-blue-200 dark:bg-blue-900/50 print:!bg-blue-200 px-3 py-2">
                 <h2 className="font-bold text-sm text-blue-900 dark:text-blue-200 print:!text-black">TRAVELER OPTIONS</h2>
@@ -3182,7 +3629,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
           )}
 
-          {/* Comments Section - First Page Only */}
+          {/* Comments Section - for non-RMA types shown here; for RMA shown on page 2 */}
+          {!isRmaType(displayTraveler.travelerType) && (
           <div className="border-b-2 border-black dark:border-slate-600">
             <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 px-3 py-2 print:px-1 print:py-0">
               <h2 className="font-bold text-sm text-purple-900 dark:text-purple-200 print:!text-black print:text-[9px] print-section-title">COMMENTS & NOTES</h2>
@@ -3203,16 +3651,134 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               )}
             </div>
           </div>
+          )}
 
-          {/* Additional Instructions/Comments Space */}
+          {/* Additional Instructions/Comments Space - not for RMA types */}
+          {!isRmaType(displayTraveler.travelerType) && (
           <div className="border-b-2 border-black dark:border-slate-600">
             <div className="bg-gray-50 dark:bg-slate-900 p-3 min-h-[120px] print:min-h-[750px] text-sm print:p-1">
               <div className="text-gray-400 dark:text-slate-500 text-xs print:text-[8px]">Additional Instructions/Comments:</div>
             </div>
           </div>
+          )}
 
-          {/* Labor Hours Section - Second Page (Page Break Before) - Show if includeLaborHours is true */}
-          {displayTraveler.includeLaborHours && (
+          {/* RMA Page 2: Comments + Unit Tracking */}
+          {isRmaType(displayTraveler.travelerType) && (
+          <div className="rma-page2-content">
+            {/* Comments & Notes for RMA - on page 2 */}
+            <div className="border-b-2 border-black dark:border-slate-600">
+              <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 px-3 py-2 print:px-1 print:py-0">
+                <h2 className="font-bold text-sm text-purple-900 dark:text-purple-200 print:!text-black print:text-[9px]">COMMENTS & NOTES</h2>
+              </div>
+              <div className="bg-purple-50 dark:bg-slate-800 p-3 min-h-[40px] text-sm print:p-1 print:min-h-0 print:text-[8px]">
+                {isEditing ? (
+                  <>
+                    <textarea value={editData.comments} onChange={(e) => updateField('comments', e.target.value)} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded min-h-[60px] text-sm screen-only" placeholder="Enter comments..." />
+                    <div className="print-only whitespace-pre-wrap text-sm print:text-[8px]">{editData.comments || <span className="text-gray-400 dark:text-slate-500 italic">No comments</span>}</div>
+                  </>
+                ) : (
+                  <div className="whitespace-pre-wrap text-sm print:text-[8px]">{displayTraveler.comments || <span className="text-gray-400 dark:text-slate-500 italic">No comments</span>}</div>
+                )}
+              </div>
+            </div>
+            {/* For RMA_DIFF type, show per-unit original job info table first */}
+            {displayTraveler.travelerType === 'RMA_DIFF' && (
+            <div className="border-b-2 border-black dark:border-slate-600">
+              <div className="bg-pink-200 dark:bg-pink-900/50 print:!bg-pink-200 border-b border-black dark:border-slate-600 px-3 py-2 flex justify-between items-center">
+                <h2 className="font-bold text-sm text-pink-900 dark:text-pink-200 print:!text-black print:text-[10px]">UNIT ORIGINAL JOB INFORMATION</h2>
+                {isEditing && (
+                  <button onClick={addRmaUnit} className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm no-print">
+                    <PlusIcon className="h-4 w-4" /><span>Add Unit</span>
+                  </button>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm print:text-[8px]">
+                  <thead>
+                    <tr className="bg-pink-100 dark:bg-pink-900/30 border-b-2 border-black dark:border-slate-600">
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold w-10">No.</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold">Serial Number</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold">Customer NCR</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold">Original PO#</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold">Original WO#</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold">Cust. Rev Sent</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold">Cust. Rev Recv</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold">Orig. Built Qty</th>
+                      <th className="px-2 py-2 text-center font-bold">Units Shipped</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(displayTraveler.rmaUnits || []).map((unit, idx) => (
+                      <tr key={idx} className="border-b border-gray-300 dark:border-slate-600" style={{height: '40px'}}>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold">{unit.unit_number}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.serial_number} onChange={(e) => updateRmaUnit(idx, 'serial_number', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.serial_number || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.customer_ncr || ''} onChange={(e) => updateRmaUnit(idx, 'customer_ncr', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.customer_ncr || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.original_po_number || ''} onChange={(e) => updateRmaUnit(idx, 'original_po_number', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.original_po_number || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.original_wo_number || ''} onChange={(e) => updateRmaUnit(idx, 'original_wo_number', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.original_wo_number || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.customer_revision_sent || ''} onChange={(e) => updateRmaUnit(idx, 'customer_revision_sent', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.customer_revision_sent || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.customer_revision_received || ''} onChange={(e) => updateRmaUnit(idx, 'customer_revision_received', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.customer_revision_received || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2 text-center">{isEditing ? <input type="number" value={unit.original_built_quantity || ''} onChange={(e) => updateRmaUnit(idx, 'original_built_quantity', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-center text-black dark:text-white" /> : (unit.original_built_quantity || '')}</td>
+                        <td className="px-2 py-2 text-center">{isEditing ? <input type="number" value={unit.units_shipped || ''} onChange={(e) => updateRmaUnit(idx, 'units_shipped', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-center text-black dark:text-white" /> : (unit.units_shipped || '')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            )}
+
+            {/* Unit Serial Number Tracking Table (all RMA types) */}
+            <div className="border-b-2 border-black dark:border-slate-600">
+              <div className="bg-red-200 dark:bg-red-900/50 print:!bg-red-200 border-b border-black dark:border-slate-600 px-3 py-2 flex justify-between items-center">
+                <h2 className="font-bold text-sm text-red-900 dark:text-red-200 print:!text-black print:text-[10px]">UNIT SERIAL NUMBER TRACKING</h2>
+                {isEditing && displayTraveler.travelerType !== 'RMA_DIFF' && (
+                  <button onClick={addRmaUnit} className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm no-print">
+                    <PlusIcon className="h-4 w-4" /><span>Add Unit</span>
+                  </button>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm print:text-[8px]">
+                  <thead>
+                    <tr className="bg-red-100 dark:bg-red-900/30 border-b-2 border-black dark:border-slate-600">
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold w-10">No.</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '110px'}}>Unit Serial Number</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '130px'}}>Customer Complaint</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '140px'}}>Incoming Inspection Result/Note</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '120px'}}>Disposition of Unit</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '140px'}}>Troubleshooting/Testing Notes</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '120px'}}>Repairing Notes</th>
+                      <th className="px-2 py-2 text-left font-bold" style={{minWidth: '110px'}}>Final Inspection Notes</th>
+                      {isEditing && <th className="px-2 py-2 w-10 no-print"></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(displayTraveler.rmaUnits || []).map((unit, idx) => (
+                      <tr key={idx} className="border-b border-gray-300 dark:border-slate-600" style={{height: '44px'}}>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold">{unit.unit_number}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.serial_number} onChange={(e) => updateRmaUnit(idx, 'serial_number', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.serial_number || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.customer_complaint} onChange={(e) => updateRmaUnit(idx, 'customer_complaint', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.customer_complaint || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.incoming_inspection_notes} onChange={(e) => updateRmaUnit(idx, 'incoming_inspection_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.incoming_inspection_notes || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.disposition} onChange={(e) => updateRmaUnit(idx, 'disposition', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.disposition || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.troubleshooting_notes} onChange={(e) => updateRmaUnit(idx, 'troubleshooting_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.troubleshooting_notes || '')}</td>
+                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.repairing_notes} onChange={(e) => updateRmaUnit(idx, 'repairing_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.repairing_notes || '')}</td>
+                        <td className="px-2 py-2">{isEditing ? <input type="text" value={unit.final_inspection_notes} onChange={(e) => updateRmaUnit(idx, 'final_inspection_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.final_inspection_notes || '')}</td>
+                        {isEditing && (
+                          <td className="px-2 py-2 no-print">
+                            <button onClick={() => removeRmaUnit(idx)} className="text-red-500 hover:text-red-700"><TrashIcon className="h-4 w-4" /></button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Labor Hours Section - Second Page (Page Break Before) - Show if includeLaborHours is true, hidden for RMA types */}
+          {displayTraveler.includeLaborHours && !isRmaType(displayTraveler.travelerType) && (
             <div className="print:break-before-page">
               <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 border-b-4 border-black dark:border-slate-600 print:!border-black px-4 py-4">
                 <h2 className="font-bold text-3xl text-purple-900 dark:text-purple-200 print:!text-black">LABOR HOURS TRACKING</h2>
