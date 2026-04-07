@@ -1,6 +1,6 @@
 # 🏭 NEXUS - American Circuits Traveler Management System
 
-**Version 1.0.0**
+**Version 2.0.0**
 *Complete Digital Traveler Management & Manufacturing Operations Platform*
 
 ---
@@ -34,7 +34,15 @@ NEXUS is a comprehensive traveler management system designed specifically for Am
 - ✅ **Comprehensive Reporting** - Labor hours, production statistics, and audit trails
 - ✅ **Global Search** - Instant search across travelers, work orders, and labor entries
 - ✅ **Notification System** - Real-time alerts for admins on all operations
-- ✅ **Multi-Type Support** - PCB, ASSY, Cable, Cable Assembly, Mechanical, and Test workflows
+- ✅ **Multi-Type Support** - PCB, ASSY, Cable, and Purchasing workflows
+- ✅ **Progressive Web App (PWA)** - Full offline support for the entire NEXUS website
+- ✅ **Production Analytics** - 7-feature analytics dashboard with work center breakdowns
+- ✅ **Global Scanner Listener** - Auto-start and auto-stop timers without field focus
+- ✅ **Work Center Management** - DB-backed CRUD with per-type filtering, reordering, and categories
+- ✅ **Pause Logging** - Track each pause with duration, count, and optional comments
+- ✅ **Auto-Populate** - Smart job number lookup to auto-fill traveler fields
+- ✅ **Work Center Category Reports** - Single and all-category reporting
+- ✅ **Consistent Print Views** - Unified print layout across view, edit, and create modes
 
 ---
 
@@ -42,7 +50,7 @@ NEXUS is a comprehensive traveler management system designed specifically for Am
 
 ### 1. Traveler Management
 
-#### Traveler Types
+#### Traveler Types (4 Types)
 - **PCB** - Printed Circuit Board manufacturing
 - **ASSY** - Assembly operations
 - **CABLE** - Cable manufacturing
@@ -1220,6 +1228,6 @@ All rights reserved.
 
 ---
 
-**Version:** 1.0.0
-**Last Updated:** January 2026
+**Version:** 2.0.0
+**Last Updated:** April 2026
 **System Status:** Production Ready ✅
