@@ -1223,11 +1223,14 @@ All rights reserved.
 
 ## 🤝 Credits
 
-**Developed for American Circuits, Inc.**
+**Owner: American Circuits, Inc.**
+
+Deployed and maintained by **Preet Raval**
+
 *Manufacturing Excellence Through Digital Innovation*
 
 ---
 
 **Version:** 2.0.0
 **Last Updated:** April 2026
-**System Status:** Production Ready ✅
+**System Status:** Production Ready
