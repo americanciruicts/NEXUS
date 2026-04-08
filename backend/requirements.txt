@@ -17,3 +17,13 @@ requests==2.32.3
 qrcode[pil]==7.4.2
 pillow==10.1.0
 python-barcode[images]==0.15.1
+treepoem>=3.28.0
+
+# CI/CD tools
+bandit==1.7.6
+safety==2.3.5
+pytest==7.4.3
+pytest-cov==4.1.0
+flake8==6.1.0
+black==23.12.0
+mypy==1.7.1

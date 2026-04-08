@@ -7,10 +7,11 @@ import re
 from datetime import datetime
 
 from database import get_db
-from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus, LaborEntry, UserRole
+from models import User, Traveler, ProcessStep, SubStep, ManualStep, AuditLog, WorkOrder, WorkCenter, TravelerTrackingLog, NotificationType, TravelerStatus, LaborEntry, UserRole, RmaUnitTracking, TravelerGroup
 from schemas.traveler_schemas import (
     TravelerCreate, Traveler as TravelerSchema, TravelerUpdate,
-    TravelerList, ProcessStepCreate, ManualStepCreate
+    TravelerList, ProcessStepCreate, ManualStepCreate,
+    LinkTravelersRequest, TravelerGroupInfo, TravelerGroupMember
 )
 from schemas.tracking_schemas import TrackingScanRequest, TrackingScanResponse, TrackingLogResponse
 from routers.auth import get_current_user
@@ -25,38 +26,21 @@ async def get_user_or_system(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Get current authenticated user if auth token provided, otherwise return system user.
-    This maintains backward compatibility while supporting authentication.
+    Get current authenticated user. Falls back to first admin if token is missing/invalid.
+    Never creates a 'system' user.
     """
-    # Try to get authenticated user if credentials provided
     if credentials:
         try:
             return await get_current_user(credentials, db)
         except Exception:
-            pass  # Fall through to system user on ANY error
+            pass
 
-    # Fall back to system user for backward compatibility
-    system_user = db.query(User).filter(User.username == "system").first()
-    if not system_user:
-        try:
-            system_user = User(
-                username="system",
-                email="system@nexus.local",
-                first_name="System",
-                last_name="User",
-                hashed_password="$2b$12$dummyhashforbackwardcompatibility",
-                role=UserRole.OPERATOR,
-                is_approver=False
-            )
-            db.add(system_user)
-            db.commit()
-            db.refresh(system_user)
-        except Exception:
-            db.rollback()
-            # Race condition: another request created it
-            system_user = db.query(User).filter(User.username == "system").first()
+    # Fallback: use first admin user (never create a fake system user)
+    admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+    if admin_user:
+        return admin_user
 
-    return system_user
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 # Memory store for manufacturing process steps
 MANUFACTURING_STEPS = {
@@ -124,6 +108,47 @@ MANUFACTURING_STEPS = {
 }
 # Add PCB_ASSEMBLY as an alias for ASSY manufacturing steps
 MANUFACTURING_STEPS["PCB_ASSEMBLY"] = MANUFACTURING_STEPS["ASSY"]
+
+# RMA Router - Same Job/Rev, PO & WO (from Word template)
+MANUFACTURING_STEPS["RMA_SAME"] = [
+    {"step_number": 1, "operation": "INCOMING INSPECTION", "work_center_code": "RMA_INCOMING_INSPEC", "instructions": "Inspect incoming RMA units, verify quantity and condition", "sub_steps": [], "estimated_time": 30, "is_required": True},
+    {"step_number": 2, "operation": "REPAIR", "work_center_code": "RMA_REPAIR", "instructions": "Repair defective units per customer complaint", "sub_steps": [], "estimated_time": 60, "is_required": True},
+    {"step_number": 3, "operation": "COATING", "work_center_code": "RMA_COATING", "instructions": "Apply conformal coating if required", "sub_steps": [], "estimated_time": 30, "is_required": False},
+    {"step_number": 4, "operation": "TESTING", "work_center_code": "RMA_TESTING", "instructions": "Test repaired units per original test procedures", "sub_steps": [], "estimated_time": 45, "is_required": True},
+    {"step_number": 5, "operation": "INVENTORY", "work_center_code": "RMA_INVENTORY", "instructions": "Check parts before buying", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 6, "operation": "PURCHASING", "work_center_code": "RMA_PURCHASING", "instructions": "Parts ordered and waiting to be received for repair", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 7, "operation": "MISC.", "work_center_code": "RMA_MISC", "instructions": "Miscellaneous operations as needed", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 8, "operation": "FINAL INSPEC", "work_center_code": "RMA_FINAL_INSPEC", "instructions": "Final inspection - sample or 100% inspection", "sub_steps": [], "estimated_time": 30, "is_required": True},
+    {"step_number": 9, "operation": "STOCK", "work_center_code": "RMA_STOCK", "instructions": "Check stock - do we have any PCBA or cable assemblies in stock?", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 10, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
+]
+
+# RMA Router - Different Jobs/Rev, PO & WO (same work center steps, different header fields)
+MANUFACTURING_STEPS["RMA_DIFF"] = [
+    {"step_number": 1, "operation": "INCOMING INSPECTION", "work_center_code": "RMA_INCOMING_INSPEC", "instructions": "Inspect incoming RMA units, verify quantity and condition", "sub_steps": [], "estimated_time": 30, "is_required": True},
+    {"step_number": 2, "operation": "REPAIR", "work_center_code": "RMA_REPAIR", "instructions": "Repair defective units per customer complaint", "sub_steps": [], "estimated_time": 60, "is_required": True},
+    {"step_number": 3, "operation": "COATING", "work_center_code": "RMA_COATING", "instructions": "Apply conformal coating if required", "sub_steps": [], "estimated_time": 30, "is_required": False},
+    {"step_number": 4, "operation": "TESTING", "work_center_code": "RMA_TESTING", "instructions": "Test repaired units per original test procedures", "sub_steps": [], "estimated_time": 45, "is_required": True},
+    {"step_number": 5, "operation": "INVENTORY", "work_center_code": "RMA_INVENTORY", "instructions": "Check parts before buying", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 6, "operation": "PURCHASING", "work_center_code": "RMA_PURCHASING", "instructions": "Parts ordered and waiting to be received for repair", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 7, "operation": "MISC.", "work_center_code": "RMA_MISC", "instructions": "Miscellaneous operations as needed", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 8, "operation": "FINAL INSPEC", "work_center_code": "RMA_FINAL_INSPEC", "instructions": "Final inspection - sample or 100% inspection", "sub_steps": [], "estimated_time": 30, "is_required": True},
+    {"step_number": 9, "operation": "STOCK", "work_center_code": "RMA_STOCK", "instructions": "Check stock - do we have any PCBA or cable assemblies in stock?", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 10, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
+]
+
+# Modification RMA (no STOCK step per Word template)
+MANUFACTURING_STEPS["MODIFICATION"] = [
+    {"step_number": 1, "operation": "INCOMING INSPECTION", "work_center_code": "RMA_INCOMING_INSPEC", "instructions": "Inspect incoming modification units, verify quantity and condition", "sub_steps": [], "estimated_time": 30, "is_required": True},
+    {"step_number": 2, "operation": "REPAIR", "work_center_code": "RMA_REPAIR", "instructions": "Perform required modifications per work order", "sub_steps": [], "estimated_time": 60, "is_required": True},
+    {"step_number": 3, "operation": "COATING", "work_center_code": "RMA_COATING", "instructions": "Apply conformal coating if required", "sub_steps": [], "estimated_time": 30, "is_required": False},
+    {"step_number": 4, "operation": "TESTING", "work_center_code": "RMA_TESTING", "instructions": "Test modified units per test procedures", "sub_steps": [], "estimated_time": 45, "is_required": True},
+    {"step_number": 5, "operation": "INVENTORY", "work_center_code": "RMA_INVENTORY", "instructions": "Check parts before buying", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 6, "operation": "PURCHASING", "work_center_code": "RMA_PURCHASING", "instructions": "Parts ordered and waiting to be received", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 7, "operation": "MISC.", "work_center_code": "RMA_MISC", "instructions": "Miscellaneous operations as needed", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 8, "operation": "FINAL INSPEC", "work_center_code": "RMA_FINAL_INSPEC", "instructions": "Final inspection - sample or 100% inspection", "sub_steps": [], "estimated_time": 30, "is_required": True},
+    {"step_number": 9, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship modified units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
+]
 
 @router.get("/next-work-order-number")
 async def get_next_work_order_number(db: Session = Depends(get_db)):
@@ -275,7 +300,22 @@ async def create_traveler(
             include_labor_hours=include_labor_hours,
             status=traveler_data.status if traveler_data.status else TravelerStatus.CREATED,
             is_active=traveler_data.is_active,
-            created_by=current_user.id  # Use authenticated or system user
+            created_by=current_user.id,
+            # RMA-specific fields
+            customer_contact=traveler_data.customer_contact,
+            original_wo_number=traveler_data.original_wo_number,
+            original_po_number=traveler_data.original_po_number,
+            return_po_number=traveler_data.return_po_number,
+            rma_po_number=traveler_data.rma_po_number,
+            invoice_number=traveler_data.invoice_number,
+            customer_ncr=traveler_data.customer_ncr,
+            original_built_quantity=traveler_data.original_built_quantity,
+            units_shipped=traveler_data.units_shipped,
+            quantity_rma_issued=traveler_data.quantity_rma_issued,
+            units_received=traveler_data.units_received,
+            customer_revision_sent=traveler_data.customer_revision_sent,
+            customer_revision_received=traveler_data.customer_revision_received,
+            rma_notes=traveler_data.rma_notes,
         )
 
         db.add(db_traveler)
@@ -332,6 +372,28 @@ async def create_traveler(
             )
             db.add(db_manual_step)
 
+        # Create RMA unit tracking entries
+        for rma_unit_data in traveler_data.rma_units:
+            db_rma_unit = RmaUnitTracking(
+                traveler_id=db_traveler.id,
+                unit_number=rma_unit_data.unit_number,
+                serial_number=rma_unit_data.serial_number,
+                customer_complaint=rma_unit_data.customer_complaint,
+                incoming_inspection_notes=rma_unit_data.incoming_inspection_notes,
+                disposition=rma_unit_data.disposition,
+                troubleshooting_notes=rma_unit_data.troubleshooting_notes,
+                repairing_notes=rma_unit_data.repairing_notes,
+                final_inspection_notes=rma_unit_data.final_inspection_notes,
+                customer_ncr=rma_unit_data.customer_ncr,
+                original_po_number=rma_unit_data.original_po_number,
+                original_wo_number=rma_unit_data.original_wo_number,
+                customer_revision_sent=rma_unit_data.customer_revision_sent,
+                customer_revision_received=rma_unit_data.customer_revision_received,
+                original_built_quantity=rma_unit_data.original_built_quantity,
+                units_shipped=rma_unit_data.units_shipped,
+            )
+            db.add(db_rma_unit)
+
         db.commit()
 
         # Create audit log
@@ -369,47 +431,55 @@ async def create_traveler(
             detail=f"Error creating traveler: {str(e)}"
         )
 
-@router.get("", response_model=List[TravelerList])
+@router.get("")
 async def get_travelers(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 50,
     current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
-    """Get list of travelers. ITAR travelers (job_number contains 'M') are only visible to ADMIN users or users with is_itar=True."""
+    """Get list of travelers with server-side pagination. Optimized: single bulk query for steps, labor, departments."""
     from sqlalchemy.orm import joinedload
+    from sqlalchemy import func as sqlfunc, not_
 
     query = db.query(Traveler).options(joinedload(Traveler.process_steps))
 
-    # Filter ITAR travelers for non-privileged users
-    # ITAR job numbers have M right after the digits, e.g. "12345M ASSY", "12345ML CABLE"
-    # ADMIN users and users with is_itar=True can see all travelers
     is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
     has_itar_access = getattr(current_user, 'is_itar', False)
 
     if not is_admin and not has_itar_access:
-        # Exclude ITAR travelers: job numbers matching pattern like "1234M", "1234M ASSY", "1234ML CABLE"
-        # Pattern: digits followed by M (with optional L) then space or end of string
-        # Uses PostgreSQL POSIX regex — [[:space:]] for whitespace (not \s which fails in brackets)
-        from sqlalchemy import not_
         query = query.filter(not_(Traveler.job_number.op('~')(r'[0-9]M[L[:space:]]|[0-9]M$|[0-9]ML$')))
 
-    travelers = query.offset(skip).limit(limit).all()
+    # Get total count first (for pagination)
+    total_count = query.count()
 
-    # Build work center -> department map
-    all_work_centers = db.query(WorkCenter).all()
-    wc_dept_map = {wc.code: wc.department or 'Other' for wc in all_work_centers}
+    travelers = query.order_by(Traveler.created_at.desc()).offset(skip).limit(limit).all()
+    if not travelers:
+        return []
 
-    # Get labor entries for all travelers in bulk
-    from sqlalchemy import func as sqlfunc
     traveler_ids = [t.id for t in travelers]
-    labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id.in_(traveler_ids)).all() if traveler_ids else []
-    # Group labor entries by traveler_id
-    labor_by_traveler = {}
-    for le in labor_entries:
-        labor_by_traveler.setdefault(le.traveler_id, []).append(le)
 
-    # Calculate progress for each traveler
+    # Bulk: work center -> department map (single query, cached)
+    wc_dept_map = {wc.code: wc.department or 'Other' for wc in db.query(WorkCenter.code, WorkCenter.department).all()}
+
+    KNOWN_DEPTS = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
+                   'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+
+    # Bulk: labor stats per traveler (single query)
+    from sqlalchemy import case, literal_column, Integer
+    labor_stats = db.query(
+        LaborEntry.traveler_id,
+        sqlfunc.sum(LaborEntry.hours_worked).label('total_hours'),
+        sqlfunc.count(LaborEntry.id).label('entry_count'),
+        sqlfunc.sum(case((LaborEntry.is_completed == False, 1), else_=0)).label('active_count'),
+        sqlfunc.count(sqlfunc.distinct(LaborEntry.step_id)).label('steps_with_labor'),
+    ).filter(
+        LaborEntry.traveler_id.in_(traveler_ids)
+    ).group_by(LaborEntry.traveler_id).all()
+
+    labor_map = {r.traveler_id: r for r in labor_stats}
+
+    # Build results
     results = []
     for t in travelers:
         data = {c.name: getattr(t, c.name) for c in t.__table__.columns}
@@ -420,53 +490,42 @@ async def get_travelers(
         data['completed_steps'] = completed
         data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0.0
 
-        # Department progress
-        KNOWN_DEPTS_LIST = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
-                       'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+        # Department progress (computed from already-loaded steps — no extra queries)
         dept_progress = {}
         for step in steps:
             dept = wc_dept_map.get(step.work_center_code, 'Other')
-            # Split multi-department assignments into individual departments
-            if dept in KNOWN_DEPTS_LIST:
+            if dept in KNOWN_DEPTS:
                 split_depts = [dept]
             else:
                 parts = [d.strip() for d in dept.split('/') if d.strip()]
-                if all(p in KNOWN_DEPTS_LIST for p in parts) and len(parts) > 1:
-                    split_depts = parts
-                else:
-                    split_depts = [dept] if dept else ['Other']
-            for individual_dept in split_depts:
-                if individual_dept not in dept_progress:
-                    dept_progress[individual_dept] = {'total': 0, 'completed': 0}
-                dept_progress[individual_dept]['total'] += 1
+                split_depts = parts if all(p in KNOWN_DEPTS for p in parts) and len(parts) > 1 else [dept or 'Other']
+            for d in split_depts:
+                if d not in dept_progress:
+                    dept_progress[d] = {'total': 0, 'completed': 0}
+                dept_progress[d]['total'] += 1
                 if step.is_completed:
-                    dept_progress[individual_dept]['completed'] += 1
+                    dept_progress[d]['completed'] += 1
 
         data['department_progress'] = [
-            {
-                'department': dept,
-                'total_steps': d['total'],
-                'completed_steps': d['completed'],
-                'percent_complete': round((d['completed'] / d['total']) * 100, 1) if d['total'] > 0 else 0,
-            }
+            {'department': dept, 'total_steps': d['total'], 'completed_steps': d['completed'],
+             'percent_complete': round((d['completed'] / d['total']) * 100, 1) if d['total'] > 0 else 0}
             for dept, d in dept_progress.items()
         ]
 
-        # Labor progress
-        t_labor = labor_by_traveler.get(t.id, [])
-        total_labor_hours = round(sum(le.hours_worked or 0 for le in t_labor), 2)
-        labor_entries_count = len(t_labor)
-        active_labor = sum(1 for le in t_labor if not le.is_completed)
-        steps_with_labor = len(set(le.step_id for le in t_labor if le.step_id))
-        labor_percent = round((steps_with_labor / total) * 100, 1) if total > 0 else 0.0
-        data['labor_progress'] = {
-            'total_hours': total_labor_hours,
-            'entries_count': labor_entries_count,
-            'active_entries': active_labor,
-            'steps_with_labor': steps_with_labor,
-            'total_steps': total,
-            'percent': labor_percent,
-        }
+        # Labor progress (from bulk query)
+        ls = labor_map.get(t.id)
+        if ls:
+            total_hours = round(float(ls.total_hours or 0), 2)
+            data['labor_progress'] = {
+                'total_hours': total_hours,
+                'entries_count': ls.entry_count or 0,
+                'active_entries': ls.active_count or 0,
+                'steps_with_labor': ls.steps_with_labor or 0,
+                'total_steps': total,
+                'percent': round((ls.steps_with_labor or 0) / total * 100, 1) if total > 0 else 0.0,
+            }
+        else:
+            data['labor_progress'] = {'total_hours': 0, 'entries_count': 0, 'active_entries': 0, 'steps_with_labor': 0, 'total_steps': total, 'percent': 0.0}
 
         results.append(data)
 
@@ -476,6 +535,7 @@ async def get_travelers(
 async def get_latest_revision_traveler(
     job_number: str,
     work_order: str,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
     """Get the latest revision traveler for a given job number and work order"""
@@ -493,6 +553,13 @@ async def get_latest_revision_traveler(
 
     # Return the traveler with the highest revision
     traveler = travelers[0]
+
+    # ITAR access check
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+    is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', traveler.job_number))
+    if is_itar_job and not is_admin and not has_itar_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ITAR restricted: You do not have permission to view this traveler")
 
     # Manually serialize to ensure process_steps are included
     result = {
@@ -520,6 +587,7 @@ async def get_latest_revision_traveler(
         "to_stock": traveler.to_stock,
         "ship_via": traveler.ship_via,
         "comments": traveler.comments,
+        "start_date": traveler.start_date,
         "due_date": traveler.due_date,
         "ship_date": traveler.ship_date,
         "include_labor_hours": traveler.include_labor_hours,
@@ -552,14 +620,206 @@ async def get_latest_revision_traveler(
     print(f"Returning traveler with {len(result['process_steps'])} process steps")
     return result
 
+## ── Traveler Group endpoints ──
+
+@router.post("/groups")
+async def create_traveler_group(
+    request: LinkTravelersRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a group and link travelers together"""
+    if len(request.traveler_ids) < 2:
+        raise HTTPException(status_code=400, detail="A group must have at least 2 travelers")
+    if len(request.traveler_ids) != len(request.labels):
+        raise HTTPException(status_code=400, detail="Must provide a label for each traveler")
+
+    # Verify all travelers exist
+    travelers = db.query(Traveler).filter(Traveler.id.in_(request.traveler_ids)).all()
+    if len(travelers) != len(request.traveler_ids):
+        raise HTTPException(status_code=404, detail="One or more travelers not found")
+
+    # Check none are already in a group
+    for t in travelers:
+        if t.group_id is not None:
+            raise HTTPException(status_code=400, detail=f"Traveler {t.job_number} (ID {t.id}) is already in a group. Remove it first.")
+
+    # Create the group
+    group = TravelerGroup(name=request.group_name or None, created_by=current_user.id)
+    db.add(group)
+    db.flush()
+
+    # Link travelers with sequence and label
+    traveler_map = {t.id: t for t in travelers}
+    for i, tid in enumerate(request.traveler_ids):
+        t = traveler_map[tid]
+        t.group_id = group.id
+        t.group_sequence = i + 1
+        t.group_label = request.labels[i]
+
+    db.commit()
+    db.refresh(group)
+
+    members = []
+    for t in sorted(group.travelers, key=lambda x: x.group_sequence or 0):
+        members.append({
+            "id": t.id,
+            "job_number": t.job_number,
+            "traveler_type": t.traveler_type.value if hasattr(t.traveler_type, 'value') else str(t.traveler_type),
+            "group_sequence": t.group_sequence,
+            "group_label": t.group_label,
+            "quantity": t.quantity,
+            "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+            "work_order_number": t.work_order_number
+        })
+
+    return {"id": group.id, "name": group.name, "members": members}
+
+@router.put("/groups/{group_id}")
+async def update_traveler_group(
+    group_id: int,
+    request: LinkTravelersRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a traveler group (reorder, add/remove members, rename)"""
+    group = db.query(TravelerGroup).filter(TravelerGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    if len(request.traveler_ids) < 2:
+        raise HTTPException(status_code=400, detail="A group must have at least 2 travelers")
+    if len(request.traveler_ids) != len(request.labels):
+        raise HTTPException(status_code=400, detail="Must provide a label for each traveler")
+
+    # Unlink travelers no longer in the group
+    old_members = db.query(Traveler).filter(Traveler.group_id == group_id).all()
+    new_ids = set(request.traveler_ids)
+    for t in old_members:
+        if t.id not in new_ids:
+            t.group_id = None
+            t.group_sequence = None
+            t.group_label = None
+
+    # Verify new travelers exist
+    travelers = db.query(Traveler).filter(Traveler.id.in_(request.traveler_ids)).all()
+    if len(travelers) != len(request.traveler_ids):
+        raise HTTPException(status_code=404, detail="One or more travelers not found")
+
+    # Check new members aren't in a different group
+    for t in travelers:
+        if t.group_id is not None and t.group_id != group_id:
+            raise HTTPException(status_code=400, detail=f"Traveler {t.job_number} (ID {t.id}) is already in another group")
+
+    # Update group
+    group.name = request.group_name or group.name
+
+    # Assign sequence and label
+    traveler_map = {t.id: t for t in travelers}
+    for i, tid in enumerate(request.traveler_ids):
+        t = traveler_map[tid]
+        t.group_id = group_id
+        t.group_sequence = i + 1
+        t.group_label = request.labels[i]
+
+    db.commit()
+    db.refresh(group)
+
+    members = []
+    for t in sorted(group.travelers, key=lambda x: x.group_sequence or 0):
+        members.append({
+            "id": t.id,
+            "job_number": t.job_number,
+            "traveler_type": t.traveler_type.value if hasattr(t.traveler_type, 'value') else str(t.traveler_type),
+            "group_sequence": t.group_sequence,
+            "group_label": t.group_label,
+            "quantity": t.quantity,
+            "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+            "work_order_number": t.work_order_number
+        })
+
+    return {"id": group.id, "name": group.name, "members": members}
+
+@router.delete("/groups/{group_id}")
+async def delete_traveler_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Dissolve a traveler group"""
+    group = db.query(TravelerGroup).filter(TravelerGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # Unlink all travelers
+    for t in group.travelers:
+        t.group_id = None
+        t.group_sequence = None
+        t.group_label = None
+
+    db.delete(group)
+    db.commit()
+    return {"detail": "Group dissolved"}
+
+@router.get("/groups/{group_id}")
+async def get_traveler_group(
+    group_id: int,
+    current_user: User = Depends(get_user_or_system),
+    db: Session = Depends(get_db)
+):
+    """Get group info with all members"""
+    group = db.query(TravelerGroup).filter(TravelerGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # ITAR filtering on members
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+
+    members = []
+    for t in sorted(group.travelers, key=lambda x: x.group_sequence or 0):
+        is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', t.job_number))
+        if is_itar_job and not is_admin and not has_itar_access:
+            members.append({
+                "id": t.id,
+                "job_number": "ITAR Restricted",
+                "traveler_type": "RESTRICTED",
+                "group_sequence": t.group_sequence,
+                "group_label": t.group_label,
+                "quantity": 0,
+                "status": "RESTRICTED",
+                "work_order_number": None
+            })
+        else:
+            members.append({
+                "id": t.id,
+                "job_number": t.job_number,
+                "traveler_type": t.traveler_type.value if hasattr(t.traveler_type, 'value') else str(t.traveler_type),
+                "group_sequence": t.group_sequence,
+                "group_label": t.group_label,
+                "quantity": t.quantity,
+                "status": t.status.value if hasattr(t.status, 'value') else str(t.status),
+                "work_order_number": t.work_order_number
+            })
+
+    return {"id": group.id, "name": group.name, "total_count": len(members), "members": members}
+
 @router.get("/by-job-number/{job_number}/all-work-orders")
 async def get_all_work_orders_for_job(
     job_number: str,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
     """Get all travelers (work orders) for a given job number.
     Returns a list of work orders with their details so the user can select one."""
     from sqlalchemy.orm import joinedload
+
+    # ITAR access check
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+    is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', job_number))
+    if is_itar_job and not is_admin and not has_itar_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ITAR restricted: You do not have permission to view this traveler")
 
     travelers = db.query(Traveler).options(
         joinedload(Traveler.process_steps)
@@ -597,6 +857,7 @@ async def get_all_work_orders_for_job(
             "to_stock": traveler.to_stock,
             "ship_via": traveler.ship_via,
             "comments": traveler.comments,
+            "start_date": traveler.start_date,
             "due_date": traveler.due_date,
             "ship_date": traveler.ship_date,
             "include_labor_hours": traveler.include_labor_hours,
@@ -628,10 +889,18 @@ async def get_all_work_orders_for_job(
 @router.get("/by-job-number/{job_number}")
 async def get_traveler_by_job_number(
     job_number: str,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
     """Get the latest revision traveler for a given job number (no work order required)"""
     from sqlalchemy.orm import joinedload
+
+    # ITAR access check
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+    is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', job_number))
+    if is_itar_job and not is_admin and not has_itar_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ITAR restricted: You do not have permission to view this traveler")
 
     travelers = db.query(Traveler).options(
         joinedload(Traveler.process_steps)
@@ -669,6 +938,7 @@ async def get_traveler_by_job_number(
         "to_stock": traveler.to_stock,
         "ship_via": traveler.ship_via,
         "comments": traveler.comments,
+        "start_date": traveler.start_date,
         "due_date": traveler.due_date,
         "ship_date": traveler.ship_date,
         "include_labor_hours": traveler.include_labor_hours,
@@ -1046,13 +1316,13 @@ async def get_traveler_by_job(
 
     return traveler
 
-@router.get("/{traveler_id}", response_model=TravelerSchema)
+@router.get("/{traveler_id}")
 async def get_traveler(
     traveler_id: int,
     current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
-    """Get a specific traveler by ID"""
+    """Get a specific traveler by ID, includes group_info if traveler is in a group"""
     from sqlalchemy.orm import joinedload
 
     traveler = db.query(Traveler).options(
@@ -1075,15 +1345,51 @@ async def get_traveler(
             detail="ITAR restricted: You do not have permission to view this traveler"
         )
 
-    return traveler
+    # Build group_info if traveler is in a group
+    group_info = None
+    if traveler.group_id:
+        siblings = db.query(Traveler).filter(Traveler.group_id == traveler.group_id).order_by(Traveler.group_sequence).all()
+        group = db.query(TravelerGroup).filter(TravelerGroup.id == traveler.group_id).first()
+        members = []
+        for s in siblings:
+            s_itar = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', s.job_number))
+            if s_itar and not is_admin and not has_itar_access:
+                members.append({
+                    "id": s.id, "job_number": "ITAR Restricted", "traveler_type": "RESTRICTED",
+                    "group_sequence": s.group_sequence, "group_label": s.group_label,
+                    "quantity": 0, "status": "RESTRICTED", "work_order_number": None
+                })
+            else:
+                members.append({
+                    "id": s.id, "job_number": s.job_number,
+                    "traveler_type": s.traveler_type.value if hasattr(s.traveler_type, 'value') else str(s.traveler_type),
+                    "group_sequence": s.group_sequence, "group_label": s.group_label,
+                    "quantity": s.quantity,
+                    "status": s.status.value if hasattr(s.status, 'value') else str(s.status),
+                    "work_order_number": s.work_order_number
+                })
+        group_info = {
+            "group_id": traveler.group_id,
+            "group_name": group.name if group else None,
+            "current_sequence": traveler.group_sequence,
+            "total_count": len(members),
+            "members": members
+        }
+
+    # Serialize traveler using the schema, then add group_info
+    from schemas.traveler_schemas import Traveler as TravelerSchema
+    result = TravelerSchema.model_validate(traveler).model_dump()
+    result["group_info"] = group_info
+    return result
 
 @router.put("/{traveler_id}", response_model=TravelerSchema)
 async def update_traveler(
     traveler_id: int,
     traveler_data: TravelerCreate,
+    current_user: User = Depends(get_user_or_system),
     db: Session = Depends(get_db)
 ):
-    """Update a traveler"""
+    """Update a traveler. PRESERVES labor entries — only updates step metadata."""
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
     if not traveler:
         raise HTTPException(
@@ -1091,24 +1397,7 @@ async def update_traveler(
             detail="Traveler not found"
         )
 
-    # Get or create a default user for travelers updated without auth
-    default_user = db.query(User).filter(User.username == "system").first()
-    if not default_user:
-        default_user = User(
-            username="system",
-            email="system@nexus.local",
-            first_name="System",
-            last_name="User",
-            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
-            role=UserRole.OPERATOR,
-            is_approver=False
-        )
-        db.add(default_user)
-        db.commit()
-        db.refresh(default_user)
-
     # Determine labor hours based on traveler type
-    # PCB parts don't need labor hours, all others do by default
     include_labor_hours = traveler_data.include_labor_hours if traveler_data.traveler_type != "PCB" else False
 
     # Update traveler fields
@@ -1132,85 +1421,119 @@ async def update_traveler(
     traveler.to_stock = traveler_data.to_stock
     traveler.ship_via = traveler_data.ship_via
     traveler.comments = traveler_data.comments
-    # Only update start_date if provided, otherwise keep existing
     if traveler_data.start_date:
         traveler.start_date = traveler_data.start_date
     traveler.due_date = traveler_data.due_date
     traveler.ship_date = traveler_data.ship_date
     traveler.include_labor_hours = include_labor_hours
-    # Update status and is_active if provided
     if traveler_data.status:
         traveler.status = traveler_data.status
     if traveler_data.is_active is not None:
         traveler.is_active = traveler_data.is_active
 
-    # Delete child records that reference process steps (FK constraints)
-    step_ids = [s.id for s in db.query(ProcessStep.id).filter(ProcessStep.traveler_id == traveler.id).all()]
-    if step_ids:
-        db.query(LaborEntry).filter(LaborEntry.step_id.in_(step_ids)).delete(synchronize_session=False)
-        db.query(SubStep).filter(SubStep.process_step_id.in_(step_ids)).delete(synchronize_session=False)
+    # ── SAFE step update: preserve labor entries ──
+    # Build a map of existing steps by (step_number, operation) for matching
+    existing_steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).all()
+    existing_map = {}
+    for s in existing_steps:
+        key = (s.step_number, (s.operation or "").upper().strip())
+        existing_map[key] = s
 
-    # Delete existing process steps
-    db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).delete()
-    db.query(ManualStep).filter(ManualStep.traveler_id == traveler.id).delete()
+    # Track which existing step IDs we keep
+    kept_step_ids = set()
+    new_step_order = []
 
-    # Create new process steps
     for step_data in traveler_data.process_steps:
-        # Auto-create work center if it doesn't exist
-        work_center = db.query(WorkCenter).filter(WorkCenter.code == step_data.work_center_code).first()
-        if not work_center:
-            work_center = WorkCenter(
-                code=step_data.work_center_code,
-                name=step_data.operation,
-                description=f"Auto-created from traveler",
-                is_active=True
+        key = (step_data.step_number, (step_data.operation or "").upper().strip())
+        existing = existing_map.get(key)
+
+        if existing:
+            # Update existing step in-place (preserves its ID → preserves labor entries)
+            existing.operation = step_data.operation
+            existing.work_center_code = step_data.work_center_code
+            existing.instructions = step_data.instructions
+            existing.estimated_time = step_data.estimated_time
+            existing.is_required = step_data.is_required
+            existing.quantity = step_data.quantity
+            existing.accepted = step_data.accepted
+            existing.rejected = step_data.rejected
+            existing.sign = step_data.sign
+            existing.completed_date = step_data.completed_date
+            kept_step_ids.add(existing.id)
+            new_step_order.append(existing)
+        else:
+            # Auto-create work center if needed
+            work_center = db.query(WorkCenter).filter(WorkCenter.code == step_data.work_center_code).first()
+            if not work_center:
+                work_center = WorkCenter(
+                    code=step_data.work_center_code,
+                    name=step_data.operation,
+                    description="Auto-created from traveler",
+                    is_active=True
+                )
+                db.add(work_center)
+                db.flush()
+
+            db_step = ProcessStep(
+                traveler_id=traveler.id,
+                step_number=step_data.step_number,
+                operation=step_data.operation,
+                work_center_code=step_data.work_center_code,
+                instructions=step_data.instructions,
+                estimated_time=step_data.estimated_time,
+                is_required=step_data.is_required,
+                quantity=step_data.quantity,
+                accepted=step_data.accepted,
+                rejected=step_data.rejected,
+                sign=step_data.sign,
+                completed_date=step_data.completed_date
             )
-            db.add(work_center)
-            db.commit()
+            db.add(db_step)
+            db.flush()
+            db.refresh(db_step)
+            kept_step_ids.add(db_step.id)
+            new_step_order.append(db_step)
 
-        db_step = ProcessStep(
-            traveler_id=traveler.id,
-            step_number=step_data.step_number,
-            operation=step_data.operation,
-            work_center_code=step_data.work_center_code,
-            instructions=step_data.instructions,
-            estimated_time=step_data.estimated_time,
-            is_required=step_data.is_required,
-            quantity=step_data.quantity,
-            accepted=step_data.accepted,
-            rejected=step_data.rejected,
-            sign=step_data.sign,
-            completed_date=step_data.completed_date
-        )
-        db.add(db_step)
-        db.commit()
-        db.refresh(db_step)
+            # Create sub-steps for new steps only
+            for sub_step_data in step_data.sub_steps:
+                db.add(SubStep(
+                    process_step_id=db_step.id,
+                    step_number=sub_step_data.step_number,
+                    description=sub_step_data.description
+                ))
 
-        # Create sub-steps
-        for sub_step_data in step_data.sub_steps:
-            db_sub_step = SubStep(
-                process_step_id=db_step.id,
-                step_number=sub_step_data.step_number,
-                description=sub_step_data.description
-            )
-            db.add(db_sub_step)
+    # Only delete steps that are no longer in the new list AND have no labor entries
+    for old_step in existing_steps:
+        if old_step.id not in kept_step_ids:
+            has_labor = db.query(LaborEntry).filter(LaborEntry.step_id == old_step.id).count() > 0
+            if has_labor:
+                # Keep the step (hidden) — don't delete labor data
+                # Reassign labor entries to traveler level (step_id NULL) to preserve them
+                db.query(LaborEntry).filter(LaborEntry.step_id == old_step.id).update(
+                    {LaborEntry.step_id: None}, synchronize_session=False
+                )
+                db.query(SubStep).filter(SubStep.process_step_id == old_step.id).delete(synchronize_session=False)
+                db.delete(old_step)
+            else:
+                db.query(SubStep).filter(SubStep.process_step_id == old_step.id).delete(synchronize_session=False)
+                db.delete(old_step)
 
-    # Create manual steps
+    # Handle manual steps — delete old, create new
+    db.query(ManualStep).filter(ManualStep.traveler_id == traveler.id).delete()
     for manual_step_data in traveler_data.manual_steps:
-        db_manual_step = ManualStep(
+        db.add(ManualStep(
             traveler_id=traveler.id,
             description=manual_step_data.description,
-            added_by=default_user.id
-        )
-        db.add(db_manual_step)
+            added_by=current_user.id
+        ))
 
     db.commit()
     db.refresh(traveler)
 
-    # Create audit log
+    # Create audit log with actual user
     audit_log = AuditLog(
         traveler_id=traveler.id,
-        user_id=default_user.id,
+        user_id=current_user.id,
         action="UPDATED",
         ip_address="127.0.0.1",
         user_agent="NEXUS-Frontend"
@@ -1218,15 +1541,15 @@ async def update_traveler(
     db.add(audit_log)
     db.commit()
 
-    # Create notification for all admins
+    # Create notification for all admins with actual username
     create_notification_for_admins(
         db=db,
         notification_type=NotificationType.TRAVELER_UPDATED,
         title="Traveler Updated",
-        message=f"{default_user.username} updated traveler {traveler.job_number} - {traveler.part_description}",
+        message=f"{current_user.username} updated traveler {traveler.job_number} - {traveler.part_description}",
         reference_id=traveler.id,
         reference_type="traveler",
-        created_by_username=default_user.username
+        created_by_username=current_user.username
     )
 
     return traveler
@@ -1320,7 +1643,7 @@ async def delete_traveler(
             email="system@nexus.local",
             first_name="System",
             last_name="User",
-            hashed_password="$2b$12$dummyhashforbackwardcompatibility",
+            hashed_password="$2b$12$vow0SBalxeDTuwKLWt8d9ed4bEUY6hDLY7OIz/opm3kbQQtM.4GtC",
             role=UserRole.OPERATOR,
             is_approver=False
         )
