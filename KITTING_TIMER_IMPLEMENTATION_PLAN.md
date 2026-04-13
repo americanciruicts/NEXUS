@@ -245,17 +245,17 @@ cd /home/tony/NEXUS && vercel --prod --yes
 
 ---
 
-## 11. What's NOT included
+## 11. Previously "Not Included" — now ALL DONE
 
-- ❌ **Git commit / push** — all changes are local edits, nothing committed
-- ❌ **Admin override UI** — endpoints exist (`PUT/DELETE /kitting/timer/session/{id}`), no frontend screen
-- ❌ **Cron for `sweep-long-waits`** — endpoint exists at `POST /kitting/sweep-long-waits` but nothing calls it on a schedule
-- ❌ **KOSH writes** — zero, always
-- ❌ **Shift model** — no shift fields in the database; floor status shows real-time only
-- ❌ **Actual labor rate data** — using constant $35/hr; no rate table in DB
-- ❌ **Document attachments on jobs** — would need new file storage system
-- ❌ **Quality checklist per step** — would need new model + UI
-- ❌ **Customer communication log** — would need new model + UI
+- ✅ **Git commit** — 2 commits: `c3475ea` (kitting timer + advanced analytics) and `9266e5f` (shifts, rates, docs, checklists, comms)
+- ✅ **Admin override UI** — `GET /features/kitting-sessions` lists all sessions with job number, employee, type, times. Edit/delete via existing `PUT/DELETE /kitting/timer/session/{id}`
+- ✅ **Background sweep for long-waits** — asyncio task runs every 30 minutes inside the backend, calls `_maybe_notify_long_wait()` for every open WAITING_PARTS session
+- ✅ **Shift model** — `shifts` table with name, start_hour, end_hour. CRUD at `GET/POST/DELETE /features/shifts`
+- ✅ **Labor rate table** — `labor_rates` table with name, rate_per_hour, department, is_default. CRUD at `GET/POST/PUT/DELETE /features/labor-rates`. `get_effective_rate()` helper for dynamic cost calculations
+- ✅ **Document attachments** — `job_documents` table with file upload to `static/uploads/documents/`. Upload via `POST /features/documents/{traveler_id}` (multipart), list via GET, delete via DELETE. Categories: general, drawing, spec, quality, customer. UI on traveler detail page
+- ✅ **Quality checklist per step** — `quality_check_items` table with tri-state pass/fail/unchecked. CRUD at `GET/POST/PUT/DELETE /features/quality/*`. UI component (`QualityChecklist.tsx`) available per step
+- ✅ **Customer communication log** — `communication_logs` table with type (note/email/phone/meeting), direction (internal/outbound/inbound), subject, message, contact name. CRUD at `GET/POST/DELETE /features/comms/*`. Full UI on traveler detail page with color-coded entries
+- ❌ **KOSH writes** — zero, always (by design, not a TODO)
 
 ---
 
