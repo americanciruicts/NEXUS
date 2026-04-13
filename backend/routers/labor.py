@@ -530,34 +530,56 @@ async def update_labor_entry(
     else:
         action = "updated"
 
-    job_label = traveler.job_number if traveler else 'Unknown Job'
-    wc_label = labor_entry.work_center or 'Unknown Work Center'
-    notif_msg = f"{current_user.username} {action} labor entry for {job_label} - {wc_label}"
+    # Suppress duplicate "stopped" notifications when an operator stops a second
+    # labor entry on the same step that was already completed. This happens when
+    # an operator needs to log more time on a step they already finished — the
+    # admin doesn't need two "stopped" notifications for the same work.
+    suppress_notification = False
+    if action == "stopped" and labor_entry.step_id:
+        from models import Notification
+        recent_stop = db.query(Notification).filter(
+            Notification.notification_type == NotificationType.LABOR_ENTRY_UPDATED,
+            Notification.title == "Labor Entry Stopped",
+            Notification.message.like(f"%{labor_entry.work_center}%"),
+            Notification.created_by_username == current_user.username,
+            Notification.created_at >= datetime.now(timezone.utc) - timedelta(hours=12),
+            Notification.reference_type == "labor_entry",
+        ).first()
+        if recent_stop:
+            # Check if the recent notification was for the same job
+            prev_entry = db.query(LaborEntry).filter(LaborEntry.id == recent_stop.reference_id).first()
+            if prev_entry and prev_entry.traveler_id == labor_entry.traveler_id:
+                suppress_notification = True
 
-    # Append details so they're captured in notification history
-    details = []
-    if action == "paused" and labor_data.pause_comment:
-        details.append(f"Reason: {labor_data.pause_comment}")
-    if action == "resumed" and labor_data.pause_comment:
-        details.append(f"Resume note: {labor_data.pause_comment}")
-    if action == "stopped" and labor_entry.hours_worked:
-        details.append(f"Hours: {labor_entry.hours_worked}h")
-    if labor_entry.qty_completed:
-        details.append(f"QTY: {labor_entry.qty_completed}")
-    if labor_entry.comment:
-        details.append(f"Comment: {labor_entry.comment}")
-    if details:
-        notif_msg += " | " + " | ".join(details)
+    if not suppress_notification:
+        job_label = traveler.job_number if traveler else 'Unknown Job'
+        wc_label = labor_entry.work_center or 'Unknown Work Center'
+        notif_msg = f"{current_user.username} {action} labor entry for {job_label} - {wc_label}"
 
-    create_notification_for_admins(
-        db=db,
-        notification_type=NotificationType.LABOR_ENTRY_UPDATED,
-        title=f"Labor Entry {action.capitalize()}",
-        message=notif_msg,
-        reference_id=labor_entry.id,
-        reference_type="labor_entry",
-        created_by_username=current_user.username
-    )
+        # Append details so they're captured in notification history
+        details = []
+        if action == "paused" and labor_data.pause_comment:
+            details.append(f"Reason: {labor_data.pause_comment}")
+        if action == "resumed" and labor_data.pause_comment:
+            details.append(f"Resume note: {labor_data.pause_comment}")
+        if action == "stopped" and labor_entry.hours_worked:
+            details.append(f"Hours: {labor_entry.hours_worked}h")
+        if labor_entry.qty_completed:
+            details.append(f"QTY: {labor_entry.qty_completed}")
+        if labor_entry.comment:
+            details.append(f"Comment: {labor_entry.comment}")
+        if details:
+            notif_msg += " | " + " | ".join(details)
+
+        create_notification_for_admins(
+            db=db,
+            notification_type=NotificationType.LABOR_ENTRY_UPDATED,
+            title=f"Labor Entry {action.capitalize()}",
+            message=notif_msg,
+            reference_id=labor_entry.id,
+            reference_type="labor_entry",
+            created_by_username=current_user.username
+        )
 
     # Build response with pause data
     response_dict = {
