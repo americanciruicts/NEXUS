@@ -141,6 +141,10 @@ export default function LaborTrackingPage() {
   // Active traveler id for the currently-running labor entry. Used by the
   // kitting timer mirror calls below — those endpoints take a traveler_id.
   const lastStartedTravelerIdRef = useRef<number | null>(null);
+  // Accumulated pause seconds for the current entry — used by the timer
+  // effect to subtract pause time from the displayed elapsed time so it
+  // matches actual worked time (not wall-clock time).
+  const totalPauseSecondsRef = useRef<number>(0);
   const lastStartedStepIdRef = useRef<number | undefined>(undefined);
 
   // Global scanner listener — auto-stop when timer is running
@@ -223,12 +227,26 @@ export default function LaborTrackingPage() {
         // Set entries
         const validEntries = (data.entries || []).filter((entry: LaborEntry) => entry.hours_worked >= 0);
         setLaborEntries(validEntries);
-        // Set active entry
+        // Set active entry — restore full timer state so the circular
+        // display and pause/resume buttons work correctly on page load.
         if (data.active_entry) {
           setIsTimerRunning(true);
           setActiveEntryId(data.active_entry.id);
           lastStartedWorkCenterRef.current = data.active_entry.work_center || '';
           lastStartedTravelerIdRef.current = data.active_entry.traveler_id || null;
+          const start = new Date(data.active_entry.start_time);
+          setStartTime(start);
+          totalPauseSecondsRef.current = data.active_entry.total_pause_seconds ? Math.floor(data.active_entry.total_pause_seconds) : 0;
+          if (data.active_entry.pause_time) {
+            const paused = new Date(data.active_entry.pause_time);
+            setIsPaused(true);
+            setPauseTime(paused);
+            const wallSecs = Math.floor((paused.getTime() - start.getTime()) / 1000);
+            setElapsedTime(Math.max(wallSecs - totalPauseSecondsRef.current, 0));
+          } else {
+            const wallSecs = Math.floor((Date.now() - start.getTime()) / 1000);
+            setElapsedTime(Math.max(wallSecs - totalPauseSecondsRef.current, 0));
+          }
           setNewEntry(prev => ({
             ...prev,
             job_number: data.active_entry.job_number || '',
@@ -457,18 +475,26 @@ export default function LaborTrackingPage() {
     }
   };
 
-  // Timer effect
+  // Timer effect — when paused, elapsedTime is frozen at whatever value
+  // was set by the pause handler. When running, it ticks from startTime
+  // but subtracts accumulated pause duration so the display doesn't jump.
   useEffect(() => {
     if (isTimerRunning && startTime && !isPaused) {
       timerIntervalRef.current = setInterval(() => {
         const now = new Date();
-        const diff = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+        let diff = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+        // Subtract total pause seconds so displayed time matches actual worked time
+        if (totalPauseSecondsRef.current > 0) {
+          diff = Math.max(diff - totalPauseSecondsRef.current, 0);
+        }
         setElapsedTime(diff);
       }, 1000);
     } else {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
       }
+      // When paused, do NOT reset elapsedTime — it stays frozen at the
+      // value captured by the pause handler.
     }
 
     return () => {
@@ -558,14 +584,18 @@ export default function LaborTrackingPage() {
           setStartTime(start);
           setIsTimerRunning(true);
 
+          // Restore accumulated pause seconds from prior pauses
+          totalPauseSecondsRef.current = data.total_pause_seconds ? Math.floor(data.total_pause_seconds) : 0;
+
           // Restore paused state if the entry was paused
           if (data.pause_time) {
             const paused = new Date(data.pause_time);
             setIsPaused(true);
             setPauseTime(paused);
-            // Freeze elapsed time at the moment it was paused
-            const diff = Math.floor((paused.getTime() - start.getTime()) / 1000);
-            setElapsedTime(diff);
+            // Freeze elapsed time at worked time (wall-clock minus all pauses)
+            const wallSecs = Math.floor((paused.getTime() - start.getTime()) / 1000);
+            const worked = Math.max(wallSecs - totalPauseSecondsRef.current, 0);
+            setElapsedTime(worked);
           }
 
           // Store traveler max qty for validation
@@ -691,12 +721,14 @@ export default function LaborTrackingPage() {
       if (data.offline && data.queued) {
         setStartTime(now);
         setElapsedTime(0);
+        totalPauseSecondsRef.current = 0;
         setIsTimerRunning(true);
         toast.info('Offline: Timer saved locally. Will sync when back online.');
       } else if (response.ok) {
         setActiveEntryId(data.id);
         setStartTime(now);
         setElapsedTime(0);
+        totalPauseSecondsRef.current = 0;
         setIsTimerRunning(true);
         setTravelerMaxQty(traveler.quantity || null);
         lastStartedWorkCenterRef.current = newEntry.work_center; // display name e.g. "FEEDER LOAD"
@@ -787,10 +819,18 @@ export default function LaborTrackingPage() {
       });
       const data = await response.json();
       if (data.offline && data.queued) {
+        if (startTime) {
+          const worked = Math.floor((currentPauseTime.getTime() - startTime.getTime()) / 1000) - totalPauseSecondsRef.current;
+          setElapsedTime(Math.max(worked, 0));
+        }
         setIsPaused(true);
         setPauseTime(currentPauseTime);
         toast.info('Offline: Waiting-parts pause saved locally.');
       } else if (response.ok) {
+        if (startTime) {
+          const worked = Math.floor((currentPauseTime.getTime() - startTime.getTime()) / 1000) - totalPauseSecondsRef.current;
+          setElapsedTime(Math.max(worked, 0));
+        }
         setIsPaused(true);
         setPauseTime(currentPauseTime);
         // Mirror to kitting subsystem
@@ -827,10 +867,20 @@ export default function LaborTrackingPage() {
 
       const data = await response.json();
       if (data.offline && data.queued) {
+        // Freeze the displayed time at the moment of pause
+        if (startTime) {
+          const worked = Math.floor((currentPauseTime.getTime() - startTime.getTime()) / 1000) - totalPauseSecondsRef.current;
+          setElapsedTime(Math.max(worked, 0));
+        }
         setIsPaused(true);
         setPauseTime(currentPauseTime);
         toast.info('Offline: Pause saved locally.');
       } else if (response.ok) {
+        // Freeze the displayed time at the moment of pause
+        if (startTime) {
+          const worked = Math.floor((currentPauseTime.getTime() - startTime.getTime()) / 1000) - totalPauseSecondsRef.current;
+          setElapsedTime(Math.max(worked, 0));
+        }
         setIsPaused(true);
         setPauseTime(currentPauseTime);
         toast.info('Timer paused!');
@@ -871,11 +921,21 @@ export default function LaborTrackingPage() {
       });
 
       const data = await response.json();
+      // When resuming, add the pause duration to the running total so the
+      // timer effect can subtract it from wall-clock elapsed time.
+      const addPauseDuration = () => {
+        if (pauseTime) {
+          const pauseSecs = Math.floor((Date.now() - pauseTime.getTime()) / 1000);
+          totalPauseSecondsRef.current += Math.max(pauseSecs, 0);
+        }
+      };
       if (data.offline && data.queued) {
+        addPauseDuration();
         setIsPaused(false);
         setPauseTime(null);
         toast.info('Offline: Resume saved locally.');
       } else if (response.ok) {
+        addPauseDuration();
         setIsPaused(false);
         setPauseTime(null);
         // Mirror to kitting subsystem (only fires if WC is kitting)
