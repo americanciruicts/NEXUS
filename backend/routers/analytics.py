@@ -512,6 +512,323 @@ async def get_analytics(
 
     scorecards.sort(key=lambda x: x["total_hours"], reverse=True)
 
+    # ========== 8. KITTING ANALYTICS ==========
+    # Tracks every kitting step across all traveler types so admin can see
+    # total kitting labor, who's waiting on parts (live from KOSH + manual
+    # WAITING_PARTS pause logs), trends, waiting-time metrics, and a forecast
+    # of how long it'll take to clear the kitting queue.
+    kitting_analytics = {
+        "summary": {
+            "total_hours_30d": 0,
+            "avg_hours_per_kit": 0,
+            "completed_count_30d": 0,
+            "active_jobs": 0,
+            "waiting_on_parts": 0,
+            "ready_to_kit": 0,
+        },
+        "waiting_metrics": {
+            "total_waiting_hours_30d": 0,
+            "waiting_event_count_30d": 0,
+            "avg_waiting_hours": 0,
+            "longest_waiting_hours": 0,
+            "currently_waiting_count": 0,
+        },
+        "active_jobs": [],
+        "trend_14d": [],
+        "throughput_8w": [],
+        "forecast": {
+            "remaining_hours": 0,
+            "days_to_clear_one_kitter": 0,
+            "hours_per_kit_used": estimate_hours("KITTING"),
+        },
+    }
+    try:
+        # All kitting steps in the system
+        kitting_step_rows = db.query(ProcessStep.id).filter(
+            func.upper(ProcessStep.operation).like('%KIT%')
+        ).all()
+        kitting_step_ids = [r[0] for r in kitting_step_rows]
+
+        # ─── Waiting-for-parts metrics (from PauseLog with reason=WAITING_PARTS) ─
+        waiting_total_secs = 0
+        waiting_count = 0
+        waiting_avg_secs = 0
+        waiting_max_secs = 0
+        currently_waiting_ids = set()
+        if kitting_step_ids:
+            # Closed waiting-parts pauses linked to kitting labor entries (last 30d)
+            waiting_rows = db.query(
+                PauseLog.duration_seconds,
+            ).join(LaborEntry, LaborEntry.id == PauseLog.labor_entry_id).filter(
+                LaborEntry.step_id.in_(kitting_step_ids),
+                PauseLog.reason == "WAITING_PARTS",
+                PauseLog.resumed_at.isnot(None),
+                PauseLog.paused_at > thirty_days_ago,
+            ).all()
+            durations = [float(r[0] or 0) for r in waiting_rows]
+            waiting_total_secs = sum(durations)
+            waiting_count = len(durations)
+            waiting_avg_secs = (waiting_total_secs / waiting_count) if waiting_count else 0
+            waiting_max_secs = max(durations) if durations else 0
+
+            # Open (still waiting now) — count distinct travelers currently in WAITING_PARTS
+            now_dt = datetime.now(timezone.utc)
+            open_rows = db.query(
+                LaborEntry.traveler_id,
+                PauseLog.paused_at,
+            ).join(LaborEntry, LaborEntry.id == PauseLog.labor_entry_id).filter(
+                LaborEntry.step_id.in_(kitting_step_ids),
+                PauseLog.reason == "WAITING_PARTS",
+                PauseLog.resumed_at.is_(None),
+            ).all()
+            for tid, paused_at in open_rows:
+                if tid:
+                    currently_waiting_ids.add(tid)
+                # Count the open waiting period in totals so the running clock is reflected
+                if paused_at:
+                    paused_aware = paused_at if paused_at.tzinfo else paused_at.replace(tzinfo=timezone.utc)
+                    open_secs = (now_dt - paused_aware).total_seconds()
+                    if open_secs > 0:
+                        waiting_total_secs += open_secs
+                        waiting_count += 1
+                        if open_secs > waiting_max_secs:
+                            waiting_max_secs = open_secs
+            if waiting_count:
+                waiting_avg_secs = waiting_total_secs / waiting_count
+
+        # Total kitting hours in last 30 days
+        total_kit_hours_30d = 0
+        if kitting_step_ids:
+            total_kit_hours_30d = db.query(
+                func.coalesce(func.sum(LaborEntry.hours_worked), 0)
+            ).filter(
+                LaborEntry.step_id.in_(kitting_step_ids),
+                LaborEntry.created_at > thirty_days_ago,
+                LaborEntry.hours_worked > 0,
+            ).scalar() or 0
+
+        # Average kitting time per completed kit step (last 30 days)
+        avg_kit_hours = 0.0
+        completed_kit_count = 0
+        if kitting_step_ids:
+            row = db.query(
+                func.avg(LaborEntry.hours_worked).label("avg_h"),
+                func.count(LaborEntry.id).label("cnt"),
+            ).filter(
+                LaborEntry.step_id.in_(kitting_step_ids),
+                LaborEntry.end_time.isnot(None),
+                LaborEntry.hours_worked > 0,
+                LaborEntry.created_at > thirty_days_ago,
+            ).first()
+            if row:
+                avg_kit_hours = float(row.avg_h or 0)
+                completed_kit_count = int(row.cnt or 0)
+
+        # Active kitting jobs: kitting step not yet completed and traveler still active
+        active_kit_steps = db.query(ProcessStep, Traveler).join(
+            Traveler, Traveler.id == ProcessStep.traveler_id
+        ).filter(
+            func.upper(ProcessStep.operation).like('%KIT%'),
+            ProcessStep.is_completed == False,
+            Traveler.is_active == True,
+            Traveler.status.in_([
+                TravelerStatus.CREATED,
+                TravelerStatus.IN_PROGRESS,
+                TravelerStatus.ON_HOLD,
+            ]),
+        ).all()
+
+        # Look up parts shortage per active kitting job from KOSH (live, no cache,
+        # so when KOSH inventory updates the status auto-refreshes here)
+        kosh_shortage_map = {}
+        kosh_status_map = {}
+        try:
+            from routers.jobs import get_kosh_connection
+            kosh_conn = get_kosh_connection()
+            kosh_cur = kosh_conn.cursor()
+            unique_jobs = list({t.job_number for _, t in active_kit_steps if t.job_number})
+            for jn in unique_jobs:
+                base = jn.rstrip('LM') if jn else jn
+                kosh_job = None
+                kosh_jn = jn
+                for try_jn in (jn, base) if base != jn else (jn,):
+                    kosh_cur.execute(
+                        'SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s',
+                        (try_jn,),
+                    )
+                    row = kosh_cur.fetchone()
+                    if row:
+                        kosh_job = row
+                        kosh_jn = try_jn
+                        break
+                if not kosh_job:
+                    continue
+                order_qty = int(kosh_job[0] or 1)
+                kosh_status_map[jn] = kosh_job[1]
+                kosh_cur.execute(
+                    """
+                    WITH bom_items AS (
+                        SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
+                        FROM pcb_inventory."tblBOM" b
+                        WHERE b.job = %s
+                        ORDER BY b.aci_pn, b.line
+                    )
+                    SELECT
+                        CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
+                        COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
+                    FROM bom_items bi
+                    LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                        ON bi.aci_pn = w.item OR bi.mpn = w.mpn
+                    GROUP BY bi.aci_pn, bi.qty
+                    """,
+                    (kosh_jn,),
+                )
+                bom_rows = kosh_cur.fetchall()
+                total = len(bom_rows)
+                short = 0
+                for r in bom_rows:
+                    req = int(r[0] or 0) * order_qty
+                    oh = int(r[1] or 0)
+                    if oh < req:
+                        short += 1
+                kosh_shortage_map[jn] = {"total": total, "short": short}
+            kosh_conn.close()
+        except Exception as kosh_err:
+            print(f"Kitting KOSH lookup error: {kosh_err}")
+
+        active_kitting = []
+        for step, t in active_kit_steps:
+            hours = db.query(
+                func.coalesce(func.sum(LaborEntry.hours_worked), 0)
+            ).filter(
+                LaborEntry.step_id == step.id,
+                LaborEntry.hours_worked > 0,
+            ).scalar() or 0
+            active_now = db.query(func.count(LaborEntry.id)).filter(
+                LaborEntry.step_id == step.id,
+                LaborEntry.end_time.is_(None),
+                LaborEntry.is_completed == False,
+            ).scalar() or 0
+            sh = kosh_shortage_map.get(t.job_number, {"total": 0, "short": 0})
+            days_until_due = None
+            if t.due_date:
+                try:
+                    due = datetime.strptime(t.due_date, "%Y-%m-%d").date()
+                    days_until_due = (due - now.date()).days
+                except Exception:
+                    pass
+            # Manually flagged "waiting parts" via open WAITING_PARTS pause log on this step
+            manually_waiting = t.id in currently_waiting_ids
+            active_kitting.append({
+                "traveler_id": t.id,
+                "job_number": t.job_number,
+                "part_description": t.part_description or "",
+                "customer_name": t.customer_name or "",
+                "status": t.status.value if t.status else "",
+                "kosh_status": kosh_status_map.get(t.job_number),
+                "due_date": t.due_date,
+                "days_until_due": days_until_due,
+                "hours_logged": round(float(hours), 1),
+                "estimated_hours": estimate_hours("KITTING"),
+                "active_now": active_now > 0,
+                "parts_total": sh["total"],
+                "parts_short": sh["short"],
+                "waiting_on_parts": sh["short"] > 0 or manually_waiting,
+                "manually_waiting": manually_waiting,
+            })
+
+        # Sort: waiting on parts first, then most urgent due date
+        active_kitting.sort(key=lambda k: (
+            not k["waiting_on_parts"],
+            k["days_until_due"] if k["days_until_due"] is not None else 9999,
+        ))
+
+        # Kitting trend - daily hours, last 14 days
+        kitting_trend = []
+        for d in range(13, -1, -1):
+            day = (now - timedelta(days=d)).date()
+            day_start = datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
+            day_end = day_start + timedelta(days=1)
+            if kitting_step_ids:
+                h = db.query(
+                    func.coalesce(func.sum(LaborEntry.hours_worked), 0)
+                ).filter(
+                    LaborEntry.step_id.in_(kitting_step_ids),
+                    LaborEntry.start_time >= day_start,
+                    LaborEntry.start_time < day_end,
+                    LaborEntry.hours_worked > 0,
+                ).scalar() or 0
+            else:
+                h = 0
+            kitting_trend.append({
+                "date": day.strftime("%m/%d"),
+                "day": day.strftime("%a"),
+                "hours": round(float(h), 1),
+            })
+
+        # Kitting throughput - kit steps completed per week, last 8 weeks
+        kitting_throughput = []
+        today_d = now.date()
+        for w in range(7, -1, -1):
+            week_start = today_d - timedelta(days=today_d.weekday() + 7 * w)
+            week_end = week_start + timedelta(days=6)
+            ws_dt = datetime.combine(week_start, datetime.min.time()).replace(tzinfo=timezone.utc)
+            we_dt = datetime.combine(week_end + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc)
+            completed = db.query(func.count(ProcessStep.id)).filter(
+                func.upper(ProcessStep.operation).like('%KIT%'),
+                ProcessStep.is_completed == True,
+                ProcessStep.completed_at >= ws_dt,
+                ProcessStep.completed_at < we_dt,
+            ).scalar() or 0
+            kitting_throughput.append({
+                "week": week_start.strftime("%m/%d"),
+                "completed": completed,
+            })
+
+        # Forecast - hours of kitting work remaining and rough days to clear
+        # using one kitter at 8h/day. Excludes jobs waiting on parts since
+        # those can't actually be kitted yet.
+        hours_per_kit = avg_kit_hours if avg_kit_hours > 0 else estimate_hours("KITTING")
+        ready_jobs = [k for k in active_kitting if not k["waiting_on_parts"]]
+        waiting_jobs = [k for k in active_kitting if k["waiting_on_parts"]]
+        # Account for partial progress (subtract hours already logged)
+        remaining_ready = sum(
+            max(hours_per_kit - k["hours_logged"], 0) for k in ready_jobs
+        )
+        remaining_waiting = sum(
+            max(hours_per_kit - k["hours_logged"], 0) for k in waiting_jobs
+        )
+        days_to_clear_ready = round(remaining_ready / 8.0, 1) if remaining_ready > 0 else 0
+
+        kitting_analytics = {
+            "summary": {
+                "total_hours_30d": round(float(total_kit_hours_30d), 1),
+                "avg_hours_per_kit": round(avg_kit_hours, 2),
+                "completed_count_30d": completed_kit_count,
+                "active_jobs": len(active_kitting),
+                "waiting_on_parts": len(waiting_jobs),
+                "ready_to_kit": len(ready_jobs),
+            },
+            "waiting_metrics": {
+                "total_waiting_hours_30d": round(waiting_total_secs / 3600, 1),
+                "waiting_event_count_30d": waiting_count,
+                "avg_waiting_hours": round(waiting_avg_secs / 3600, 1),
+                "longest_waiting_hours": round(waiting_max_secs / 3600, 1),
+                "currently_waiting_count": len(currently_waiting_ids),
+            },
+            "active_jobs": active_kitting,
+            "trend_14d": kitting_trend,
+            "throughput_8w": kitting_throughput,
+            "forecast": {
+                "remaining_hours_ready": round(remaining_ready, 1),
+                "remaining_hours_waiting_parts": round(remaining_waiting, 1),
+                "days_to_clear_one_kitter": days_to_clear_ready,
+                "hours_per_kit_used": round(hours_per_kit, 2),
+            },
+        }
+    except Exception as kit_err:
+        print(f"Kitting analytics error: {kit_err}")
+
     return {
         "anomalies": anomalies,
         "due_date_heatmap": due_date_data,
@@ -521,4 +838,5 @@ async def get_analytics(
         "daily_summary": daily_summary,
         "bottlenecks": bottlenecks,
         "operator_scorecards": scorecards,
+        "kitting_analytics": kitting_analytics,
     }

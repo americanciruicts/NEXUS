@@ -15,6 +15,9 @@ class TravelerType(enum.Enum):
     CABLE = "CABLE"
     CABLES = "CABLES"  # Legacy alias
     PURCHASING = "PURCHASING"
+    RMA_SAME = "RMA_SAME"  # RMA Router - Same Job/Rev, PO & WO
+    RMA_DIFF = "RMA_DIFF"  # RMA Router - Different Jobs/Rev, PO & WO
+    MODIFICATION = "MODIFICATION"  # Modification RMA
 
 class TravelerStatus(enum.Enum):
     DRAFT = "DRAFT"
@@ -91,6 +94,16 @@ class Part(Base):
     # Relationships
     travelers = relationship("Traveler", back_populates="part")
 
+class TravelerGroup(Base):
+    __tablename__ = "traveler_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    travelers = relationship("Traveler", back_populates="group", order_by="Traveler.group_sequence")
+
 class Traveler(Base):
     __tablename__ = "travelers"
     __table_args__ = (
@@ -130,17 +143,40 @@ class Traveler(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     completed_at = Column(DateTime(timezone=True))
 
+    # RMA-specific fields
+    customer_contact = Column(String(100))  # Customer contact person
+    original_wo_number = Column(String(50))  # Original Work Order Number
+    original_po_number = Column(String(255))  # Original PO Number
+    return_po_number = Column(String(255))  # Return PO Number
+    rma_po_number = Column(String(255))  # RMA PO Number
+    invoice_number = Column(String(100))  # Invoice Number
+    customer_ncr = Column(String(100))  # Customer NCR#
+    original_built_quantity = Column(Integer)  # Original Built Quantity
+    units_shipped = Column(Integer)  # Number of units shipped
+    quantity_rma_issued = Column(Integer)  # Quantity RMA issued for
+    units_received = Column(Integer)  # Units Received
+    customer_revision_sent = Column(String(50))  # Customer Revision sent
+    customer_revision_received = Column(String(50))  # Customer Revision Received
+    rma_notes = Column(Text)  # Notes/Comments section for RMA
+
+    # Group linking fields
+    group_id = Column(Integer, ForeignKey("traveler_groups.id"), nullable=True)
+    group_sequence = Column(Integer, nullable=True)
+    group_label = Column(String(50), nullable=True)
+
     # Foreign keys
     part_id = Column(Integer, ForeignKey("parts.id"))
 
     # Relationships
     creator = relationship("User", back_populates="created_travelers")
     part = relationship("Part", back_populates="travelers")
+    group = relationship("TravelerGroup", back_populates="travelers")
     process_steps = relationship("ProcessStep", back_populates="traveler")
     manual_steps = relationship("ManualStep", back_populates="traveler")
     labor_entries = relationship("LaborEntry", back_populates="traveler")
     approvals = relationship("Approval", back_populates="traveler")
     audit_logs = relationship("AuditLog", back_populates="traveler")
+    rma_units = relationship("RmaUnitTracking", back_populates="traveler", cascade="all, delete-orphan")
 
 class ProcessStep(Base):
     __tablename__ = "process_steps"
@@ -196,6 +232,35 @@ class ManualStep(Base):
     # Relationships
     traveler = relationship("Traveler", back_populates="manual_steps")
 
+class RmaUnitTracking(Base):
+    """Tracks individual RMA units/serial numbers with their inspection/repair status.
+    Maps to the serial number tracking table in the RMA Router Word templates."""
+    __tablename__ = "rma_unit_tracking"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id", ondelete="CASCADE"), nullable=False)
+    unit_number = Column(Integer, nullable=False)  # Row number (No.)
+    serial_number = Column(String(100))  # Unit Serial Number
+    customer_complaint = Column(Text)  # Customer Complaint
+    incoming_inspection_notes = Column(Text)  # Incoming Inspection Result/Note
+    disposition = Column(Text)  # Disposition of unit
+    troubleshooting_notes = Column(Text)  # Troubleshooting/Testing notes
+    repairing_notes = Column(Text)  # Repairing notes
+    final_inspection_notes = Column(Text)  # Final Inspection Notes
+    # Additional fields for RMA_DIFF type (per-unit original job info)
+    customer_ncr = Column(String(100))  # Customer NCR (per unit, for diff jobs)
+    original_po_number = Column(String(255))  # Original PO Number (per unit)
+    original_wo_number = Column(String(50))  # Original WO Number (per unit)
+    customer_revision_sent = Column(String(50))  # Customer Revision sent (per unit)
+    customer_revision_received = Column(String(50))  # Customer Revision Received (per unit)
+    original_built_quantity = Column(Integer)  # Original Built Quantity (per unit)
+    units_shipped = Column(Integer)  # Number of units shipped (per unit)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    traveler = relationship("Traveler", back_populates="rma_units")
+
+
 class LaborEntry(Base):
     __tablename__ = "labor_entries"
 
@@ -229,8 +294,51 @@ class PauseLog(Base):
     resumed_at = Column(DateTime(timezone=True), nullable=True)
     duration_seconds = Column(Float, nullable=True)  # Calculated on resume
     comment = Column(Text, nullable=True)
+    reason = Column(String(32), nullable=True, default="BREAK")  # BREAK | WAITING_PARTS
 
     labor_entry = relationship("LaborEntry", back_populates="pause_logs")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Phase A: Dedicated Kitting Timer subsystem
+#
+# Lives ALONGSIDE labor_entries (does not replace it). Each row in
+# kitting_timer_sessions is one continuous interval of either ACTIVE
+# (operator kitting) or WAITING_PARTS (paused for parts) state. A
+# session has end_time IS NULL if it is currently open.
+# kitting_event_logs is the audit timeline for each transition.
+# ─────────────────────────────────────────────────────────────────────
+
+
+class KittingTimerSession(Base):
+    __tablename__ = "kitting_timer_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id", ondelete="CASCADE"), nullable=False, index=True)
+    step_id = Column(Integer, ForeignKey("process_steps.id"), nullable=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_type = Column(String(20), nullable=False)  # 'ACTIVE' | 'WAITING_PARTS'
+    start_time = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    end_time = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Float, nullable=True)  # populated on close
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class KittingEventLog(Base):
+    __tablename__ = "kitting_event_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("kitting_timer_sessions.id", ondelete="SET NULL"), nullable=True)
+    event_type = Column(String(32), nullable=False)
+    # event_type values:
+    #   TIMER_STARTED, TIMER_PAUSED_WAITING, TIMER_RESUMED,
+    #   TIMER_STOPPED, PARTS_RECEIVED, MANUAL_OVERRIDE
+    source = Column(String(20), nullable=False, default="user")  # 'user' | 'kosh' | 'system'
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    payload = Column(Text, nullable=True)  # optional JSON-as-text for extra context
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 class Approval(Base):
     __tablename__ = "approvals"

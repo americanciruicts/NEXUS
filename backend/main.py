@@ -9,7 +9,7 @@ import re
 
 from database import engine, get_db
 from models import Base
-from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers, analytics
+from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers, analytics, analytics_advanced, jobs, kitting_timer
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -150,6 +150,61 @@ async def lifespan(app: FastAPI):
             print(f"✅ Seeded {count} work centers")
         else:
             print(f"Work centers already exist ({db.query(WorkCenter).count()} found)")
+
+        # Seed RMA work centers if they don't exist yet
+        rma_exists = db.query(WorkCenter).filter(WorkCenter.traveler_type == 'RMA_SAME').count()
+        if rma_exists == 0:
+            print("Seeding RMA work centers...")
+            RMA_WC_DATA = {
+                "RMA_SAME": [
+                    ("INCOMING INSPECTION", "Inspect incoming RMA units, verify quantity and condition", "Quality"),
+                    ("REPAIR", "Repair defective units per customer complaint", "Soldering"),
+                    ("COATING", "Apply conformal coating if required", "Coating"),
+                    ("TESTING", "Test repaired units per original test procedures", "Test"),
+                    ("INVENTORY", "Check parts before buying", "Purchasing"),
+                    ("PURCHASING", "Parts ordered and waiting to be received for repair", "Purchasing"),
+                    ("MISC.", "Miscellaneous operations as needed", "ALL"),
+                    ("FINAL INSPEC", "Final inspection - sample or 100% inspection", "Quality"),
+                    ("STOCK", "Check stock - do we have any PCBA or cable assemblies in stock?", "Receiving"),
+                    ("SHIPPING", "Ship repaired units back to customer", "Shipping"),
+                ],
+                "RMA_DIFF": [
+                    ("INCOMING INSPECTION", "Inspect incoming RMA units, verify quantity and condition", "Quality"),
+                    ("REPAIR", "Repair defective units per customer complaint", "Soldering"),
+                    ("COATING", "Apply conformal coating if required", "Coating"),
+                    ("TESTING", "Test repaired units per original test procedures", "Test"),
+                    ("INVENTORY", "Check parts before buying", "Purchasing"),
+                    ("PURCHASING", "Parts ordered and waiting to be received for repair", "Purchasing"),
+                    ("MISC.", "Miscellaneous operations as needed", "ALL"),
+                    ("FINAL INSPEC", "Final inspection - sample or 100% inspection", "Quality"),
+                    ("STOCK", "Check stock - do we have any PCBA or cable assemblies in stock?", "Receiving"),
+                    ("SHIPPING", "Ship repaired units back to customer", "Shipping"),
+                ],
+                "MODIFICATION": [
+                    ("INCOMING INSPECTION", "Inspect incoming modification units, verify quantity and condition", "Quality"),
+                    ("REPAIR", "Perform required modifications per work order", "Soldering"),
+                    ("COATING", "Apply conformal coating if required", "Coating"),
+                    ("TESTING", "Test modified units per test procedures", "Test"),
+                    ("INVENTORY", "Check parts before buying", "Purchasing"),
+                    ("PURCHASING", "Parts ordered and waiting to be received", "Purchasing"),
+                    ("MISC.", "Miscellaneous operations as needed", "ALL"),
+                    ("FINAL INSPEC", "Final inspection - sample or 100% inspection", "Quality"),
+                    ("SHIPPING", "Ship modified units back to customer", "Shipping"),
+                ],
+            }
+            rma_count = 0
+            for wc_type, items in RMA_WC_DATA.items():
+                for idx, (name, desc, dept) in enumerate(items):
+                    type_prefix = {"RMA_SAME": "RMAS", "RMA_DIFF": "RMAD", "MODIFICATION": "MOD"}
+                    code = f"{type_prefix[wc_type]}_{name.replace(' ', '_').replace('.', '').upper()}"
+                    existing = db.query(WorkCenter).filter(WorkCenter.code == code).first()
+                    if not existing:
+                        wc = WorkCenter(name=name, code=code, description=desc, traveler_type=wc_type, department=dept, sort_order=idx + 1, is_active=True)
+                        db.add(wc)
+                        rma_count += 1
+            db.commit()
+            print(f"Seeded {rma_count} RMA work centers")
+
         db.close()
     except Exception as e:
         print(f"Warning: Could not seed work centers: {e}")
@@ -321,6 +376,79 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not auto-migrate qty_completed column: {e}")
 
+    # Auto-migrate: add RMA enum values to travelertype
+    try:
+        from sqlalchemy import text as text_rma_enum
+        with engine.connect() as conn:
+            for val in ['RMA_SAME', 'RMA_DIFF', 'MODIFICATION']:
+                try:
+                    conn.execute(text_rma_enum(f"ALTER TYPE travelertype ADD VALUE IF NOT EXISTS '{val}'"))
+                except Exception:
+                    pass  # Value already exists
+            conn.commit()
+            print("Ensured RMA enum values exist in travelertype")
+    except Exception as e:
+        print(f"Warning: Could not add RMA enum values: {e}")
+
+    # Auto-migrate: add RMA-specific columns to travelers table and create rma_unit_tracking table
+    try:
+        from sqlalchemy import text, inspect as sa_inspect_rma
+        with engine.connect() as conn:
+            insp = sa_inspect_rma(engine)
+            traveler_cols = [c['name'] for c in insp.get_columns('travelers')]
+            rma_columns = {
+                'customer_contact': 'VARCHAR(100)',
+                'original_wo_number': 'VARCHAR(50)',
+                'original_po_number': 'VARCHAR(255)',
+                'return_po_number': 'VARCHAR(255)',
+                'rma_po_number': 'VARCHAR(255)',
+                'invoice_number': 'VARCHAR(100)',
+                'customer_ncr': 'VARCHAR(100)',
+                'original_built_quantity': 'INTEGER',
+                'units_shipped': 'INTEGER',
+                'quantity_rma_issued': 'INTEGER',
+                'units_received': 'INTEGER',
+                'customer_revision_sent': 'VARCHAR(50)',
+                'customer_revision_received': 'VARCHAR(50)',
+                'rma_notes': 'TEXT',
+            }
+            for col_name, col_type in rma_columns.items():
+                if col_name not in traveler_cols:
+                    conn.execute(text(f"ALTER TABLE travelers ADD COLUMN {col_name} {col_type}"))
+                    print(f"Added '{col_name}' column to travelers table")
+            conn.commit()
+
+            # Create rma_unit_tracking table if it doesn't exist
+            table_names = insp.get_table_names()
+            if 'rma_unit_tracking' not in table_names:
+                conn.execute(text("""
+                    CREATE TABLE rma_unit_tracking (
+                        id SERIAL PRIMARY KEY,
+                        traveler_id INTEGER NOT NULL REFERENCES travelers(id) ON DELETE CASCADE,
+                        unit_number INTEGER NOT NULL,
+                        serial_number VARCHAR(100),
+                        customer_complaint TEXT,
+                        incoming_inspection_notes TEXT,
+                        disposition TEXT,
+                        troubleshooting_notes TEXT,
+                        repairing_notes TEXT,
+                        final_inspection_notes TEXT,
+                        customer_ncr VARCHAR(100),
+                        original_po_number VARCHAR(255),
+                        original_wo_number VARCHAR(50),
+                        customer_revision_sent VARCHAR(50),
+                        customer_revision_received VARCHAR(50),
+                        original_built_quantity INTEGER,
+                        units_shipped INTEGER,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                conn.execute(text("CREATE INDEX ix_rma_unit_tracking_traveler_id ON rma_unit_tracking(traveler_id)"))
+                conn.commit()
+                print("Created 'rma_unit_tracking' table")
+    except Exception as e:
+        print(f"Warning: Could not auto-migrate RMA columns/table: {e}")
+
     # Ensure FINAL INSPECTION exists in PCB_ASSEMBLY work centers
     try:
         from database import SessionLocal
@@ -364,6 +492,27 @@ app = FastAPI(
     redirect_slashes=False
 )
 
+# Strip trailing slashes so /travelers/ works the same as /travelers
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+class TrailingSlashMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path != "/" and request.url.path.endswith("/"):
+            request.scope["path"] = request.url.path.rstrip("/")
+        response = await call_next(request)
+
+        # Add cache headers for GET requests (10 seconds browser cache)
+        if request.method == "GET" and response.status_code == 200:
+            path = request.url.path
+            # Don't cache auth, notifications, or active labor (needs to be real-time)
+            if not any(x in path for x in ['/auth/', '/notifications', '/labor/active', '/labor/init']):
+                response.headers["Cache-Control"] = "private, max-age=10, stale-while-revalidate=20"
+
+        return response
+
+app.add_middleware(TrailingSlashMiddleware)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -386,6 +535,9 @@ app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(work_centers.router, prefix="/work-centers-mgmt", tags=["work-centers"])
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(analytics_advanced.router, prefix="/analytics", tags=["analytics-advanced"])
+app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+app.include_router(kitting_timer.router, prefix="/kitting", tags=["kitting-timer"])
 
 @app.get("/")
 async def root():

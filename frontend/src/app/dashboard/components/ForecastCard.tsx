@@ -40,7 +40,9 @@ interface ForecastItem {
   job_number: string;
   part_number: string;
   part_description: string;
-  due_date: string;
+  customer_name?: string;
+  status?: string;
+  due_date: string | null;
   days_until_due: number | null;
   estimated_hours: number;
   buffer_hours: number;
@@ -54,8 +56,14 @@ interface ForecastItem {
   completed_steps: number;
   percent_complete: number;
   priority: string;
-  on_track: boolean;
+  on_track: boolean | null;
   steps: StepForecast[];
+  // KOSH inventory (optional — only present when KOSH job exists)
+  inventory_ready?: boolean | null;
+  total_bom_lines?: number;
+  lines_with_stock?: number;
+  shortage_lines?: number;
+  kosh_job_status?: string | null;
 }
 
 interface ForecastCardProps {
@@ -65,6 +73,7 @@ interface ForecastCardProps {
 const priorityColors: Record<string, string> = {
   HIGH: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   URGENT: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  PREMIUM: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
   NORMAL: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400',
   LOW: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
 };
@@ -72,10 +81,14 @@ const priorityColors: Record<string, string> = {
 export default function ForecastCard({ data }: ForecastCardProps) {
   const { theme } = useTheme();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const items = data || [];
-  const atRisk = items.filter(i => !i.on_track).length;
-  const onTrack = items.filter(i => i.on_track).length;
+  const atRisk = items.filter(i => i.on_track === false).length;
+  const onTrack = items.filter(i => i.on_track === true).length;
+  const noDueDate = items.filter(i => i.on_track === null).length;
+
+  const displayItems = showAll ? items : items.slice(0, 20);
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
@@ -86,9 +99,9 @@ export default function ForecastCard({ data }: ForecastCardProps) {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-white">Production Forecast</h3>
-              <p className="text-xs text-amber-200/80">Step-by-step timeline with buffer estimates</p>
+              <p className="text-xs text-amber-200/80">{items.length} active traveler{items.length !== 1 ? 's' : ''} &middot; Step-by-step timeline with buffer</p>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 flex-wrap justify-end">
               {onTrack > 0 && (
                 <span className="bg-green-500/80 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                   {onTrack} on track
@@ -97,6 +110,11 @@ export default function ForecastCard({ data }: ForecastCardProps) {
               {atRisk > 0 && (
                 <span className="bg-red-500/80 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                   {atRisk} at risk
+                </span>
+              )}
+              {noDueDate > 0 && (
+                <span className="bg-gray-500/80 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {noDueDate} no date
                 </span>
               )}
             </div>
@@ -126,16 +144,17 @@ export default function ForecastCard({ data }: ForecastCardProps) {
       </div>
 
       {/* Forecast Items */}
-      <div className="max-h-[600px] overflow-y-auto">
+      <div className="max-h-[700px] overflow-y-auto">
         {items.length === 0 ? (
           <div className="flex items-center justify-center h-32 p-4">
-            <p className="text-gray-500 dark:text-slate-400 text-sm">No forecast data</p>
+            <p className="text-gray-500 dark:text-slate-400 text-sm">No active travelers in production</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-slate-700">
-            {items.map((item) => {
+            {displayItems.map((item) => {
               const isOverdue = item.days_until_due !== null && item.days_until_due < 0;
               const isDueSoon = item.days_until_due !== null && item.days_until_due >= 0 && item.days_until_due <= 3;
+              const hasNoDueDate = item.due_date === null || item.due_date === '';
               const isExpanded = expandedId === item.id;
 
               return (
@@ -158,26 +177,35 @@ export default function ForecastCard({ data }: ForecastCardProps) {
                         <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${priorityColors[item.priority] || priorityColors.NORMAL}`}>
                           {item.priority}
                         </span>
+                        {item.status === 'CREATED' && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                            NOT STARTED
+                          </span>
+                        )}
                       </div>
                       <span className={`text-xs font-bold ${
+                        hasNoDueDate ? 'text-gray-400 dark:text-slate-500' :
                         isOverdue ? 'text-red-600 dark:text-red-400' :
                         isDueSoon ? 'text-amber-600 dark:text-amber-400' :
                         'text-green-600 dark:text-green-400'
                       }`}>
-                        {isOverdue ? `${Math.abs(item.days_until_due!)}d overdue` :
-                         item.days_until_due !== null ? `${item.days_until_due}d left` : 'No date'}
+                        {hasNoDueDate ? 'No due date' :
+                         isOverdue ? `${Math.abs(item.days_until_due!)}d overdue` :
+                         `${item.days_until_due}d left`}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400 mb-2">
-                      <span className="truncate mr-2">{item.part_number} {item.part_description ? `— ${item.part_description}` : ''}</span>
-                      <span className="flex-shrink-0">Due: {item.due_date}</span>
+                      <span className="truncate mr-2">
+                        {item.part_number} {item.part_description ? `— ${item.part_description}` : ''}
+                        {item.customer_name ? ` (${item.customer_name})` : ''}
+                      </span>
+                      {!hasNoDueDate && <span className="flex-shrink-0">Due: {item.due_date}</span>}
                     </div>
 
                     {/* Progress bar */}
                     <div className="flex items-center gap-2 mb-2">
                       <div className="flex-1 h-2.5 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
-                        {/* Actual progress */}
                         <div
                           className={`h-full rounded-full transition-all ${
                             isOverdue ? 'bg-red-500' :
@@ -196,6 +224,25 @@ export default function ForecastCard({ data }: ForecastCardProps) {
                       </span>
                     </div>
 
+                    {/* Inventory Status from KOSH */}
+                    {item.inventory_ready !== undefined && item.inventory_ready !== null && (item.total_bom_lines ?? 0) > 0 && (
+                      <div className={`flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded-lg text-xs font-medium ${
+                        item.inventory_ready
+                          ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                      }`}>
+                        <span>{item.inventory_ready ? '✓' : '!'}</span>
+                        <span>
+                          {item.inventory_ready
+                            ? `Parts ready — ${item.lines_with_stock ?? 0}/${item.total_bom_lines ?? 0} BOM lines in stock`
+                            : `${item.shortage_lines ?? 0} of ${item.total_bom_lines ?? 0} parts short — waiting on inventory`}
+                        </span>
+                        {item.kosh_job_status && (
+                          <span className="ml-auto text-[10px] opacity-70">KOSH: {item.kosh_job_status}</span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Key metrics row */}
                     <div className="grid grid-cols-4 gap-2">
                       <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2 py-1.5 text-center">
@@ -211,15 +258,33 @@ export default function ForecastCard({ data }: ForecastCardProps) {
                       <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2 py-1.5 text-center">
                         <div className="text-[10px] text-amber-500 dark:text-amber-400 uppercase font-semibold">Remaining</div>
                         <div className="text-sm font-bold text-amber-700 dark:text-amber-300">{formatDuration(item.remaining_buffered)}</div>
-                        <div className="text-[10px] text-amber-400 dark:text-amber-500">{formatDuration(item.work_hours_available)} avail</div>
+                        <div className="text-[10px] text-amber-400 dark:text-amber-500">
+                          {hasNoDueDate ? 'no deadline' : `${formatDuration(item.work_hours_available)} avail`}
+                        </div>
                       </div>
-                      <div className={`rounded-lg px-2 py-1.5 text-center ${item.on_track ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                        <div className={`text-[10px] uppercase font-semibold ${item.on_track ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>Headcount</div>
-                        <div className={`text-sm font-bold ${item.on_track ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>
+                      <div className={`rounded-lg px-2 py-1.5 text-center ${
+                        item.on_track === true ? 'bg-emerald-50 dark:bg-emerald-900/20' :
+                        item.on_track === false ? 'bg-red-50 dark:bg-red-900/20' :
+                        'bg-gray-50 dark:bg-slate-700/50'
+                      }`}>
+                        <div className={`text-[10px] uppercase font-semibold ${
+                          item.on_track === true ? 'text-emerald-500 dark:text-emerald-400' :
+                          item.on_track === false ? 'text-red-500 dark:text-red-400' :
+                          'text-gray-500 dark:text-slate-400'
+                        }`}>Headcount</div>
+                        <div className={`text-sm font-bold ${
+                          item.on_track === true ? 'text-emerald-700 dark:text-emerald-300' :
+                          item.on_track === false ? 'text-red-700 dark:text-red-300' :
+                          'text-gray-700 dark:text-slate-300'
+                        }`}>
                           {item.min_headcount} {item.min_headcount === 1 ? 'person' : 'people'}
                         </div>
-                        <div className={`text-[10px] ${item.on_track ? 'text-emerald-400 dark:text-emerald-500' : 'text-red-400 dark:text-red-500'}`}>
-                          {item.on_track ? 'On track' : 'At risk'}
+                        <div className={`text-[10px] ${
+                          item.on_track === true ? 'text-emerald-400 dark:text-emerald-500' :
+                          item.on_track === false ? 'text-red-400 dark:text-red-500' :
+                          'text-gray-400 dark:text-slate-500'
+                        }`}>
+                          {item.on_track === true ? 'On track' : item.on_track === false ? 'At risk' : 'No deadline'}
                         </div>
                       </div>
                     </div>
@@ -281,7 +346,7 @@ export default function ForecastCard({ data }: ForecastCardProps) {
                                   )}
                                 </div>
                                 {/* Mini progress bar for this step */}
-                                {!step.is_completed && step.actual_hours > 0 && (
+                                {!step.is_completed && step.actual_hours > 0 && step.buffered_total > 0 && (
                                   <div className="mt-1 flex items-center gap-1.5">
                                     <div className="flex-1 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
                                       <div
@@ -317,6 +382,18 @@ export default function ForecastCard({ data }: ForecastCardProps) {
           </div>
         )}
       </div>
+
+      {/* Show All / Show Less toggle */}
+      {items.length > 20 && (
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/30 text-center">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs font-medium text-teal-600 dark:text-teal-400 hover:underline"
+          >
+            {showAll ? `Show less (20 of ${items.length})` : `Show all ${items.length} travelers`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

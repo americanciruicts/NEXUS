@@ -408,10 +408,9 @@ async def get_dashboard_stats(
         return {"hours": 1.0, "operators": 1}
 
     try:
+        # Include ALL non-completed travelers (active + drafts)
         forecast_travelers = db.query(Traveler).filter(
-            Traveler.status.in_([TravelerStatus.IN_PROGRESS, TravelerStatus.CREATED]),
-            Traveler.is_active == True,
-            Traveler.due_date.isnot(None)
+            Traveler.status.in_([TravelerStatus.IN_PROGRESS, TravelerStatus.CREATED, TravelerStatus.DRAFT, TravelerStatus.ON_HOLD]),
         ).all()
 
         for t in forecast_travelers:
@@ -438,14 +437,14 @@ async def get_dashboard_stats(
             # Days until due
             try:
                 due = datetime.strptime(t.due_date, "%Y-%m-%d")
-                days_until_due = (due - datetime.now()).days
+                days_until_due = (due.date() - datetime.now(timezone.utc).date()).days
             except Exception:
                 days_until_due = None
 
             # Work hours available (8h/day, weekdays only)
             work_hours_available = 0
             if days_until_due is not None and days_until_due > 0:
-                current = datetime.now()
+                current = datetime.now(timezone.utc)
                 for d in range(days_until_due):
                     check_day = current + timedelta(days=d+1)
                     if check_day.weekday() < 5:  # Mon-Fri
@@ -494,14 +493,86 @@ async def get_dashboard_stats(
                 min_headcount = 1
 
             percent_complete = round(total_completed_steps / total_steps * 100, 1) if total_steps > 0 else 0
-            on_track = (days_until_due is not None and days_until_due > 0 and
-                        (work_hours_available >= remaining_buffered or percent_complete >= 100))
+
+            # ── KOSH inventory check for this job ──
+            inventory_ready = None  # None = no KOSH job found
+            total_bom_lines = 0
+            lines_with_stock = 0
+            shortage_lines = 0
+            kosh_job_status = None
+            try:
+                from routers.jobs import get_kosh_connection
+                kosh_conn = get_kosh_connection()
+                kosh_cur = kosh_conn.cursor()
+                # Strip L/M suffixes to get base job number for KOSH lookup
+                base_job = t.job_number.rstrip('LM') if t.job_number else t.job_number
+
+                kosh_cur.execute('SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s', (t.job_number,))
+                kosh_job = kosh_cur.fetchone()
+                kosh_job_number = t.job_number
+                if not kosh_job:
+                    kosh_cur.execute('SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s', (base_job,))
+                    kosh_job = kosh_cur.fetchone()
+                    if kosh_job:
+                        kosh_job_number = base_job
+
+                if kosh_job:
+                    kosh_order_qty = int(kosh_job[0] or 1)
+                    kosh_job_status = kosh_job[1]
+
+                    kosh_cur.execute("""
+                        WITH bom_items AS (
+                            SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
+                            FROM pcb_inventory."tblBOM" b
+                            WHERE b.job = %s
+                            ORDER BY b.aci_pn, b.line
+                        )
+                        SELECT
+                            bi.aci_pn,
+                            CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per_board,
+                            COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
+                        FROM bom_items bi
+                        LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                            ON bi.aci_pn = w.item OR bi.mpn = w.mpn
+                        GROUP BY bi.aci_pn, bi.qty
+                    """, (kosh_job_number,))
+                    bom_rows = kosh_cur.fetchall()
+                    total_bom_lines = len(bom_rows)
+                    for row in bom_rows:
+                        req = int(row[1] or 0) * kosh_order_qty
+                        oh = int(row[2] or 0)
+                        if oh >= req:
+                            lines_with_stock += 1
+                        else:
+                            shortage_lines += 1
+
+                    inventory_ready = shortage_lines == 0 and total_bom_lines > 0
+
+                kosh_conn.close()
+            except Exception:
+                pass  # KOSH unavailable — skip inventory check
+
+            # On-track: combine due date + inventory readiness
+            if percent_complete >= 100:
+                on_track = True
+            elif days_until_due is not None and days_until_due > 0:
+                on_track = work_hours_available >= remaining_buffered
+            elif days_until_due is not None and days_until_due <= 0:
+                on_track = False  # Overdue
+            else:
+                on_track = None  # No due date — unknown
+
+            # If inventory is short, mark at risk regardless
+            if inventory_ready is False and on_track is True:
+                on_track = False  # Parts missing — can't be on track
 
             forecast.append({
                 "id": t.id,
                 "job_number": t.job_number,
                 "part_number": t.part_number,
                 "part_description": t.part_description or "",
+                "customer_name": t.customer_name or "",
+                "status": t.status.value if t.status else "CREATED",
                 "due_date": t.due_date,
                 "days_until_due": days_until_due,
                 "estimated_hours": round(total_estimated, 1),
@@ -518,10 +589,21 @@ async def get_dashboard_stats(
                 "priority": t.priority.value if t.priority else "NORMAL",
                 "on_track": on_track,
                 "steps": step_forecasts,
+                # Inventory data from KOSH
+                "inventory_ready": inventory_ready,
+                "total_bom_lines": total_bom_lines,
+                "lines_with_stock": lines_with_stock,
+                "shortage_lines": shortage_lines,
+                "kosh_job_status": kosh_job_status,
             })
 
-        forecast.sort(key=lambda x: x["days_until_due"] if x["days_until_due"] is not None else 999)
-        forecast = forecast[:20]
+        # Sort: overdue first, then by days_until_due ascending, no-due-date last
+        forecast.sort(key=lambda x: (
+            0 if x["days_until_due"] is not None and x["days_until_due"] <= 0 else  # overdue first
+            1 if x["days_until_due"] is not None else  # has due date
+            2,  # no due date last
+            x["days_until_due"] if x["days_until_due"] is not None else 999
+        ))
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -553,3 +635,390 @@ async def get_dashboard_stats(
         forecast=forecast,
         active_labor_entries=active_labor_entries
     )
+
+
+@router.get("/insights")
+async def get_dashboard_insights(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """All-in-one insights endpoint for dashboard cards. Returns operator efficiency,
+    busiest work centers, idle operators, KOSH inventory insights, rejection rates,
+    bottlenecks, due date heatmap, overdue aging, throughput/labor/cycle trends."""
+    import math
+    from collections import defaultdict
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    # ─── 1. OPERATOR EFFICIENCY (actual vs estimated per person) ─────────────
+    operator_efficiency = []
+    try:
+        employees = db.query(
+            User.id, User.username, User.first_name, User.last_name,
+            func.sum(LaborEntry.hours_worked).label('actual_hours'),
+            func.count(LaborEntry.id).label('entry_count')
+        ).join(LaborEntry, LaborEntry.employee_id == User.id).filter(
+            LaborEntry.hours_worked > 0,
+            LaborEntry.end_time.isnot(None),
+            LaborEntry.created_at >= now - timedelta(days=30)
+        ).group_by(User.id).order_by(func.sum(LaborEntry.hours_worked).desc()).limit(15).all()
+
+        OPERATION_ESTIMATES = {
+            "KITTING": 1.5, "FEEDER LOAD": 1.0, "SMT SET UP": 1.5, "SMT TOP": 3.0,
+            "SMT BOTTOM": 3.0, "WASH": 0.75, "AOI": 1.5, "HAND SOLDER": 3.0,
+            "HAND ASSEMBLY": 2.5, "INSPECTION": 1.5, "INTERNAL TESTING": 2.0,
+            "LABELING": 0.5, "SHIPPING": 0.5, "DEPANEL": 1.0, "TRIM": 1.0,
+            "WAVE": 1.5, "MANUAL INSERTION": 2.0, "COMPONENT PREP": 1.5,
+        }
+
+        for emp in employees:
+            # Get their completed steps to estimate expected hours
+            completed_steps = db.query(ProcessStep.operation).join(
+                LaborEntry, LaborEntry.step_id == ProcessStep.id
+            ).filter(
+                LaborEntry.employee_id == emp.id,
+                LaborEntry.end_time.isnot(None),
+                LaborEntry.created_at >= now - timedelta(days=30)
+            ).all()
+            est_hours = sum(
+                next((v for k, v in OPERATION_ESTIMATES.items() if k in (s.operation or '').upper()), 1.0)
+                for s in completed_steps
+            )
+            actual = float(emp.actual_hours or 0)
+            efficiency = round((est_hours / actual * 100), 1) if actual > 0 else 0
+            operator_efficiency.append({
+                "name": f"{emp.first_name or ''} {emp.last_name or ''}".strip() or emp.username,
+                "username": emp.username,
+                "actual_hours": round(actual, 1),
+                "estimated_hours": round(est_hours, 1),
+                "efficiency": efficiency,
+                "entries": emp.entry_count,
+            })
+    except Exception as e:
+        print(f"Operator efficiency error: {e}")
+
+    # ─── 2. BUSIEST WORK CENTERS (active labor right now) ────────────────────
+    busiest_wc = []
+    try:
+        active = db.query(
+            LaborEntry.work_center,
+            func.count(LaborEntry.id).label('active_count'),
+            func.count(func.distinct(LaborEntry.employee_id)).label('operators')
+        ).filter(
+            LaborEntry.is_completed == False,
+            LaborEntry.end_time.is_(None)
+        ).group_by(LaborEntry.work_center).order_by(func.count(LaborEntry.id).desc()).all()
+
+        for wc in active:
+            busiest_wc.append({
+                "work_center": wc.work_center or "Unknown",
+                "active_entries": wc.active_count,
+                "operators": wc.operators,
+            })
+    except Exception as e:
+        print(f"Busiest WC error: {e}")
+
+    # ─── 3. IDLE OPERATORS (logged labor today but none active now) ──────────
+    idle_operators = []
+    try:
+        today_start = datetime.combine(today, datetime.min.time())
+        worked_today = db.query(func.distinct(LaborEntry.employee_id)).filter(
+            LaborEntry.created_at >= today_start
+        ).all()
+        worked_today_ids = {r[0] for r in worked_today}
+
+        active_now_ids = {r[0] for r in db.query(func.distinct(LaborEntry.employee_id)).filter(
+            LaborEntry.is_completed == False, LaborEntry.end_time.is_(None)
+        ).all()}
+
+        idle_ids = worked_today_ids - active_now_ids
+        if idle_ids:
+            for uid in idle_ids:
+                u = db.query(User).filter(User.id == uid).first()
+                last = db.query(LaborEntry).filter(
+                    LaborEntry.employee_id == uid, LaborEntry.end_time.isnot(None)
+                ).order_by(LaborEntry.end_time.desc()).first()
+                if u and last:
+                    idle_mins = (now - last.end_time).total_seconds() / 60 if last.end_time else 0
+                    idle_operators.append({
+                        "name": f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username,
+                        "last_activity": str(last.end_time) if last.end_time else None,
+                        "idle_minutes": round(idle_mins),
+                        "last_work_center": last.work_center or "",
+                    })
+            idle_operators.sort(key=lambda x: x["idle_minutes"], reverse=True)
+    except Exception as e:
+        print(f"Idle operators error: {e}")
+
+    # ─── 4 & 5. KOSH INVENTORY: jobs waiting on parts + top shortages ────────
+    jobs_waiting_on_parts = []
+    top_shortages = []
+    try:
+        from routers.jobs import get_kosh_connection
+        kosh_conn = get_kosh_connection()
+        kosh_cur = kosh_conn.cursor()
+
+        # Get jobs with shortages
+        kosh_cur.execute("""
+            WITH job_bom AS (
+                SELECT j.job_number, j.order_qty, j.customer, j.description, j.status,
+                       COUNT(DISTINCT b.aci_pn) as total_parts
+                FROM pcb_inventory."tblJob" j
+                JOIN pcb_inventory."tblBOM" b ON b.job = j.job_number
+                WHERE j.status IN ('New', 'In Prep', 'In Mfg')
+                GROUP BY j.job_number, j.order_qty, j.customer, j.description, j.status
+                HAVING COUNT(DISTINCT b.aci_pn) > 0
+            )
+            SELECT job_number, order_qty, customer, description, status, total_parts
+            FROM job_bom ORDER BY
+                CASE WHEN status = 'In Mfg' THEN 0 WHEN status = 'In Prep' THEN 1 ELSE 2 END,
+                job_number
+            LIMIT 50
+        """)
+        kosh_jobs = kosh_cur.fetchall()
+
+        shortage_items_map = defaultdict(lambda: {"jobs": [], "total_short": 0})
+
+        for kj in kosh_jobs:
+            job_num, order_qty_raw, customer, desc, status, total_parts = kj
+            order_qty = int(order_qty_raw or 1)
+
+            kosh_cur.execute("""
+                WITH bom_items AS (
+                    SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty, b."DESC"
+                    FROM pcb_inventory."tblBOM" b WHERE b.job = %s
+                    ORDER BY b.aci_pn, b.line
+                )
+                SELECT bi.aci_pn, bi."DESC",
+                    CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
+                    COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
+                FROM bom_items bi
+                LEFT JOIN pcb_inventory."tblWhse_Inventory" w ON bi.aci_pn = w.item OR bi.mpn = w.mpn
+                GROUP BY bi.aci_pn, bi."DESC", bi.qty
+            """, (job_num,))
+            parts = kosh_cur.fetchall()
+            short_count = 0
+            for p in parts:
+                req = int(p[2] or 0) * order_qty
+                oh = int(p[3] or 0)
+                if oh < req:
+                    short_count += 1
+                    shortage_items_map[p[0]]["jobs"].append(job_num)
+                    shortage_items_map[p[0]]["total_short"] += (req - oh)
+                    shortage_items_map[p[0]]["description"] = p[1] or ""
+
+            if short_count > 0:
+                jobs_waiting_on_parts.append({
+                    "job_number": job_num,
+                    "customer": customer or "",
+                    "description": desc or "",
+                    "status": status or "New",
+                    "total_parts": total_parts,
+                    "short_parts": short_count,
+                    "order_qty": order_qty,
+                })
+
+        # Top 10 shortage items
+        top_shortages = sorted(
+            [{"aci_pn": k, "description": v["description"], "short_qty": v["total_short"],
+              "affected_jobs": len(set(v["jobs"])), "jobs": list(set(v["jobs"]))[:5]}
+             for k, v in shortage_items_map.items()],
+            key=lambda x: x["affected_jobs"], reverse=True
+        )[:10]
+
+        kosh_conn.close()
+    except Exception as e:
+        print(f"KOSH insights error: {e}")
+
+    # ─── 6. REJECTION RATE PER WORK CENTER ───────────────────────────────────
+    rejection_rates = []
+    try:
+        steps_with_qty = db.query(
+            ProcessStep.operation,
+            func.sum(ProcessStep.quantity).label('total_qty'),
+            func.sum(ProcessStep.rejected).label('total_rejected'),
+            func.sum(ProcessStep.accepted).label('total_accepted'),
+        ).filter(
+            ProcessStep.quantity > 0
+        ).group_by(ProcessStep.operation).all()
+
+        for s in steps_with_qty:
+            total = int(s.total_qty or 0)
+            rejected = int(s.total_rejected or 0)
+            if total > 0 and rejected > 0:
+                rejection_rates.append({
+                    "work_center": s.operation,
+                    "total_qty": total,
+                    "rejected": rejected,
+                    "accepted": int(s.total_accepted or 0),
+                    "rejection_rate": round(rejected / total * 100, 1),
+                })
+        rejection_rates.sort(key=lambda x: x["rejection_rate"], reverse=True)
+    except Exception as e:
+        print(f"Rejection rate error: {e}")
+
+    # ─── 7. BOTTLENECK DETECTION ─────────────────────────────────────────────
+    bottlenecks = []
+    try:
+        # Steps with most travelers waiting (not completed, not the last step)
+        pending_by_op = db.query(
+            ProcessStep.operation,
+            func.count(ProcessStep.id).label('pending_count'),
+            func.avg(LaborEntry.hours_worked).label('avg_hours')
+        ).outerjoin(LaborEntry, LaborEntry.step_id == ProcessStep.id).filter(
+            ProcessStep.is_completed == False
+        ).group_by(ProcessStep.operation).order_by(
+            func.count(ProcessStep.id).desc()
+        ).limit(10).all()
+
+        for b in pending_by_op:
+            bottlenecks.append({
+                "work_center": b.operation,
+                "waiting_count": b.pending_count,
+                "avg_hours": round(float(b.avg_hours or 0), 1),
+            })
+    except Exception as e:
+        print(f"Bottleneck error: {e}")
+
+    # ─── 8. DUE DATE HEATMAP ────────────────────────────────────────────────
+    due_date_heatmap = {"overdue": 0, "today": 0, "this_week": 0, "next_week": 0, "later": 0, "no_date": 0}
+    try:
+        active_travelers = db.query(Traveler).filter(
+            Traveler.status.in_([TravelerStatus.IN_PROGRESS, TravelerStatus.CREATED])
+        ).all()
+        for t in active_travelers:
+            if not t.due_date:
+                due_date_heatmap["no_date"] += 1
+                continue
+            try:
+                due = datetime.strptime(t.due_date, "%Y-%m-%d").date()
+                diff = (due - today).days
+                if diff < 0:
+                    due_date_heatmap["overdue"] += 1
+                elif diff == 0:
+                    due_date_heatmap["today"] += 1
+                elif diff <= 7:
+                    due_date_heatmap["this_week"] += 1
+                elif diff <= 14:
+                    due_date_heatmap["next_week"] += 1
+                else:
+                    due_date_heatmap["later"] += 1
+            except Exception:
+                due_date_heatmap["no_date"] += 1
+    except Exception as e:
+        print(f"Due date heatmap error: {e}")
+
+    # ─── 9. OVERDUE AGING ────────────────────────────────────────────────────
+    overdue_aging = []
+    try:
+        for t in active_travelers:
+            if not t.due_date:
+                continue
+            try:
+                due = datetime.strptime(t.due_date, "%Y-%m-%d").date()
+                days_overdue = (today - due).days
+                if days_overdue > 0:
+                    overdue_aging.append({
+                        "job_number": t.job_number,
+                        "part_description": t.part_description or "",
+                        "customer_name": t.customer_name or "",
+                        "due_date": t.due_date,
+                        "days_overdue": days_overdue,
+                        "status": t.status.value if t.status else "",
+                    })
+            except Exception:
+                pass
+        overdue_aging.sort(key=lambda x: x["days_overdue"], reverse=True)
+    except Exception as e:
+        print(f"Overdue aging error: {e}")
+
+    # ─── 10. THROUGHPUT TREND (travelers completed per week, last 8 weeks) ───
+    throughput_trend = []
+    try:
+        for w in range(7, -1, -1):
+            week_start = today - timedelta(days=today.weekday() + 7 * w)
+            week_end = week_start + timedelta(days=6)
+            completed = db.query(func.count(Traveler.id)).filter(
+                Traveler.completed_at >= datetime.combine(week_start, datetime.min.time()),
+                Traveler.completed_at < datetime.combine(week_end + timedelta(days=1), datetime.min.time()),
+            ).scalar() or 0
+            created = db.query(func.count(Traveler.id)).filter(
+                Traveler.created_at >= datetime.combine(week_start, datetime.min.time()),
+                Traveler.created_at < datetime.combine(week_end + timedelta(days=1), datetime.min.time()),
+            ).scalar() or 0
+            throughput_trend.append({
+                "week": week_start.strftime("%m/%d"),
+                "completed": completed,
+                "created": created,
+            })
+    except Exception as e:
+        print(f"Throughput trend error: {e}")
+
+    # ─── 11. LABOR HOURS TREND (per day, last 14 days) ──────────────────────
+    labor_hours_trend = []
+    try:
+        for d in range(13, -1, -1):
+            day = today - timedelta(days=d)
+            day_start = datetime.combine(day, datetime.min.time())
+            day_end = datetime.combine(day + timedelta(days=1), datetime.min.time())
+            hours = db.query(func.sum(LaborEntry.hours_worked)).filter(
+                LaborEntry.start_time >= day_start,
+                LaborEntry.start_time < day_end,
+                LaborEntry.hours_worked > 0,
+            ).scalar() or 0
+            entries = db.query(func.count(LaborEntry.id)).filter(
+                LaborEntry.start_time >= day_start,
+                LaborEntry.start_time < day_end,
+            ).scalar() or 0
+            labor_hours_trend.append({
+                "date": day.strftime("%m/%d"),
+                "day": day.strftime("%a"),
+                "hours": round(float(hours), 1),
+                "entries": entries,
+            })
+    except Exception as e:
+        print(f"Labor hours trend error: {e}")
+
+    # ─── 12. CYCLE TIME TREND (avg days creation→completion, last 8 weeks) ──
+    cycle_time_trend = []
+    try:
+        for w in range(7, -1, -1):
+            week_start = today - timedelta(days=today.weekday() + 7 * w)
+            week_end = week_start + timedelta(days=6)
+            completed = db.query(Traveler).filter(
+                Traveler.completed_at >= datetime.combine(week_start, datetime.min.time()),
+                Traveler.completed_at < datetime.combine(week_end + timedelta(days=1), datetime.min.time()),
+                Traveler.completed_at.isnot(None),
+            ).all()
+            if completed:
+                cycle_days = []
+                for t in completed:
+                    if t.created_at and t.completed_at:
+                        diff = (t.completed_at - t.created_at).total_seconds() / 86400
+                        cycle_days.append(diff)
+                avg_days = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else 0
+            else:
+                avg_days = 0
+            cycle_time_trend.append({
+                "week": week_start.strftime("%m/%d"),
+                "avg_days": avg_days,
+                "count": len(completed),
+            })
+    except Exception as e:
+        print(f"Cycle time trend error: {e}")
+
+    return {
+        "operator_efficiency": operator_efficiency,
+        "busiest_work_centers": busiest_wc,
+        "idle_operators": idle_operators,
+        "jobs_waiting_on_parts": jobs_waiting_on_parts,
+        "top_shortages": top_shortages,
+        "rejection_rates": rejection_rates,
+        "bottlenecks": bottlenecks,
+        "due_date_heatmap": due_date_heatmap,
+        "overdue_aging": overdue_aging,
+        "throughput_trend": throughput_trend,
+        "labor_hours_trend": labor_hours_trend,
+        "cycle_time_trend": cycle_time_trend,
+    }

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 
 from database import get_db
-from models import User, LaborEntry, Traveler, ProcessStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog
+from models import User, LaborEntry, Traveler, ProcessStep, ManualStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
 
@@ -69,6 +69,7 @@ class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
     clear_pause: Optional[bool] = None  # Set to true to resume (clear pause_time)
     pause_comment: Optional[str] = None  # Comment for pause/resume
+    pause_reason: Optional[str] = None   # 'BREAK' (default) or 'WAITING_PARTS'
     end_time: Optional[datetime] = None
     description: Optional[str] = None
     is_completed: Optional[bool] = None
@@ -82,6 +83,7 @@ class PauseLogResponse(BaseModel):
     resumed_at: Optional[datetime] = None
     duration_seconds: Optional[float] = None
     comment: Optional[str] = None
+    reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -97,7 +99,7 @@ class LaborEntryResponse(BaseModel):
     pause_time: Optional[datetime] = None
     end_time: Optional[datetime]
     hours_worked: float
-    description: str
+    description: Optional[str] = ""
     is_completed: bool
     work_center: Optional[str] = None
     work_center_code: Optional[str] = None
@@ -117,6 +119,90 @@ class LaborEntryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+@router.get("/scan")
+async def scan_qr_lookup(
+    qr_data: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Parse a NEXUS-STEP QR code and return all fields from the database.
+    QR format: NEXUS-STEP|traveler_id|job_number|work_order|work_center_code|step_number|operation|step_type|step_id|company_code
+    """
+    if not qr_data.startswith("NEXUS-STEP|"):
+        raise HTTPException(status_code=400, detail="Invalid QR code format")
+
+    parts = qr_data.split("|")
+    if len(parts) < 10:
+        raise HTTPException(status_code=400, detail="Incomplete QR code data")
+
+    try:
+        qr_step_id = int(parts[8])
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="Invalid step_id in QR code")
+
+    # Determine step type from QR data
+    qr_step_type = parts[7] if len(parts) > 7 else "PROCESS"
+
+    if qr_step_type == "MANUAL":
+        # Look up manual step
+        manual_step = db.query(ManualStep).filter(ManualStep.id == qr_step_id).first()
+        if not manual_step:
+            raise HTTPException(status_code=404, detail=f"Manual step {qr_step_id} not found")
+
+        traveler = db.query(Traveler).filter(Traveler.id == manual_step.traveler_id).first()
+        if not traveler:
+            raise HTTPException(status_code=404, detail="Traveler not found for this step")
+
+        return {
+            "step_id": manual_step.id,
+            "traveler_id": traveler.id,
+            "job_number": traveler.job_number,
+            "work_order": traveler.work_order_number,
+            "operation": manual_step.description,  # e.g. "Manual Insertion"
+            "work_center_code": manual_step.description,
+            "work_center_name": manual_step.description,
+            "step_number": 0,
+            "step_type": "MANUAL",
+            "quantity": traveler.quantity,
+            "part_number": traveler.part_number,
+            "po_number": traveler.po_number,
+            "company_code": parts[9] if len(parts) > 9 else None,
+            "is_step_completed": manual_step.is_completed if hasattr(manual_step, 'is_completed') else False,
+        }
+
+    # Look up process step from DB
+    step = db.query(ProcessStep).filter(ProcessStep.id == qr_step_id).first()
+    if not step:
+        raise HTTPException(status_code=404, detail=f"Process step {qr_step_id} not found")
+
+    # Look up traveler
+    traveler = db.query(Traveler).filter(Traveler.id == step.traveler_id).first()
+    if not traveler:
+        raise HTTPException(status_code=404, detail="Traveler not found for this step")
+
+    # Look up work center for display name
+    work_center = None
+    if step.work_center_code:
+        work_center = db.query(WorkCenter).filter(WorkCenter.code == step.work_center_code).first()
+
+    return {
+        "step_id": step.id,
+        "traveler_id": traveler.id,
+        "job_number": traveler.job_number,
+        "work_order": traveler.work_order_number,
+        "operation": step.operation,  # e.g. "AOI", "FEEDER LOAD" — the display name
+        "work_center_code": step.work_center_code,
+        "work_center_name": work_center.name if work_center else step.operation,
+        "step_number": step.step_number,
+        "step_type": "PROCESS",
+        "quantity": traveler.quantity,
+        "part_number": traveler.part_number,
+        "po_number": traveler.po_number,
+        "company_code": traveler.company_code if hasattr(traveler, 'company_code') else parts[9] if len(parts) > 9 else None,
+        "is_step_completed": step.is_completed,
+    }
+
 
 @router.post("/", response_model=LaborEntryResponse)
 @router.post("", response_model=LaborEntryResponse, include_in_schema=False)
@@ -300,15 +386,23 @@ async def start_labor_entry(
     traveler = db.query(Traveler).filter(Traveler.id == db_labor_entry.traveler_id).first()
     db_labor_entry.job_number = traveler.job_number if traveler else None
 
-    # Create notification for all admins
+    # Create notification for all admins — include details for data recovery
     created_by_label = current_user.username
     if effective_employee_id != current_user.id:
         created_by_label = f"{current_user.username} (for {effective_employee.first_name})"
+    start_msg = f"{created_by_label} started labor entry for {traveler.job_number if traveler else 'Unknown Job'} - {work_center_name or 'Unknown Work Center'}"
+    start_details = []
+    if db_labor_entry.qty_completed:
+        start_details.append(f"QTY: {db_labor_entry.qty_completed}")
+    if db_labor_entry.comment:
+        start_details.append(f"Comment: {db_labor_entry.comment}")
+    if start_details:
+        start_msg += " | " + " | ".join(start_details)
     create_notification_for_admins(
         db=db,
         notification_type=NotificationType.LABOR_ENTRY_CREATED,
         title="New Labor Entry Started",
-        message=f"{created_by_label} started labor entry for {traveler.job_number if traveler else 'Unknown Job'} - {work_center_name or 'Unknown Work Center'}",
+        message=start_msg,
         reference_id=db_labor_entry.id,
         reference_type="labor_entry",
         created_by_username=current_user.username
@@ -345,10 +439,14 @@ async def update_labor_entry(
 
     # Log pause event
     if labor_data.pause_time:
+        reason = (labor_data.pause_reason or "BREAK").upper()
+        if reason not in ("BREAK", "WAITING_PARTS"):
+            reason = "BREAK"
         pause_log = PauseLog(
             labor_entry_id=labor_entry.id,
             paused_at=labor_data.pause_time,
-            comment=labor_data.pause_comment
+            comment=labor_data.pause_comment,
+            reason=reason,
         )
         db.add(pause_log)
 
@@ -422,7 +520,7 @@ async def update_labor_entry(
     traveler = db.query(Traveler).filter(Traveler.id == labor_entry.traveler_id).first()
     labor_entry.job_number = traveler.job_number if traveler else None
 
-    # Create notification for all admins
+    # Create notification for all admins — include comments, qty, hours for data recovery
     if labor_data.pause_time:
         action = "paused"
     elif labor_data.clear_pause:
@@ -431,11 +529,31 @@ async def update_labor_entry(
         action = "stopped"
     else:
         action = "updated"
+
+    job_label = traveler.job_number if traveler else 'Unknown Job'
+    wc_label = labor_entry.work_center or 'Unknown Work Center'
+    notif_msg = f"{current_user.username} {action} labor entry for {job_label} - {wc_label}"
+
+    # Append details so they're captured in notification history
+    details = []
+    if action == "paused" and labor_data.pause_comment:
+        details.append(f"Reason: {labor_data.pause_comment}")
+    if action == "resumed" and labor_data.pause_comment:
+        details.append(f"Resume note: {labor_data.pause_comment}")
+    if action == "stopped" and labor_entry.hours_worked:
+        details.append(f"Hours: {labor_entry.hours_worked}h")
+    if labor_entry.qty_completed:
+        details.append(f"QTY: {labor_entry.qty_completed}")
+    if labor_entry.comment:
+        details.append(f"Comment: {labor_entry.comment}")
+    if details:
+        notif_msg += " | " + " | ".join(details)
+
     create_notification_for_admins(
         db=db,
         notification_type=NotificationType.LABOR_ENTRY_UPDATED,
         title=f"Labor Entry {action.capitalize()}",
-        message=f"{current_user.username} {action} labor entry for {traveler.job_number if traveler else 'Unknown Job'} - {labor_entry.work_center or 'Unknown Work Center'}",
+        message=notif_msg,
         reference_id=labor_entry.id,
         reference_type="labor_entry",
         created_by_username=current_user.username
@@ -486,20 +604,39 @@ async def delete_labor_entry(
             detail="Labor entry not found"
         )
 
-    # Get info for notification before deletion
+    # Capture ALL info before deletion for notification (data recovery backup)
     traveler = db.query(Traveler).filter(Traveler.id == labor_entry.traveler_id).first()
     job_number = traveler.job_number if traveler else 'Unknown Job'
     work_center = labor_entry.work_center or 'Unknown Work Center'
+    del_details = []
+    if labor_entry.hours_worked:
+        del_details.append(f"Hours: {labor_entry.hours_worked}h")
+    if labor_entry.qty_completed:
+        del_details.append(f"QTY: {labor_entry.qty_completed}")
+    if labor_entry.comment:
+        del_details.append(f"Comment: {labor_entry.comment}")
+    if labor_entry.start_time:
+        del_details.append(f"Start: {labor_entry.start_time.strftime('%m/%d %H:%M')}")
+    if labor_entry.end_time:
+        del_details.append(f"End: {labor_entry.end_time.strftime('%m/%d %H:%M')}")
+    # Capture pause info
+    pause_logs = db.query(PauseLog).filter(PauseLog.labor_entry_id == labor_entry.id).all()
+    for pl in pause_logs:
+        if pl.comment:
+            del_details.append(f"Pause reason: {pl.comment}")
 
     db.delete(labor_entry)
     db.commit()
 
-    # Create notification for all admins
+    del_msg = f"{current_user.username} deleted labor entry for {job_number} - {work_center}"
+    if del_details:
+        del_msg += " | " + " | ".join(del_details)
+
     create_notification_for_admins(
         db=db,
         notification_type=NotificationType.LABOR_ENTRY_DELETED,
         title="Labor Entry Deleted",
-        message=f"{current_user.username} deleted labor entry for {job_number} - {work_center}",
+        message=del_msg,
         reference_id=labor_id,
         reference_type="labor_entry",
         created_by_username=current_user.username
@@ -678,6 +815,109 @@ async def get_traveler_labor_entries(
         result.append(LaborEntryResponse(**entry_dict))
 
     return result
+
+
+@router.get("/init")
+async def get_labor_init(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Combined endpoint: returns active entry + my entries + auto-stop check in one call."""
+    from sqlalchemy import func as sqlfunc
+
+    # 1. Active entry
+    active_entry = None
+    active_labor = db.query(LaborEntry).filter(
+        LaborEntry.employee_id == current_user.id,
+        LaborEntry.is_completed == False,
+        LaborEntry.end_time.is_(None)
+    ).order_by(LaborEntry.start_time.desc()).first()
+
+    if active_labor:
+        employee = db.query(User).filter(User.id == active_labor.employee_id).first()
+        traveler = db.query(Traveler).filter(Traveler.id == active_labor.traveler_id).first()
+        active_entry = {
+            "id": active_labor.id, "traveler_id": active_labor.traveler_id,
+            "step_id": active_labor.step_id, "employee_id": active_labor.employee_id,
+            "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
+            "job_number": traveler.job_number if traveler else None,
+            "start_time": str(active_labor.start_time), "pause_time": str(active_labor.pause_time) if active_labor.pause_time else None,
+            "end_time": None, "hours_worked": active_labor.hours_worked or 0,
+            "description": active_labor.description or "", "is_completed": False,
+            "work_center": active_labor.work_center, "sequence_number": active_labor.sequence_number,
+            "qty_completed": active_labor.qty_completed, "comment": active_labor.comment,
+            "created_at": str(active_labor.created_at),
+            "work_order": traveler.work_order_number if traveler else None,
+            "po_number": traveler.po_number if traveler else None,
+            "part_number": traveler.part_number if traveler else None,
+            "quantity": traveler.quantity if traveler else None,
+            **get_pause_data(db, active_labor.id)
+        }
+
+    # 2. My entries (same logic as /my-entries)
+    start_date = datetime.now() - timedelta(days=days)
+    if current_user.role == UserRole.ADMIN:
+        labor_entries = db.query(LaborEntry).filter(LaborEntry.created_at >= start_date).order_by(LaborEntry.created_at.desc()).all()
+    else:
+        labor_entries = db.query(LaborEntry).filter(LaborEntry.employee_id == current_user.id, LaborEntry.created_at >= start_date).order_by(LaborEntry.created_at.desc()).all()
+
+    employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
+    traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
+    employees = {u.id: u for u in db.query(User).filter(User.id.in_(employee_ids)).all()} if employee_ids else {}
+    travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
+
+    entries = []
+    for entry in labor_entries:
+        emp = employees.get(entry.employee_id)
+        trav = travelers.get(entry.traveler_id)
+        entry_dict = {
+            "id": entry.id, "traveler_id": entry.traveler_id, "step_id": entry.step_id,
+            "employee_id": entry.employee_id,
+            "employee_name": f"{emp.first_name} {emp.last_name}" if emp else "Unknown",
+            "job_number": trav.job_number if trav else None,
+            "start_time": entry.start_time, "pause_time": entry.pause_time,
+            "end_time": entry.end_time, "hours_worked": entry.hours_worked or 0,
+            "description": entry.description or "", "is_completed": entry.is_completed,
+            "work_center": entry.work_center, "work_center_code": None,
+            "sequence_number": entry.sequence_number, "qty_completed": entry.qty_completed,
+            "comment": entry.comment, "created_at": entry.created_at,
+            "work_order": trav.work_order_number if trav else None,
+            "po_number": trav.po_number if trav else None,
+            "part_number": trav.part_number if trav else None,
+            "quantity": trav.quantity if trav else None,
+            **get_pause_data(db, entry.id)
+        }
+        entries.append(entry_dict)
+
+    # 3. Auto-stop check (5pm)
+    auto_stopped = 0
+    now = datetime.now()
+    if now.hour >= 17:
+        running = db.query(LaborEntry).filter(LaborEntry.is_completed == False, LaborEntry.end_time.is_(None)).all()
+        for le in running:
+            if le.start_time and le.start_time.replace(tzinfo=None).date() < now.date():
+                end_dt = datetime.combine(le.start_time.replace(tzinfo=None).date(), datetime.strptime("17:00", "%H:%M").time())
+                if le.start_time.tzinfo is not None:
+                    end_dt = end_dt.replace(tzinfo=le.start_time.tzinfo)
+                le.end_time = end_dt
+                le.is_completed = True
+                if le.start_time:
+                    start_naive = le.start_time.replace(tzinfo=None)
+                    end_naive = le.end_time.replace(tzinfo=None) if le.end_time else start_naive
+                    diff = (end_naive - start_naive).total_seconds()
+                    pause_secs = sum(p.duration_seconds or 0 for p in db.query(PauseLog).filter(PauseLog.labor_entry_id == le.id).all())
+                    le.hours_worked = round(max(diff - pause_secs, 0) / 3600, 2)
+                auto_stopped += 1
+        if auto_stopped > 0:
+            db.commit()
+
+    return {
+        "active_entry": active_entry,
+        "entries": entries,
+        "auto_stopped": auto_stopped,
+    }
+
 
 @router.get("/my-entries", response_model=List[LaborEntryResponse])
 async def get_my_labor_entries(

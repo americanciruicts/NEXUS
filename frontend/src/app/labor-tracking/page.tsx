@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Layout from '@/components/layout/Layout';
 import Modal from '@/components/Modal';
 import { ClockIcon, UserIcon, DocumentTextIcon, PlayIcon, StopIcon, PencilIcon, TrashIcon, EyeIcon, CheckIcon } from '@heroicons/react/24/outline';
@@ -67,6 +67,7 @@ export default function LaborTrackingPage() {
     date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
   });
   const [jobWorkCenterOptions, setJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
+  const [workCenterConfirmed, setWorkCenterConfirmed] = useState(false);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -124,62 +125,63 @@ export default function LaborTrackingPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  // Drag reorder state (admin only)
+  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [manualOrder, setManualOrder] = useState(false);
+
   // Job Summary states
   const [jobListExpanded, setJobListExpanded] = useState(true);
   const [summaryJobSearch, setSummaryJobSearch] = useState('');
   const [selectedJobChip, setSelectedJobChip] = useState<string | null>(null);
 
-  // Auto-timer: track scan-based auto-start/stop
-  const autoStartTriggeredRef = useRef(false);
+  // Track the running timer's work center/step for auto-stop on re-scan
   const lastStartedWorkCenterRef = useRef<string>('');
-  const lastStartedWorkCenterCodeRef = useRef<string>(''); // e.g. PCB_ASSEMBLY_13_FEEDER_LOAD
+  const lastStartedWorkCenterCodeRef = useRef<string>('');
+  // Active traveler id for the currently-running labor entry. Used by the
+  // kitting timer mirror calls below — those endpoints take a traveler_id.
+  const lastStartedTravelerIdRef = useRef<number | null>(null);
   const lastStartedStepIdRef = useRef<number | undefined>(undefined);
-  const autoStartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Global scanner listener — ONLY for auto-stop when timer is running
-  // Detects rapid keystrokes (scanner) ending with Enter, extracts work center, stops timer
+  // Global scanner listener — auto-stop when timer is running
+  // Detects rapid keystrokes (scanner) ending with Enter, calls /labor/scan to verify match, stops timer
   const globalScanBufferRef = useRef('');
   const globalScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    if (!isTimerRunning) return; // Only active when timer is running
+    if (!isTimerRunning) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.key === 'Enter' && globalScanBufferRef.current.length > 1) {
         const scannedValue = globalScanBufferRef.current.trim();
         globalScanBufferRef.current = '';
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
 
-        // Extract work center info from QR code
-        // QR format: NEXUS-STEP|traveler_id|job_number|work_order|work_center_code|step_number|operation|step_type|step_id|company
-        let shouldStop = false;
         if (scannedValue.startsWith('NEXUS-STEP|')) {
-          const parts = scannedValue.split('|');
-          const qrWorkCenterCode = parts[4] || ''; // e.g. PCB_ASSEMBLY_13_FEEDER_LOAD
-          const qrOperation = parts[6] || '';       // e.g. FEEDER LOAD
-          const qrStepId = parts[8] ? parseInt(parts[8]) : 0;
+          try {
+            const token = localStorage.getItem('nexus_token');
+            const scanResp = await fetch(
+              `${API_BASE_URL}/labor/scan?qr_data=${encodeURIComponent(scannedValue)}`,
+              { headers: { 'Authorization': `Bearer ${token || 'mock-token'}` } }
+            );
+            if (scanResp.ok) {
+              const scanData = await scanResp.json();
+              // Match by step_id (most precise), work_center_code, or operation name
+              const shouldStop =
+                (scanData.step_id && scanData.step_id === lastStartedStepIdRef.current) ||
+                (scanData.work_center_code && scanData.work_center_code === lastStartedWorkCenterCodeRef.current) ||
+                (scanData.operation && scanData.operation.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase());
 
-          // Match by step_id (most precise), work_center_code, or operation name
-          if (qrStepId && qrStepId === lastStartedStepIdRef.current) {
-            shouldStop = true;
-          } else if (qrWorkCenterCode && qrWorkCenterCode.toLowerCase() === lastStartedWorkCenterCodeRef.current.toLowerCase()) {
-            shouldStop = true;
-          } else if (qrOperation && qrOperation.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
-            shouldStop = true;
-          }
-        } else {
-          // Raw text scan (not QR format) — compare directly
-          if (scannedValue.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
-            shouldStop = true;
+              if (shouldStop) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                stopTimer();
+              }
+            }
+          } catch (err) {
+            console.error('Global scan lookup failed:', err);
           }
         }
-
-        if (shouldStop) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-          stopTimer();
-        }
-
         return;
       }
 
@@ -209,11 +211,102 @@ export default function LaborTrackingPage() {
     }
   }, [user]);
 
+  // Combined init fetch — single API call for active entry + entries + auto-stop
+  const fetchLaborInit = async (silent = false) => {
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const res = await fetch(`${API_BASE_URL}/labor/init?days=30`, {
+        headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Set entries
+        const validEntries = (data.entries || []).filter((entry: LaborEntry) => entry.hours_worked >= 0);
+        setLaborEntries(validEntries);
+        // Set active entry
+        if (data.active_entry) {
+          setIsTimerRunning(true);
+          setActiveEntryId(data.active_entry.id);
+          lastStartedWorkCenterRef.current = data.active_entry.work_center || '';
+          lastStartedTravelerIdRef.current = data.active_entry.traveler_id || null;
+          setNewEntry(prev => ({
+            ...prev,
+            job_number: data.active_entry.job_number || '',
+            work_center: data.active_entry.work_center || '',
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching labor init:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    checkAutoStop5pm();
-    fetchLaborEntries();
-    checkActiveEntry();
+    fetchLaborInit();
+
+    // Auto-refresh every 60 seconds (silent) — reduced from 15s to cut API load
+    const pollInterval = setInterval(() => {
+      fetchLaborInit(true);
+    }, 60000);
+    return () => clearInterval(pollInterval);
   }, []);
+
+  // Auto-resolve QR scan data in work center field
+  // Scanner types NEXUS-STEP|...|AC (may add trailing chars like } or newline)
+  const qrResolveRef = useRef<NodeJS.Timeout | null>(null);
+  const qrResolvingRef = useRef(false);
+
+  const resolveQrCode = useCallback(async (rawValue: string) => {
+    if (qrResolvingRef.current) return;
+    qrResolvingRef.current = true;
+    try {
+      // Extract the NEXUS-STEP|...|AC part, strip any trailing junk
+      const match = rawValue.match(/(NEXUS-STEP\|[^}{\n\r]+\|AC)/);
+      if (!match) { qrResolvingRef.current = false; return; }
+      const qrString = match[1];
+
+      const token = localStorage.getItem('nexus_token');
+      const scanResp = await fetch(
+        `${API_BASE_URL}/labor/scan?qr_data=${encodeURIComponent(qrString)}`,
+        { headers: { 'Authorization': `Bearer ${token || 'mock-token'}` } }
+      );
+      if (scanResp.ok) {
+        const scanData = await scanResp.json();
+        setNewEntry(prev => ({
+          ...prev,
+          job_number: scanData.job_number || prev.job_number,
+          work_center: scanData.operation,
+          step_id: scanData.step_id,
+        }));
+        setWorkCenterConfirmed(true);
+        if (scanData.job_number) {
+          const steps = await fetchWorkCentersByJob(scanData.job_number);
+          setJobWorkCenterOptions(steps);
+        }
+        if (scanData.is_step_completed) {
+          toast.warning(`Step "${scanData.operation}" is already marked completed`);
+        }
+      }
+    } catch (err) {
+      console.error('QR resolve failed:', err);
+    } finally {
+      qrResolvingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (qrResolveRef.current) clearTimeout(qrResolveRef.current);
+    const wc = newEntry.work_center;
+    if (isTimerRunning || !wc.includes('NEXUS-STEP|')) return;
+    // Check the string has enough parts (at least 10 pipe-separated segments)
+    const pipeCount = (wc.match(/\|/g) || []).length;
+    if (pipeCount < 9) return; // Still typing, not complete yet
+
+    qrResolveRef.current = setTimeout(() => resolveQrCode(wc), 50);
+    return () => { if (qrResolveRef.current) clearTimeout(qrResolveRef.current); };
+  }, [newEntry.work_center, isTimerRunning, resolveQrCode]);
 
   // Autocomplete fetch functions
   const fetchJobNumbers = async (query: string) => {
@@ -385,30 +478,6 @@ export default function LaborTrackingPage() {
     };
   }, [isTimerRunning, startTime, isPaused]);
 
-  // Auto-start: when both job_number and work_center are filled, wait 800ms then start
-  // The debounce prevents triggering while scanner is still typing characters
-  useEffect(() => {
-    // Clear any pending auto-start
-    if (autoStartTimerRef.current) {
-      clearTimeout(autoStartTimerRef.current);
-      autoStartTimerRef.current = null;
-    }
-
-    const bothFilled = newEntry.job_number && newEntry.work_center && newEntry.operator_name;
-
-    if (bothFilled && !isTimerRunning && !autoStartTriggeredRef.current) {
-      autoStartTimerRef.current = setTimeout(() => {
-        autoStartTriggeredRef.current = true;
-        startTimer();
-      }, 800);
-    }
-
-    return () => {
-      if (autoStartTimerRef.current) {
-        clearTimeout(autoStartTimerRef.current);
-      }
-    };
-  }, [newEntry.job_number, newEntry.work_center, newEntry.operator_name, isTimerRunning]);
 
   const formatTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -455,10 +524,17 @@ export default function LaborTrackingPage() {
     return true;
   });
 
+  // Sort: latest start_time first (newest at top) — skip if admin manually reordered
+  const sortedEntries = manualOrder ? filteredEntries : [...filteredEntries].sort((a, b) => {
+    const dateA = new Date(a.start_time).getTime();
+    const dateB = new Date(b.start_time).getTime();
+    return dateB - dateA;
+  });
+
   // Pagination calculations
-  const totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedEntries.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedEntries = filteredEntries.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedEntries = sortedEntries.slice(startIndex, startIndex + itemsPerPage);
 
   // Reset page when filters change
   useEffect(() => {
@@ -499,6 +575,7 @@ export default function LaborTrackingPage() {
           const parts = data.description.split(' - ');
           if (parts.length >= 2) {
             const workCenterName = parts[0] || '';
+            setWorkCenterConfirmed(true);
             setNewEntry({
               job_number: data.job_number || '',
               work_center: workCenterName,
@@ -519,8 +596,8 @@ export default function LaborTrackingPage() {
     }
   };
 
-  const fetchLaborEntries = async () => {
-    setIsLoading(true);
+  const fetchLaborEntries = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const token = localStorage.getItem('nexus_token');
       const response = await fetch(`${API_BASE_URL}/labor/my-entries?days=30`, {
@@ -547,6 +624,10 @@ export default function LaborTrackingPage() {
   const startTimer = async () => {
     if (!newEntry.job_number || !newEntry.work_center || !newEntry.operator_name) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    if (!workCenterConfirmed) {
+      toast.error('Please select a work center from the dropdown');
       return;
     }
 
@@ -619,12 +700,16 @@ export default function LaborTrackingPage() {
         setIsTimerRunning(true);
         setTravelerMaxQty(traveler.quantity || null);
         lastStartedWorkCenterRef.current = newEntry.work_center; // display name e.g. "FEEDER LOAD"
+        lastStartedTravelerIdRef.current = traveler.id;
         // Find the matching work center code from job steps for QR auto-stop matching
         const matchingStep = jobWorkCenterOptions.find((s: any) =>
           s.value === newEntry.work_center || s.operation === newEntry.work_center || s.step_id === newEntry.step_id
         );
         lastStartedWorkCenterCodeRef.current = matchingStep?.work_center_code || matchingStep?.value || newEntry.work_center;
         lastStartedStepIdRef.current = newEntry.step_id;
+        // Mirror to dedicated kitting timer subsystem (silent / fire-and-forget)
+        // so we get the rich session log without interfering with labor tracking.
+        mirrorKittingTimer('start', traveler.id, newEntry.work_center);
         toast.success('Timer started!');
         fetchLaborEntries();
       } else {
@@ -636,6 +721,36 @@ export default function LaborTrackingPage() {
     }
   };
 
+  // ─── Kitting Timer mirror (silent, fire-and-forget) ─────────────────────
+  // Whenever the active labor entry is on a kitting work center, mirror the
+  // operator's start/pause-waiting/resume/stop to the dedicated /kitting/timer
+  // subsystem. Errors are swallowed so a kitting-side hiccup never blocks the
+  // labor entry. The kitting subsystem captures rich session + event data
+  // for analytics — operators don't need to do anything different.
+  const mirrorKittingTimer = (
+    action: 'start' | 'pause-waiting' | 'resume' | 'stop',
+    travelerId: number | null,
+    workCenter: string
+  ) => {
+    if (!travelerId) return;
+    if (!(workCenter || '').toUpperCase().includes('KIT')) return;
+    try {
+      const token = localStorage.getItem('nexus_token');
+      fetch(`${API_BASE_URL}/kitting/timer/${travelerId}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || 'mock-token'}`,
+        },
+        body: JSON.stringify({}),
+      }).catch(() => {
+        // Silent — kitting mirror is best-effort, never blocks labor flow.
+      });
+    } catch {
+      // Silent
+    }
+  };
+
   const pauseTimer = () => {
     if (!activeEntryId) {
       toast.error('No active timer found');
@@ -644,6 +759,51 @@ export default function LaborTrackingPage() {
     setPauseAction('pause');
     setPauseComment('');
     setShowPauseCommentModal(true);
+  };
+
+  // Pause specifically for "waiting on parts" — kitting jobs only.
+  // Tagged with reason=WAITING_PARTS so it shows up in the kitting analytics
+  // waiting metrics. Skips the comment modal for speed.
+  const pauseWaitingParts = async () => {
+    if (!activeEntryId) {
+      toast.error('No active timer found');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const currentPauseTime = new Date();
+      const response = await offlineFetch(`${API_BASE_URL}/labor/${activeEntryId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || 'mock-token'}`
+        },
+        body: JSON.stringify({
+          pause_time: currentPauseTime.toISOString(),
+          pause_comment: 'Waiting on parts',
+          pause_reason: 'WAITING_PARTS',
+        }),
+        offlineType: 'labor_pause'
+      });
+      const data = await response.json();
+      if (data.offline && data.queued) {
+        setIsPaused(true);
+        setPauseTime(currentPauseTime);
+        toast.info('Offline: Waiting-parts pause saved locally.');
+      } else if (response.ok) {
+        setIsPaused(true);
+        setPauseTime(currentPauseTime);
+        // Mirror to kitting subsystem
+        mirrorKittingTimer('pause-waiting', lastStartedTravelerIdRef.current, lastStartedWorkCenterRef.current);
+        toast.info('Paused — waiting on parts');
+        fetchLaborEntries();
+      } else {
+        toast.error(`Error: ${data.detail || 'Failed to set waiting state'}`);
+      }
+    } catch (error) {
+      console.error('Error pausing for waiting parts:', error);
+      toast.error('Error setting waiting state');
+    }
   };
 
   const executePause = async (comment?: string) => {
@@ -718,6 +878,8 @@ export default function LaborTrackingPage() {
       } else if (response.ok) {
         setIsPaused(false);
         setPauseTime(null);
+        // Mirror to kitting subsystem (only fires if WC is kitting)
+        mirrorKittingTimer('resume', lastStartedTravelerIdRef.current, lastStartedWorkCenterRef.current);
         toast.info('Timer resumed!');
         fetchLaborEntries();
       } else {
@@ -773,6 +935,8 @@ export default function LaborTrackingPage() {
         setIsQtyModalOpen(false);
         toast.info('Offline: Stop saved locally. Will sync when back online.');
       } else if (response.ok) {
+        // Mirror to kitting subsystem (only fires if WC was kitting)
+        mirrorKittingTimer('stop', lastStartedTravelerIdRef.current, lastStartedWorkCenterRef.current);
         setIsTimerRunning(false);
         setIsPaused(false);
         setElapsedTime(0);
@@ -791,8 +955,9 @@ export default function LaborTrackingPage() {
         setJobWorkCenterOptions([]);
         lastStartedWorkCenterRef.current = '';
         lastStartedWorkCenterCodeRef.current = '';
+        lastStartedTravelerIdRef.current = null;
         lastStartedStepIdRef.current = undefined;
-        autoStartTriggeredRef.current = false;
+
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else if (response.status === 404) {
@@ -815,8 +980,9 @@ export default function LaborTrackingPage() {
         setJobWorkCenterOptions([]);
         lastStartedWorkCenterRef.current = '';
         lastStartedWorkCenterCodeRef.current = '';
+        lastStartedTravelerIdRef.current = null;
         lastStartedStepIdRef.current = undefined;
-        autoStartTriggeredRef.current = false;
+
         toast.warning('Timer entry no longer exists. Timer has been reset.');
         fetchLaborEntries();
       } else {
@@ -1357,46 +1523,80 @@ export default function LaborTrackingPage() {
                     onChange={(value) => {
                       if (!isTimerRunning) {
                         setNewEntry(prev => ({ ...prev, work_center: value, step_id: undefined }));
+                        setWorkCenterConfirmed(false);
                       }
                     }}
-                    onSelect={(option: any) => {
+                    onSelect={async (option: any) => {
                       let selectedWC = option.value || option.label;
                       let stepId = option.step_id;
 
-                      // Parse QR code format: NEXUS-STEP|traveler_id|job_number|work_order|work_center_code|step_number|operation|step_type|step_id|company
+                      // QR code scan: call backend to resolve DB metrics instead of text parsing
                       if (selectedWC.startsWith('NEXUS-STEP|')) {
-                        const parts = selectedWC.split('|');
-                        const qrWorkCenterCode = parts[4] || '';
-                        const qrOperation = parts[6] || '';
-                        stepId = parts[8] ? parseInt(parts[8]) : undefined;
-                        // Use the operation name as the display value (e.g. "FEEDER LOAD")
-                        selectedWC = qrOperation || qrWorkCenterCode;
+                        try {
+                          const token = localStorage.getItem('nexus_token');
+                          const scanResp = await fetch(
+                            `${API_BASE_URL}/labor/scan?qr_data=${encodeURIComponent(selectedWC)}`,
+                            { headers: { 'Authorization': `Bearer ${token || 'mock-token'}` } }
+                          );
+                          if (!scanResp.ok) {
+                            const err = await scanResp.json().catch(() => ({}));
+                            toast.error(`Scan error: ${err.detail || 'Failed to look up step'}`);
+                            return;
+                          }
+                          const scanData = await scanResp.json();
 
-                        // Also auto-fill job number if empty
-                        const qrJobNumber = parts[2] || '';
-                        if (qrJobNumber && !newEntry.job_number) {
-                          setNewEntry(prev => ({ ...prev, job_number: qrJobNumber }));
+                          // Use operation name from DB (e.g. "AOI", "FEEDER LOAD") — NOT work_center_code
+                          selectedWC = scanData.operation;
+                          stepId = scanData.step_id;
+
+                          // Auto-stop if timer is running and same step scanned
+                          if (isTimerRunning) {
+                            if (
+                              scanData.step_id === lastStartedStepIdRef.current ||
+                              scanData.work_center_code === lastStartedWorkCenterCodeRef.current ||
+                              scanData.operation.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()
+                            ) {
+                              stopTimer();
+                            }
+                            return;
+                          }
+
+                          // Auto-fill job number from DB
+                          setNewEntry(prev => ({
+                            ...prev,
+                            job_number: scanData.job_number || prev.job_number,
+                            work_center: scanData.operation, // display name like "AOI"
+                            step_id: scanData.step_id,
+                          }));
+                          setWorkCenterConfirmed(true);
+
+                          if (scanData.is_step_completed) {
+                            toast.warning(`Step "${scanData.operation}" is already marked completed`);
+                          }
+
+                          // Fetch work center options for this job
+                          if (scanData.job_number) {
+                            const steps = await fetchWorkCentersByJob(scanData.job_number);
+                            setJobWorkCenterOptions(steps);
+                          }
+
+                          return;
+                        } catch (error) {
+                          console.error('QR scan lookup failed:', error);
+                          toast.error('Failed to look up scanned data');
+                          return;
                         }
                       }
 
                       if (isTimerRunning) {
-                        // Check if scanned QR matches the running timer's work center
-                        const qrParts = (option.value || '').split('|');
-                        const qrWCCode = qrParts[4] || '';
-                        const qrOp = qrParts[6] || '';
-                        const qrSid = qrParts[8] ? parseInt(qrParts[8]) : 0;
-
-                        const matchesCode = qrWCCode && qrWCCode.toLowerCase() === lastStartedWorkCenterCodeRef.current.toLowerCase();
-                        const matchesOp = qrOp && qrOp.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase();
-                        const matchesStep = qrSid && qrSid === lastStartedStepIdRef.current;
-                        const matchesName = selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase();
-
-                        if (matchesStep || matchesCode || matchesOp || matchesName) {
+                        // Non-QR selection while timer running — check for match
+                        if (selectedWC.toLowerCase() === lastStartedWorkCenterRef.current.toLowerCase()) {
                           stopTimer();
                         }
                         return;
                       }
                       setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: stepId }));
+                      setWorkCenterConfirmed(true);
                     }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps
@@ -1414,7 +1614,7 @@ export default function LaborTrackingPage() {
                       }
                       return fetchWorkCenters(query);
                     }}
-                    placeholder={isTimerRunning ? "Timer running — scan QR to stop" : "Type, scan QR, or select"}
+                    placeholder={isTimerRunning ? "Timer running — scan to stop" : "Type, scan, or select"}
                     disabled={isTimerRunning}
                     className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all dark:bg-slate-700 dark:text-slate-200"
                     minChars={0}
@@ -1450,7 +1650,7 @@ export default function LaborTrackingPage() {
                 {!isTimerRunning ? (
                   <button
                     onClick={startTimer}
-                    disabled={!newEntry.job_number || !newEntry.work_center || !newEntry.operator_name}
+                    disabled={!newEntry.job_number || !newEntry.work_center || !workCenterConfirmed || !newEntry.operator_name}
                     className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                   >
                     <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1459,15 +1659,34 @@ export default function LaborTrackingPage() {
                 ) : (
                   <>
                     {!isPaused ? (
-                      <button
-                        onClick={pauseTimer}
-                        className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
-                      >
-                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Pause</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={pauseTimer}
+                          className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                        >
+                          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>Pause</span>
+                        </button>
+                        {/* Waiting-on-parts pause — only relevant for kitting.
+                            Visibility uses the actively-running entry's work
+                            center (not the form), so it disappears immediately
+                            when stopping a kitting timer. */}
+                        {isTimerRunning && activeEntryId && (lastStartedWorkCenterRef.current || newEntry.work_center || '').toUpperCase().includes('KIT') && (
+                          <button
+                            onClick={pauseWaitingParts}
+                            title="Pause and mark this job as waiting on parts"
+                            className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                          >
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="hidden sm:inline">Waiting Parts</span>
+                            <span className="sm:hidden">Wait</span>
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <button
                         onClick={resumeTimer}
@@ -1736,6 +1955,14 @@ export default function LaborTrackingPage() {
                   <span className="text-xs font-semibold text-white bg-white/20 px-2 py-0.5 rounded-full">
                     {filteredEntries.length}
                   </span>
+                  {manualOrder && (
+                    <button
+                      onClick={() => setManualOrder(false)}
+                      className="text-[10px] font-medium text-white/80 bg-white/15 hover:bg-white/25 px-2 py-0.5 rounded-full transition-colors"
+                    >
+                      Reset order
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1916,6 +2143,11 @@ export default function LaborTrackingPage() {
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
                       {user?.role === 'ADMIN' && (
+                        <th className="px-1 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider w-8" title="Drag to reorder">
+                          <svg className="w-4 h-4 mx-auto text-white/60" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" /></svg>
+                        </th>
+                      )}
+                      {user?.role === 'ADMIN' && (
                         <th className="px-3 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">
                           <input
                             type="checkbox"
@@ -1959,7 +2191,37 @@ export default function LaborTrackingPage() {
 
                       return (
                         <React.Fragment key={entry.id}>
-                        <tr className={`transition-colors ${rowBg} ${hasComment ? 'border-b-0' : ''}`}>
+                        <tr
+                          className={`transition-colors ${rowBg} ${hasComment ? 'border-b-0' : ''} ${draggedId === entry.id ? 'opacity-40' : ''} ${dragOverId === entry.id ? 'border-t-2 border-t-blue-500' : ''}`}
+                          draggable={user?.role === 'ADMIN'}
+                          onDragStart={(e) => { if (user?.role === 'ADMIN') { setDraggedId(entry.id); e.dataTransfer.effectAllowed = 'move'; } }}
+                          onDragOver={(e) => { if (user?.role === 'ADMIN') { e.preventDefault(); setDragOverId(entry.id); } }}
+                          onDragLeave={() => setDragOverId(null)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setDragOverId(null);
+                            if (!draggedId || draggedId === entry.id) { setDraggedId(null); return; }
+                            // Reorder in local state only — no date changes
+                            setLaborEntries(prev => {
+                              const arr = [...prev];
+                              const fromIdx = arr.findIndex(le => le.id === draggedId);
+                              const toIdx = arr.findIndex(le => le.id === entry.id);
+                              if (fromIdx === -1 || toIdx === -1) return prev;
+                              const [moved] = arr.splice(fromIdx, 1);
+                              arr.splice(toIdx, 0, moved);
+                              return arr;
+                            });
+                            setManualOrder(true);
+                            toast.success('Entries reordered');
+                            setDraggedId(null);
+                          }}
+                          onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+                        >
+                          {user?.role === 'ADMIN' && (
+                            <td className={`px-1 py-3 whitespace-nowrap text-center cursor-grab active:cursor-grabbing ${hasComment ? 'pb-0' : ''}`} rowSpan={hasComment ? 2 : 1}>
+                              <svg className="w-4 h-4 mx-auto text-gray-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" /></svg>
+                            </td>
+                          )}
                           {user?.role === 'ADMIN' && (
                             <td className={`px-3 py-3 whitespace-nowrap ${hasComment ? 'pb-0' : ''}`} rowSpan={hasComment ? 2 : 1}>
                               <input
