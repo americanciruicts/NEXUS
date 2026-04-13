@@ -9,6 +9,10 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
 import { TravelerType } from '@/types';
+import TravelerFlowBar from '@/components/TravelerFlowBar';
+import TravelerGroupBadge from '@/components/TravelerGroupBadge';
+import JobDocuments from './JobDocuments';
+import CommunicationLogSection from './CommunicationLog';
 import {
   DndContext,
   closestCenter,
@@ -136,6 +140,26 @@ interface Traveler {
   customerRevisionReceived?: string;
   rmaNotes?: string;
   rmaUnits?: RmaUnit[];
+  // Group linking fields
+  groupId?: number | null;
+  groupSequence?: number | null;
+  groupLabel?: string | null;
+  groupInfo?: {
+    groupId: number;
+    groupName?: string;
+    currentSequence: number;
+    totalCount: number;
+    members: Array<{
+      id: number;
+      jobNumber: string;
+      travelerType: string;
+      groupSequence: number;
+      groupLabel?: string;
+      quantity: number;
+      status: string;
+      workOrderNumber?: string;
+    }>;
+  } | null;
 }
 
 // Sortable table row wrapper for drag-and-drop in desktop view
@@ -191,6 +215,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [shortageInfo, setShortageInfo] = useState<{ short: number; total_components: number; percent: number } | null>(null);
 
   // Track auto-filled values to require at least one change before saving
   const [autoFilledFrom, setAutoFilledFrom] = useState<{
@@ -347,7 +372,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             customerCode: String(data.customer_code || ''),
             customerName: String(data.customer_name || ''),
             status: String(data.status),
-            createdAt: String(data.created_at || '').split('T')[0],
+            createdAt: String(data.start_date || data.created_at || '').split('T')[0],
             dueDate: String(data.due_date || '').split('T')[0],
             shipDate: String(data.ship_date || '').split('T')[0],
             specs: specsArray,
@@ -402,6 +427,26 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   incoming_inspection_notes: '', disposition: '',
                   troubleshooting_notes: '', repairing_notes: '', final_inspection_notes: '',
                 })),
+            // Group linking fields
+            groupId: data.group_id || null,
+            groupSequence: data.group_sequence || null,
+            groupLabel: data.group_label || null,
+            groupInfo: data.group_info ? {
+              groupId: data.group_info.group_id,
+              groupName: data.group_info.group_name,
+              currentSequence: data.group_info.current_sequence,
+              totalCount: data.group_info.total_count,
+              members: (data.group_info.members || []).map((m: Record<string, unknown>) => ({
+                id: Number(m.id),
+                jobNumber: String(m.job_number),
+                travelerType: String(m.traveler_type),
+                groupSequence: Number(m.group_sequence),
+                groupLabel: m.group_label ? String(m.group_label) : undefined,
+                quantity: Number(m.quantity),
+                status: String(m.status),
+                workOrderNumber: m.work_order_number ? String(m.work_order_number) : undefined,
+              })),
+            } : null,
           };
           setTraveler(formattedTraveler);
           setEditedTraveler(formattedTraveler);
@@ -414,6 +459,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
           // Fetch department progress
           fetchDepartmentProgress(Number(data.id));
+
+          // Fetch shortage info for this job
+          try {
+            const shortageRes = await fetch(`${API_BASE_URL}/jobs/${encodeURIComponent(data.job_number)}/kitting-status`, {
+              headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
+            });
+            if (shortageRes.ok) {
+              const ks = await shortageRes.json();
+              if (ks.short > 0) {
+                setShortageInfo({ short: ks.short, total_components: ks.total_components, percent: ks.percent });
+              }
+            }
+          } catch { /* non-critical */ }
         } else {
           console.error('Failed to fetch traveler');
         }
@@ -638,8 +696,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const handleSave = async () => {
     if (!editedTraveler) return;
 
-    const newRevision = incrementRevision(editedTraveler.revision);
-
     try {
       const payload = {
         job_number: editedTraveler.jobNumber,
@@ -647,12 +703,13 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         po_number: editedTraveler.poNumber || '',
         part_number: editedTraveler.partNumber,
         part_description: editedTraveler.description,
-        revision: newRevision,
+        revision: editedTraveler.revision,
         customer_revision: editedTraveler.customerRevision || '',
         part_revision: editedTraveler.partRevision || '',
         quantity: Number(editedTraveler.quantity) || 0,
         customer_code: editedTraveler.customerCode || '',
         customer_name: editedTraveler.customerName || '',
+        start_date: editedTraveler.createdAt || '',
         due_date: editedTraveler.dueDate || '',
         ship_date: editedTraveler.shipDate || '',
         specs: typeof editedTraveler.specs === 'string' ? editedTraveler.specs : JSON.stringify(editedTraveler.specs),
@@ -1451,6 +1508,33 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       });
 
       toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.`);
+
+      // Check for BOM shortages (non-blocking warning)
+      try {
+        const shortageRes = await fetch(`${API_BASE_URL}/jobs/${encodeURIComponent(data.job_number)}/kitting-status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (shortageRes.ok) {
+          const ks = await shortageRes.json();
+          if (ks.short > 0) {
+            toast.warning(`This job has ${ks.short} component shortage${ks.short > 1 ? 's' : ''}. ${ks.kitted} of ${ks.total_components} components kitted (${ks.percent}%).`, { duration: 8000 });
+          }
+        }
+      } catch { /* non-critical */ }
+
+      // Check for existing active travelers (duplicate warning)
+      try {
+        const travelersRes = await fetch(`${API_BASE_URL}/jobs/${encodeURIComponent(data.job_number)}/travelers`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (travelersRes.ok) {
+          const td = await travelersRes.json();
+          const activeTravelers = (td.travelers || []).filter((t: { status: string }) => !['COMPLETED', 'CANCELLED', 'ARCHIVED'].includes(t.status));
+          if (activeTravelers.length > 0) {
+            toast.warning(`${activeTravelers.length} active traveler${activeTravelers.length > 1 ? 's' : ''} already exist${activeTravelers.length === 1 ? 's' : ''} for this job.`, { duration: 8000 });
+          }
+        }
+      } catch { /* non-critical */ }
     } catch (error) {
       console.error('Error looking up job number:', error);
       toast.error('Error looking up job number.');
@@ -2087,7 +2171,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         {/* Action Bar - Screen Only */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-3 no-print bg-white dark:bg-slate-800 shadow-md rounded-lg p-2 sm:p-4">
           <button
-            onClick={() => createMode ? router.push('/travelers') : router.back()}
+            onClick={() => router.push('/travelers')}
             className="flex items-center justify-start space-x-1 sm:space-x-2 px-2 sm:px-4 py-1.5 sm:py-2 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-sm sm:text-base font-medium"
           >
             <ArrowLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -2288,6 +2372,29 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
         </div>
 
+        {/* Shortage Warning Banner */}
+        {!createMode && shortageInfo && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 mb-3 no-print flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+              <div>
+                <p className="text-sm font-bold text-red-800 dark:text-red-300">
+                  {shortageInfo.short} Component Shortage{shortageInfo.short > 1 ? 's' : ''}
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {shortageInfo.percent}% kitted ({shortageInfo.total_components - shortageInfo.short} of {shortageInfo.total_components} components ready)
+                </p>
+              </div>
+            </div>
+            <a
+              href={`/jobs/${encodeURIComponent(traveler?.jobNumber || '')}`}
+              className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 px-3 py-1.5 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors whitespace-nowrap"
+            >
+              View BOM &rarr;
+            </a>
+          </div>
+        )}
+
         {/* Progress Tracking Section - Above Traveler Form */}
         {!createMode && departmentProgress.length > 0 && (
         <div className="bg-white dark:bg-slate-800 shadow-lg rounded-xl overflow-hidden no-print">
@@ -2449,6 +2556,22 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         </div>
         )}
 
+        {/* Traveler Flow Bar - shows linked travelers navigation */}
+        {displayTraveler.groupInfo && displayTraveler.groupInfo.members.length >= 2 && (
+          <TravelerFlowBar
+            members={displayTraveler.groupInfo.members.map(m => ({
+              id: m.id,
+              jobNumber: m.jobNumber,
+              travelerType: m.travelerType,
+              groupSequence: m.groupSequence,
+              groupLabel: m.groupLabel,
+              quantity: m.quantity,
+              status: m.status,
+            }))}
+            currentTravelerId={displayTraveler.travelerId}
+          />
+        )}
+
         {/* Main Traveler Form */}
         <div className={`bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black text-black dark:text-white print:!text-black ${isRmaType(displayTraveler.travelerType) ? 'rma-landscape-print' : ''}`} style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
           <div>
@@ -2490,6 +2613,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </div>
                   )}
                 </div>
+                {displayTraveler.groupInfo && (
+                  <div className="mt-1">
+                    <TravelerGroupBadge sequence={displayTraveler.groupInfo.currentSequence} total={displayTraveler.groupInfo.totalCount} label={displayTraveler.groupLabel || undefined} />
+                  </div>
+                )}
               </div>
               {/* Mobile Info - Organized by Sections */}
               <div className="space-y-3 text-xs">
@@ -2498,7 +2626,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <div className="font-bold text-blue-800 mb-1 text-sm">Customer Information</div>
                   <div className="space-y-1">
                     <div className="flex justify-between"><span className="font-semibold">Code:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerCode} onChange={(e) => updateField('customerCode', e.target.value)} className="w-32 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.customerCode || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Name:</span> <span className="text-right text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerName} onChange={(e) => updateField('customerName', e.target.value)} className="w-40 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.customerName || '-')}</span></div>
                   </div>
                 </div>
 
@@ -2556,19 +2683,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     />
                   ) : (
                     <span className="flex-1 text-base print:text-[8px] print:leading-tight overflow-hidden text-black dark:text-white">{displayTraveler.customerCode || '-'}</span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Cust. Name:</span>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editData.customerName}
-                      onChange={(e) => updateField('customerName', e.target.value)}
-                      className="flex-1 min-w-0 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm max-w-full text-black dark:text-white"
-                    />
-                  ) : (
-                    <span className="flex-1 text-base print:text-[8px] truncate text-black dark:text-white">{displayTraveler.customerName || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
@@ -2697,6 +2811,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       </div>
                     )}
                   </div>
+                  {displayTraveler.groupInfo && (
+                    <div className="mt-1 print:mt-0.5">
+                      <TravelerGroupBadge sequence={displayTraveler.groupInfo.currentSequence} total={displayTraveler.groupInfo.totalCount} label={displayTraveler.groupLabel || undefined} />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2756,10 +2875,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         onChange={(e) => updateField('createdAt', e.target.value)}
                         className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
                       />
-                      <span className="print-only flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.createdAt) || '-'}</span>
+                      <span className="print-only flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.createdAt) || '-'}</span>
                     </>
                   ) : (
-                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
+                    <span className="flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.createdAt) || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1 ">
@@ -2772,10 +2891,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         onChange={(e) => updateField('dueDate', e.target.value)}
                         className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
                       />
-                      <span className="print-only flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.dueDate) || '-'}</span>
+                      <span className="print-only flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.dueDate) || '-'}</span>
                     </>
                   ) : (
-                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
+                    <span className="flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1 ">
@@ -2788,10 +2907,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         onChange={(e) => updateField('shipDate', e.target.value)}
                         className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
                       />
-                      <span className="print-only flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.shipDate) || '-'}</span>
+                      <span className="print-only flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.shipDate) || '-'}</span>
                     </>
                   ) : (
-                    <span className="flex-1 text-right text-sm print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
+                    <span className="flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1">
@@ -2854,6 +2973,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             </div>
                           )}
                         </div>
+                        {displayTraveler.groupInfo && (
+                          <div className="mt-1 print:mt-0.5">
+                            <TravelerGroupBadge sequence={displayTraveler.groupInfo.currentSequence} total={displayTraveler.groupInfo.totalCount} label={displayTraveler.groupLabel || undefined} />
+                          </div>
+                        )}
                       </div>
                     </td>
                     {/* Center: RMA ROUTING title */}
@@ -2893,8 +3017,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 </colgroup>
                 <tbody>
                   <tr className="border-b border-gray-300 dark:border-slate-600">
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Name:</td>
-                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerName} onChange={(e) => updateField('customerName', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerName || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Code:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerCode} onChange={(e) => updateField('customerCode', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerCode || '-')}</td>
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Part Number:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.partNumber} onChange={(e) => updateField('partNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.partNumber || '-')}</td>
                   </tr>
@@ -3660,6 +3784,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <div className="text-gray-400 dark:text-slate-500 text-xs print:text-[8px]">Additional Instructions/Comments:</div>
             </div>
           </div>
+          )}
+
+          {/* Documents & Communication Log — screen only, not printed */}
+          {displayTraveler?.id && (
+            <>
+              <JobDocuments travelerId={Number(displayTraveler.id)} />
+              <CommunicationLogSection travelerId={Number(displayTraveler.id)} />
+            </>
           )}
 
           {/* RMA Page 2: Comments + Unit Tracking */}

@@ -441,6 +441,84 @@ class StepScanEvent(Base):
     # Relationships
     user = relationship("User")
 
+# ─────────────────────────────────────────────────────────────────────
+# Phase 3: Shift, Labor Rate, Documents, Quality Checklist, Comms Log
+# ─────────────────────────────────────────────────────────────────────
+
+class Shift(Base):
+    """Defines a named shift (e.g. Day, Swing, Night) with start/end hours."""
+    __tablename__ = "shifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False, unique=True)  # "Day", "Swing", "Night"
+    start_hour = Column(Integer, nullable=False, default=7)   # 0-23
+    end_hour = Column(Integer, nullable=False, default=15)    # 0-23 (can wrap)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class LaborRate(Base):
+    """Hourly labor rate by role or department. Falls back to a default rate."""
+    __tablename__ = "labor_rates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)  # e.g. "Default", "SMT Operator", "Engineering"
+    rate_per_hour = Column(Float, nullable=False, default=35.0)
+    department = Column(String(100), nullable=True)  # optional scoping
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class JobDocument(Base):
+    """File attachment on a traveler (engineering drawings, specs, quality notes)."""
+    __tablename__ = "job_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id", ondelete="CASCADE"), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    original_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer)  # bytes
+    content_type = Column(String(100))
+    category = Column(String(50), default="general")  # general, drawing, spec, quality, customer
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QualityCheckItem(Base):
+    """A single pass/fail check item in a quality checklist for a process step."""
+    __tablename__ = "quality_check_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    step_id = Column(Integer, ForeignKey("process_steps.id", ondelete="CASCADE"), nullable=False, index=True)
+    check_name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    sort_order = Column(Integer, default=0)
+    is_required = Column(Boolean, default=True)
+    passed = Column(Boolean, nullable=True)  # None=not checked, True=pass, False=fail
+    checked_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    checked_at = Column(DateTime(timezone=True), nullable=True)
+    fail_note = Column(Text, nullable=True)  # reason for failure
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CommunicationLog(Base):
+    """Customer/internal communication log entry for a traveler."""
+    __tablename__ = "communication_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    traveler_id = Column(Integer, ForeignKey("travelers.id", ondelete="CASCADE"), nullable=False, index=True)
+    comm_type = Column(String(30), nullable=False, default="note")  # note, email, phone, meeting
+    direction = Column(String(10), default="internal")  # internal, outbound, inbound
+    subject = Column(String(200), nullable=True)
+    message = Column(Text, nullable=False)
+    contact_name = Column(String(100), nullable=True)  # who was communicated with
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class WorkOrder(Base):
     __tablename__ = "work_orders"
 

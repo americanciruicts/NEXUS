@@ -9,7 +9,7 @@ import re
 
 from database import engine, get_db
 from models import Base
-from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers, analytics, analytics_advanced, jobs, kitting_timer
+from routers import travelers, users, work_orders, approvals, labor, auth, barcodes, notifications, search, dashboard, work_centers, analytics, analytics_advanced, jobs, kitting_timer, features
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -480,8 +480,33 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not check/add FINAL INSPECTION: {e}")
 
+    # Start background long-wait sweep (runs every 30 min)
+    import asyncio
+    async def sweep_long_waits_loop():
+        while True:
+            await asyncio.sleep(1800)  # 30 minutes
+            try:
+                from database import SessionLocal
+                from models import KittingTimerSession, Traveler
+                from routers.kitting_timer import _maybe_notify_long_wait, WAITING
+                db = SessionLocal()
+                open_waiting = db.query(KittingTimerSession).filter(
+                    KittingTimerSession.end_time.is_(None),
+                    KittingTimerSession.session_type == WAITING,
+                ).all()
+                for sess in open_waiting:
+                    traveler = db.query(Traveler).filter(Traveler.id == sess.traveler_id).first()
+                    if traveler:
+                        _maybe_notify_long_wait(db, traveler)
+                db.close()
+            except Exception as e:
+                print(f"Background sweep error: {e}")
+    sweep_task = asyncio.create_task(sweep_long_waits_loop())
+    print("Started background long-wait sweep (every 30 min)")
+
     yield
     # Shutdown
+    sweep_task.cancel()
     print("NEXUS Backend shutting down...")
 
 app = FastAPI(
@@ -538,6 +563,7 @@ app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 app.include_router(analytics_advanced.router, prefix="/analytics", tags=["analytics-advanced"])
 app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 app.include_router(kitting_timer.router, prefix="/kitting", tags=["kitting-timer"])
+app.include_router(features.router, prefix="/features", tags=["features"])
 
 @app.get("/")
 async def root():
