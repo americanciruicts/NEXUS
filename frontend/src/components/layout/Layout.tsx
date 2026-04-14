@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import Header from './Header';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 interface LayoutProps {
   children: ReactNode;
@@ -9,6 +10,8 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, fullWidth = false }: LayoutProps) {
+  useKeyboardShortcuts();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100 transition-colors duration-200">
       <Header />

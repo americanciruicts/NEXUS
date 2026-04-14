@@ -1,151 +1,130 @@
 // NEXUS Service Worker - Full Offline Support
-const CACHE_VERSION = 'nexus-v1';
-const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const API_CACHE = `${CACHE_VERSION}-api`;
-const PAGE_CACHE = `${CACHE_VERSION}-pages`;
+const CACHE_VERSION = 'nexus-v2';
+const CACHE_NAME = `${CACHE_VERSION}-all`;
 
-// Pages to pre-cache on install
-const PRECACHE_PAGES = [
-  '/',
-  '/dashboard',
-  '/travelers',
-  '/labor-tracking',
-  '/reports',
-  '/reports/analytics',
-  '/notifications',
-  '/profile',
-  '/auth/login',
-];
-
-// API paths to cache for offline reading
-const CACHEABLE_API_PATHS = [
-  '/travelers/dashboard-summary',
-  '/dashboard/stats',
-  '/analytics/all',
-  '/labor/',
-  '/notifications/',
-  '/work-centers-mgmt/',
-];
-
-// Install: pre-cache shell pages
+// Install: activate immediately
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(PAGE_CACHE).then((cache) => {
-      return Promise.allSettled(
-        PRECACHE_PAGES.map((url) =>
-          cache.add(url).catch((err) => console.log(`SW: Failed to cache ${url}:`, err.message))
-        )
-      );
-    }).then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: claim clients, clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((key) => !key.startsWith(CACHE_VERSION)).map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
   );
 });
 
-// Fetch strategy
+// Fetch handler
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests (mutations handled by offline queue in app)
+  // Skip non-GET (mutations handled by app's offline queue)
   if (request.method !== 'GET') return;
 
-  // Skip chrome-extension, webpack HMR, etc
+  // Skip non-http
   if (!url.protocol.startsWith('http')) return;
-  if (url.pathname.includes('__next') && url.pathname.includes('webpack')) return;
 
-  // API requests: network-first, fall back to cache
-  if (url.pathname.startsWith('/api/') || url.hostname !== self.location.hostname) {
-    const isApiCall = CACHEABLE_API_PATHS.some((p) => url.pathname.includes(p));
-    if (isApiCall || url.pathname.includes('/api/')) {
-      event.respondWith(networkFirstAPI(request));
-      return;
-    }
-  }
+  // Skip HMR / dev stuff
+  if (url.pathname.includes('__nextjs') || url.pathname.includes('webpack-hmr')) return;
 
-  // Static assets (_next/static): cache-first
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.match(/\.(js|css|woff2?|svg|png|jpg|ico)$/)) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
+  // For page navigations: network-first, cache fallback
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirstWithCache(request));
     return;
   }
 
-  // Page navigations: network-first with offline fallback
-  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(networkFirstPage(request));
+  // Next.js RSC requests (have special headers) — network-first
+  if (request.headers.get('rsc') === '1' || request.headers.get('next-router-state-tree')) {
+    event.respondWith(networkFirstWithCache(request));
     return;
   }
 
-  // Everything else: network with cache fallback
-  event.respondWith(networkFirstAPI(request));
+  // Static assets (JS, CSS, fonts, images) — cache-first (they have hashed filenames)
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.match(/\.(js|css|woff2?|svg|png|jpg|jpeg|gif|ico|webp)$/)
+  ) {
+    event.respondWith(cacheFirstWithNetwork(request));
+    return;
+  }
+
+  // API calls — network-first, serve cached if offline
+  if (url.pathname.startsWith('/api/') || (url.origin !== self.location.origin && url.pathname.includes('/'))) {
+    event.respondWith(networkFirstWithCache(request));
+    return;
+  }
+
+  // Everything else — network-first
+  event.respondWith(networkFirstWithCache(request));
 });
 
-// Cache-first for static assets
-async function cacheFirst(request, cacheName) {
+// Cache-first: great for immutable assets with hashed filenames
+async function cacheFirstWithNetwork(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
+
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
+    if (response.ok && response.status === 200) {
+      const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
     return response;
   } catch {
-    return new Response('Offline', { status: 503 });
+    return new Response('', { status: 503, statusText: 'Offline' });
   }
 }
 
-// Network-first for API calls, cache response for offline use
-async function networkFirstAPI(request) {
+// Network-first: try network, fall back to cache
+async function networkFirstWithCache(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(API_CACHE);
+    // Cache successful responses
+    if (response.ok && response.status === 200) {
+      const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
     return response;
   } catch {
+    // Network failed — try cache
     const cached = await caches.match(request);
     if (cached) return cached;
-    return new Response(JSON.stringify({ offline: true, message: 'You are offline. Showing cached data.' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
 
-// Network-first for page navigations
-async function networkFirstPage(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(PAGE_CACHE);
-      cache.put(request, response.clone());
+    // For navigation requests, try to serve the cached dashboard or any cached page
+    if (request.mode === 'navigate') {
+      // Try exact URL first
+      const exactCached = await caches.match(request.url);
+      if (exactCached) return exactCached;
+
+      // Try dashboard as fallback
+      const dashCached = await caches.match('/dashboard');
+      if (dashCached) return dashCached;
+
+      // Try root
+      const rootCached = await caches.match('/');
+      if (rootCached) return rootCached;
+
+      // Last resort: offline page
+      return new Response(offlineHTML(), {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
     }
-    return response;
-  } catch {
-    // Try cached version of this specific page
-    const cached = await caches.match(request);
-    if (cached) return cached;
 
-    // Try cached version of the dashboard as fallback
-    const dashCached = await caches.match('/dashboard');
-    if (dashCached) return dashCached;
+    // For API calls, return offline JSON
+    if (request.headers.get('accept')?.includes('application/json')) {
+      return new Response(
+        JSON.stringify({ offline: true, message: 'You are offline. Showing cached data.' }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Last resort: offline page
-    return new Response(offlineHTML(), {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' },
-    });
+    return new Response('', { status: 503, statusText: 'Offline' });
   }
 }
 
@@ -157,52 +136,67 @@ function offlineHTML() {
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>NEXUS - Offline</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-    .container { text-align: center; padding: 2rem; }
-    h1 { font-size: 1.5rem; color: #0d9488; margin-bottom: 0.5rem; }
-    p { color: #94a3b8; font-size: 0.875rem; margin: 0.5rem 0; }
-    .icon { font-size: 3rem; margin-bottom: 1rem; }
-    .retry { margin-top: 1.5rem; padding: 0.75rem 2rem; background: #0d9488; color: white; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; font-size: 0.875rem; }
-    .retry:hover { background: #0f766e; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .c { text-align: center; padding: 2rem; max-width: 400px; }
+    .icon { width: 64px; height: 64px; margin: 0 auto 1.5rem; background: #1e293b; border-radius: 16px; display: flex; align-items: center; justify-content: center; }
+    .icon svg { width: 32px; height: 32px; color: #f59e0b; }
+    h1 { font-size: 1.25rem; color: #f8fafc; margin-bottom: 0.5rem; font-weight: 700; }
+    p { color: #94a3b8; font-size: 0.8125rem; line-height: 1.5; margin-bottom: 0.75rem; }
+    .hint { background: #1e293b; border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0; }
+    .hint p { font-size: 0.75rem; margin: 0; }
+    .btn { margin-top: 1rem; padding: 0.625rem 1.5rem; background: #0d9488; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.8125rem; transition: background 0.2s; }
+    .btn:hover { background: #0f766e; }
+    .btn:active { transform: scale(0.98); }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="icon">&#128268;</div>
-    <h1>NEXUS Offline</h1>
-    <p>You're currently offline. The page you requested isn't cached yet.</p>
-    <p>Previously visited pages will load from cache automatically.</p>
-    <button class="retry" onclick="window.location.reload()">Retry Connection</button>
+  <div class="c">
+    <div class="icon">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728m-2.829-2.829a5 5 0 000-7.07m-4.243 9.9a9 9 0 01-4.95-4.95M3 3l18 18"/>
+      </svg>
+    </div>
+    <h1>You're Offline</h1>
+    <p>NEXUS can't connect to the internet right now.</p>
+    <div class="hint">
+      <p><strong>Tip:</strong> Visit pages while online first — they'll be available offline automatically. Previously visited pages should still work.</p>
+    </div>
+    <button class="btn" onclick="window.location.reload()">Try Again</button>
   </div>
 </body>
 </html>`;
 }
 
-// Listen for sync events (Background Sync API)
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'nexus-offline-sync') {
-    event.waitUntil(syncOfflineData());
-  }
-});
-
-// Message handler for manual sync trigger
+// Listen for messages from the app
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SYNC_OFFLINE') {
-    syncOfflineData().then(() => {
-      event.ports?.[0]?.postMessage({ synced: true });
+    // Notify all clients to run their sync logic
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => client.postMessage({ type: 'RUN_SYNC' }));
     });
   }
   if (event.data?.type === 'CLEAR_CACHE') {
-    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+    caches.delete(CACHE_NAME);
+  }
+  if (event.data?.type === 'PRECACHE_PAGES') {
+    // Pre-cache pages in background
+    const pages = event.data.pages || [];
+    caches.open(CACHE_NAME).then((cache) => {
+      pages.forEach((url) => {
+        fetch(url, { credentials: 'same-origin' })
+          .then((res) => { if (res.ok) cache.put(url, res); })
+          .catch(() => {});
+      });
+    });
   }
 });
 
-async function syncOfflineData() {
-  // This is triggered by background sync or manual message
-  // The actual sync logic lives in the app (offlineSync.ts) since it needs IndexedDB
-  // We just notify all clients to run sync
-  const clients = await self.clients.matchAll();
-  clients.forEach((client) => {
-    client.postMessage({ type: 'RUN_SYNC' });
-  });
-}
+// Background Sync
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'nexus-offline-sync') {
+    self.clients.matchAll().then((clients) => {
+      clients.forEach((client) => client.postMessage({ type: 'RUN_SYNC' }));
+    });
+  }
+});

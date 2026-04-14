@@ -1,1 +1,15 @@
 .vercel
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Next.js build artifacts
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+
+# Env files
+.env
+.env.local

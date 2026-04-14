@@ -3,9 +3,10 @@ Global Search Router
 Provides search functionality across travelers, users, work orders, and labor entries
 """
 
+import re
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func, distinct
+from sqlalchemy import or_, and_, not_, func, distinct
 from typing import List, Optional
 from database import get_db
 from models import Traveler, User, WorkOrder, LaborEntry, ProcessStep, WorkCenter, UserRole
@@ -29,8 +30,8 @@ async def global_search(
 
     search_term = f"%{q}%"
 
-    # Search Travelers
-    travelers = db.query(Traveler).filter(
+    # Search Travelers (with ITAR filtering)
+    traveler_query = db.query(Traveler).filter(
         or_(
             Traveler.job_number.ilike(search_term),
             Traveler.work_order_number.ilike(search_term),
@@ -39,7 +40,15 @@ async def global_search(
             Traveler.customer_name.ilike(search_term),
             Traveler.customer_code.ilike(search_term)
         )
-    ).limit(limit).all()
+    )
+
+    # ITAR filtering for non-privileged users
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+    if not is_admin and not has_itar_access:
+        traveler_query = traveler_query.filter(not_(Traveler.job_number.op('~')(r'[0-9]M[L[:space:]]|[0-9]M$|[0-9]ML$')))
+
+    travelers = traveler_query.limit(limit).all()
 
     traveler_results = [
         {

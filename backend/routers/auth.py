@@ -9,7 +9,7 @@ import httpx
 import logging
 
 from database import get_db
-from models import User, NotificationType
+from models import User, UserRole, NotificationType
 from schemas.user_schemas import UserLogin, Token, UserCreate, User as UserSchema, PasswordReset
 from services.notification_service import create_notification_for_admins
 
@@ -215,10 +215,27 @@ async def sso_callback(request: Request, db: Session = Depends(get_db)):
     username = payload.get("sub", "")
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail=f"User '{username}' not found in NEXUS. Please ask an admin to create your NEXUS account."
+        # Auto-create user from FORGE SSO data
+        logger.info(f"Auto-creating NEXUS user from FORGE SSO: {username}")
+        forge_name = username.split("@")[0] if "@" in username else username
+        # Capitalize first letter for display name
+        display_name = forge_name.capitalize()
+        placeholder_password = get_password_hash(f"sso-{username}-{datetime.now(timezone.utc).isoformat()}")
+        user = User(
+            username=username,
+            email=username if "@" in username else f"{username}@americancircuits.com",
+            first_name=display_name,
+            last_name="",
+            hashed_password=placeholder_password,
+            role=UserRole.OPERATOR,
+            is_approver=False,
+            is_itar=False,
+            is_active=True,
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        logger.info(f"Auto-created NEXUS user: {user.username} (id={user.id})")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="User account is inactive in NEXUS")
 

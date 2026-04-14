@@ -1806,18 +1806,44 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             page: rma-landscape;
           }
           /* RMA print-specific overrides */
-          .rma-landscape-print table { font-size: 9px !important; }
+          .rma-landscape-print table { font-size: 12px !important; }
           .rma-landscape-print table td,
-          .rma-landscape-print table th { padding: 2px 4px !important; }
+          .rma-landscape-print table th { padding: 3px 5px !important; }
           .rma-landscape-print .bg-gray-100 { padding: 4px 8px !important; }
           .rma-landscape-print .bg-gray-50 { padding: 2px 6px !important; }
           /* RMA: Keep header + routing steps on page 1, unit tracking on page 2 */
           .rma-landscape-print .rma-page1-content { page-break-inside: avoid !important; break-inside: avoid !important; }
           .rma-landscape-print .rma-page2-content { page-break-before: always !important; break-before: page !important; }
-          /* RMA barcode in print - ensure visible */
-          .rma-landscape-print img[alt*="Barcode"] { width: auto !important; height: 36px !important; max-width: 180px !important; }
-          .rma-landscape-print .rma-header-table td { padding: 1px 6px !important; font-size: 9px !important; line-height: 1.3 !important; }
-          .rma-landscape-print .rma-header-table .font-bold { font-size: 8px !important; }
+          /* RMA barcode in print — keep bars crisp for laser scanners.
+             Do NOT force height/width: native size from backend is print-grade (300dpi);
+             CSS scaling introduces anti-aliasing that breaks scanning. */
+          .rma-landscape-print img[alt*="Barcode"],
+          .rma-landscape-print .rma-header-banner img {
+            width: auto !important;
+            height: auto !important;
+            max-width: none !important;
+            max-height: 130px !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            filter: contrast(1.5) brightness(0.95) !important;
+            image-rendering: pixelated !important;
+            image-rendering: -moz-crisp-edges !important;
+            image-rendering: crisp-edges !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background: white !important;
+          }
+          .rma-landscape-print .rma-header-table td { padding: 8px 14px !important; font-size: 17px !important; line-height: 1.5 !important; }
+          .rma-landscape-print .rma-header-table .font-bold { font-size: 16px !important; }
+          .rma-landscape-print .rma-header-table input { font-size: 16px !important; padding: 4px 8px !important; }
+          /* RMA top banner: enlarged Job No / RMA ROUTING / stock column */
+          .rma-landscape-print .rma-header-banner td { padding: 12px 16px !important; font-size: 18px !important; line-height: 1.4 !important; }
+          .rma-landscape-print .rma-header-banner .text-xl { font-size: 36px !important; }
+          .rma-landscape-print .rma-header-banner .text-2xl { font-size: 42px !important; }
+          .rma-landscape-print .rma-header-banner .text-lg { font-size: 26px !important; }
+          .rma-landscape-print .rma-header-banner .text-\\[10px\\] { font-size: 15px !important; }
+          .rma-landscape-print .rma-header-banner .font-bold { font-size: 18px !important; }
           /* Compact routing table for print */
           .rma-landscape-print .routing-table-desktop td { padding: 1px 3px !important; font-size: 8px !important; height: 22px !important; }
           .rma-landscape-print .routing-table-desktop th { padding: 1px 3px !important; font-size: 8px !important; }
@@ -2948,17 +2974,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           <div className="border-b-2 border-black dark:border-slate-600 print:break-inside-avoid">
             {/* Top banner: RMA Job No. + Barcode | RMA ROUTING | To Stock / From Stock / Ship VIA */}
             <div className="bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600">
-              <table className="w-full border-collapse" style={{tableLayout: 'fixed'}}>
+              <table className="w-full border-collapse rma-header-banner" style={{tableLayout: 'fixed'}}>
                 <tbody>
                   <tr>
                     {/* Left: Job No + Barcode */}
-                    <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-2 print:py-1 align-middle" style={{width: '40%'}}>
+                    <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 align-middle" style={{width: '40%'}}>
                       <div className="flex items-center gap-3 flex-wrap">
                         <div>
-                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[7px]">
+                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px]">
                             {displayTraveler.travelerType === 'MODIFICATION' ? 'Modification' : 'RMA'} Job No.
                           </div>
-                          <div className="text-xl font-black text-black dark:text-white print:text-[14px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
+                          <div className="text-xl font-black text-black dark:text-white print:text-[26px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
                             {isEditing ? (
                               <input type="text" value={editData.jobNumber} onChange={(e) => updateField('jobNumber', e.target.value)} className="w-40 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-xl font-black text-black dark:text-white" />
                             ) : (displayTraveler.jobNumber)}
@@ -2966,9 +2992,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         </div>
                         <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
                           {headerBarcode ? (
-                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14 print:h-10" style={{ objectFit: 'contain', width: 'auto', maxWidth: '200px' }} />
+                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} />
                           ) : (
-                            <div className="flex items-center justify-center h-14 print:h-10" style={{width: '160px'}}>
+                            <div className="flex items-center justify-center h-14 print:h-28" style={{width: '160px'}}>
                               <span className="text-[10px] text-gray-400">{createMode ? 'Barcode after save' : 'Loading...'}</span>
                             </div>
                           )}
@@ -2981,12 +3007,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       </div>
                     </td>
                     {/* Center: RMA ROUTING title */}
-                    <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-2 print:py-1 text-center align-middle" style={{width: '25%'}}>
-                      <div className="text-2xl font-black text-black dark:text-white print:text-[14px] tracking-wider" style={{fontWeight: '900'}}>RMA</div>
-                      <div className="text-lg font-bold text-black dark:text-white print:text-[11px] tracking-widest">ROUTING</div>
+                    <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 text-center align-middle" style={{width: '25%'}}>
+                      <div className="text-2xl font-black text-black dark:text-white print:text-[30px] tracking-wider" style={{fontWeight: '900'}}>RMA</div>
+                      <div className="text-lg font-bold text-black dark:text-white print:text-[18px] tracking-widest">ROUTING</div>
                     </td>
                     {/* Right: To Stock / From Stock / Ship VIA */}
-                    <td className="px-4 py-3 print:px-2 print:py-1 align-middle text-sm print:text-[9px]" style={{width: '35%'}}>
+                    <td className="px-4 py-3 print:px-4 print:py-3 align-middle text-sm print:text-[13px]" style={{width: '35%'}}>
                       <div className="space-y-1.5 print:space-y-0.5">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-black dark:text-white min-w-[85px] print:min-w-[65px]">To Stock:</span>
@@ -3008,7 +3034,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
             {/* RMA Details - proper 4-column table: Label | Value | Label | Value */}
             <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600">
-              <table className="w-full border-collapse text-sm print:text-[9px] rma-header-table">
+              <table className="w-full border-collapse text-sm print:text-[13px] rma-header-table">
                 <colgroup>
                   <col style={{width: '18%'}} />
                   <col style={{width: '32%'}} />

@@ -4,7 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ToastProvider from "@/components/providers/ToastProvider";
-import OfflineIndicator from "@/components/OfflineIndicator";
+import LazyOfflineIndicator from "@/components/LazyOfflineIndicator";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -41,7 +41,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('nexus_theme');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(e){}})();`
+            __html: `(function(){try{var t=localStorage.getItem('nexus_theme');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(e){}})();
+/* Catch chunk load failures after deploy — reload cleanly instead of crashing */
+window.addEventListener('error',function(e){if(e.message&&(e.message.indexOf('Loading chunk')!==-1||e.message.indexOf('ChunkLoadError')!==-1)){e.preventDefault();window.location.reload();}},true);
+window.addEventListener('unhandledrejection',function(e){if(e.reason&&e.reason.name==='ChunkLoadError'){e.preventDefault();window.location.reload();}});`
           }}
         />
       </head>
@@ -54,7 +57,7 @@ export default function RootLayout({
           </ThemeProvider>
         </ErrorBoundary>
         <ToastProvider />
-        <OfflineIndicator />
+        <LazyOfflineIndicator />
       </body>
     </html>
   );

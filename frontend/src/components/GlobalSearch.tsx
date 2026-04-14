@@ -323,10 +323,13 @@ export default function GlobalSearch() {
       {/* Search Button/Input */}
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center space-x-1.5 px-2 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/90 hover:text-white border border-white/20"
+        className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white/90 hover:text-white border border-white/20 min-w-[160px]"
       >
-        <span className="text-xs">Search...</span>
-        <kbd className="inline-flex items-center px-1.5 py-0 text-[10px] font-semibold text-white/70 bg-white/10 border border-white/20 rounded">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-white/70">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+        </svg>
+        <span className="text-xs text-white/70">Search...</span>
+        <kbd className="inline-flex items-center px-1.5 py-0 text-[10px] font-semibold text-white/70 bg-white/10 border border-white/20 rounded ml-auto">
           ⌘K
         </kbd>
       </button>
@@ -368,6 +371,36 @@ export default function GlobalSearch() {
                   </button>
                 </div>
               </div>
+
+              {/* Quick Navigation - when no query */}
+              {query.length < 2 && (
+                <div className="px-4 py-3">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide mb-2">Quick Navigation</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { label: 'Dashboard', url: '/dashboard', shortcut: '⇧D' },
+                      { label: 'Travelers', url: '/travelers', shortcut: '⇧T' },
+                      { label: 'New Traveler', url: '/travelers/new', shortcut: '⇧N' },
+                      { label: 'Labor Tracking', url: '/labor-tracking', shortcut: '⇧L' },
+                      { label: 'Jobs', url: '/jobs', shortcut: '' },
+                      { label: 'Analytics', url: '/analytics', shortcut: '⇧A' },
+                      { label: 'Reports', url: '/reports', shortcut: '' },
+                      { label: 'Users', url: '/users', shortcut: '' },
+                    ].map((item) => (
+                      <button
+                        key={item.url}
+                        onClick={() => { router.push(item.url); setIsOpen(false); setQuery(''); }}
+                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <span className="font-medium">{item.label}</span>
+                        {item.shortcut && (
+                          <kbd className="text-[10px] font-semibold text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded px-1.5 py-0.5">⌘{item.shortcut}</kbd>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Search Results */}
               {renderResults()}

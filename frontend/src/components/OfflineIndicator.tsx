@@ -63,8 +63,8 @@ export default function OfflineIndicator() {
     };
     navigator.serviceWorker?.addEventListener('message', handleMessage);
 
-    // Poll pending count periodically
-    const interval = setInterval(updatePendingCount, 10000);
+    // Poll pending count periodically — reduced from 10s to 60s
+    const interval = setInterval(updatePendingCount, 60000);
 
     return () => {
       window.removeEventListener('online', goOnline);
@@ -74,10 +74,25 @@ export default function OfflineIndicator() {
     };
   }, [handleSync, updatePendingCount]);
 
-  // Register service worker
+  // Register service worker and pre-cache key pages
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch((err) =>
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        // Once active, tell SW to pre-cache key pages so they work offline
+        const sw = reg.active || reg.installing || reg.waiting;
+        if (sw) {
+          const precache = () => {
+            sw.postMessage({
+              type: 'PRECACHE_PAGES',
+              pages: ['/dashboard', '/labor-tracking', '/travelers', '/reports']
+            });
+          };
+          if (sw.state === 'activated') precache();
+          else sw.addEventListener('statechange', () => {
+            if (sw.state === 'activated') precache();
+          });
+        }
+      }).catch((err) =>
         console.log('SW registration failed:', err)
       );
     }

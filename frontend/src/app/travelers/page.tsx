@@ -153,7 +153,10 @@ const getTravelerTypeBadge = (type: string) => {
     'PCB': { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-800 dark:text-green-300', border: 'border-green-300 dark:border-green-700', label: 'PCB' },
     'CABLE': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-800 dark:text-purple-300', border: 'border-purple-300 dark:border-purple-700', label: 'Cables' },
     'CABLES': { bg: 'bg-purple-100 dark:bg-purple-900/40', text: 'text-purple-800 dark:text-purple-300', border: 'border-purple-300 dark:border-purple-700', label: 'Cables' },
-    'PURCHASING': { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-800 dark:text-orange-300', border: 'border-orange-300 dark:border-orange-700', label: 'Purchasing' }
+    'PURCHASING': { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-800 dark:text-orange-300', border: 'border-orange-300 dark:border-orange-700', label: 'Purchasing' },
+    'RMA_SAME': { bg: 'bg-red-100 dark:bg-red-900/40', text: 'text-red-800 dark:text-red-300', border: 'border-red-300 dark:border-red-700', label: 'RMA Same Job' },
+    'RMA_DIFF': { bg: 'bg-pink-100 dark:bg-pink-900/40', text: 'text-pink-800 dark:text-pink-300', border: 'border-pink-300 dark:border-pink-700', label: 'RMA Diff Job' },
+    'MODIFICATION': { bg: 'bg-amber-100 dark:bg-amber-900/40', text: 'text-amber-800 dark:text-amber-300', border: 'border-amber-300 dark:border-amber-700', label: 'Modification RMA' }
   };
 
   const config = typeConfig[type] || { bg: 'bg-gray-100 dark:bg-slate-700', text: 'text-gray-800 dark:text-slate-200', border: 'border-gray-300 dark:border-slate-600', label: type };
@@ -189,10 +192,60 @@ function TravelersPage() {
   const [viewFilter, setViewFilter] = useState<'active' | 'drafts' | 'all'>((searchParams.get('view') as 'active' | 'drafts' | 'all') || 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [travelers, setTravelers] = useState<TravelerItem[]>([]);
+  const [travelersLoading, setTravelersLoading] = useState(true);
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Saved filter presets
+  interface FilterPreset {
+    name: string;
+    searchTerm: string;
+    statusFilter: string;
+    typeFilter: string;
+    viewFilter: 'active' | 'drafts' | 'all';
+  }
+  const [savedFilters, setSavedFilters] = useState<FilterPreset[]>([]);
+  const [showSaveFilter, setShowSaveFilter] = useState(false);
+  const [newFilterName, setNewFilterName] = useState('');
+
+  // Load saved filters from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('nexus_saved_filters');
+      if (stored) setSavedFilters(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveCurrentFilter = () => {
+    if (!newFilterName.trim()) return;
+    const preset: FilterPreset = {
+      name: newFilterName.trim(),
+      searchTerm,
+      statusFilter,
+      typeFilter,
+      viewFilter,
+    };
+    const updated = [...savedFilters.filter(f => f.name !== preset.name), preset];
+    setSavedFilters(updated);
+    localStorage.setItem('nexus_saved_filters', JSON.stringify(updated));
+    setNewFilterName('');
+    setShowSaveFilter(false);
+  };
+
+  const loadFilter = (preset: FilterPreset) => {
+    setSearchTerm(preset.searchTerm);
+    setStatusFilter(preset.statusFilter);
+    setTypeFilter(preset.typeFilter);
+    setViewFilter(preset.viewFilter);
+  };
+
+  const deleteFilter = (name: string) => {
+    const updated = savedFilters.filter(f => f.name !== name);
+    setSavedFilters(updated);
+    localStorage.setItem('nexus_saved_filters', JSON.stringify(updated));
+  };
 
   // Toast and Confirm Modal state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -208,16 +261,16 @@ function TravelersPage() {
 
   useEffect(() => {
     fetchTravelers();
-    // Auto-refresh every 30 seconds for live status/progress updates
+    // Auto-refresh every 3 minutes — reduced from 60s to cut API load
     const interval = setInterval(() => {
       fetchTravelers();
-    }, 30000);
+    }, 180000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchTravelers = async (retryCount = 0) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/travelers/`, {
+      const response = await fetch(`${API_BASE_URL}/travelers/?limit=200`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}`
         }
@@ -258,6 +311,7 @@ function TravelersPage() {
           includeLaborHours: Boolean(t.include_labor_hours)
         }));
         setTravelers(formattedTravelers);
+        setTravelersLoading(false);
       } else {
         // Non-OK response — retry once without auth header (fallback)
         console.error('Travelers fetch failed:', response.status, response.statusText);
@@ -267,9 +321,10 @@ function TravelersPage() {
       }
     } catch (error) {
       console.error('Error fetching travelers:', error);
-      // Retry once on network error
       if (retryCount < 1) {
         setTimeout(() => fetchTravelers(retryCount + 1), 1000);
+      } else {
+        setTravelersLoading(false);
       }
     }
   };
@@ -571,6 +626,54 @@ function TravelersPage() {
               ))}
             </div>
 
+            {/* Saved Filters */}
+            <div className="relative flex items-center gap-1">
+              {savedFilters.length > 0 && (
+                <div className="flex items-center gap-1 overflow-x-auto">
+                  {savedFilters.map((f) => (
+                    <div key={f.name} className="flex items-center gap-0.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg pl-2 pr-1 py-0.5 group">
+                      <button
+                        onClick={() => loadFilter(f)}
+                        className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 whitespace-nowrap hover:text-indigo-900 dark:hover:text-indigo-100"
+                      >
+                        {f.name}
+                      </button>
+                      <button
+                        onClick={() => deleteFilter(f.name)}
+                        className="text-indigo-300 hover:text-red-500 dark:text-indigo-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <XCircleIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showSaveFilter ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={newFilterName}
+                    onChange={(e) => setNewFilterName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveCurrentFilter()}
+                    placeholder="Filter name..."
+                    className="w-24 px-2 py-1 border border-indigo-300 dark:border-indigo-600 rounded text-xs bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+                    autoFocus
+                  />
+                  <button onClick={saveCurrentFilter} className="px-1.5 py-1 bg-indigo-600 text-white rounded text-xs font-semibold">Save</button>
+                  <button onClick={() => setShowSaveFilter(false)} className="px-1.5 py-1 bg-gray-300 dark:bg-slate-600 text-gray-700 dark:text-slate-300 rounded text-xs">Cancel</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowSaveFilter(true)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors whitespace-nowrap"
+                  title="Save current filters as a preset"
+                >
+                  <FunnelIcon className="h-3.5 w-3.5" />
+                  <span>Save Filter</span>
+                </button>
+              )}
+            </div>
+
             {/* Create Button - Admin only */}
             {user?.role !== 'OPERATOR' && (
               <Link
@@ -632,7 +735,12 @@ function TravelersPage() {
               </div>
             </div>
           </div>
-          {filteredTravelers.length === 0 ? (
+          {travelersLoading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full mx-auto mb-3" />
+              <p className="text-sm text-gray-500 dark:text-slate-400">Loading travelers...</p>
+            </div>
+          ) : filteredTravelers.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
                 <DocumentArrowDownIcon className="h-8 w-8 text-gray-400 dark:text-slate-500" />
@@ -650,7 +758,7 @@ function TravelersPage() {
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
                 <div className="absolute top-0 right-1/3 w-8 h-8 bg-white/5 rounded-full translate-y-1" />
               </div>
-              <table className="w-full min-w-[1000px] divide-y divide-gray-200 dark:divide-slate-700" style={{tableLayout: 'fixed'}}>
+              <table className="w-full divide-y divide-gray-200 dark:divide-slate-700" style={{tableLayout: 'auto'}}>
                 <colgroup>
                   <col style={{width: '36px'}} />
                   <col style={{width: '14%'}} />
@@ -665,7 +773,7 @@ function TravelersPage() {
                 </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
-                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+                    <th className="px-0.5 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white" style={{width: '30px'}}>
                       <input
                         type="checkbox"
                         checked={paginatedTravelers.length > 0 && paginatedTravelers.every(t => selectedTravelers.includes(t.dbId))}
@@ -673,6 +781,7 @@ function TravelersPage() {
                         className="h-4 w-4 text-blue-600 rounded cursor-pointer"
                       />
                     </th>
+                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white" style={{width: '70px'}}>Actions</th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
                       Job, WO & PO
                     </th>
@@ -694,11 +803,8 @@ function TravelersPage() {
                     <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
                       Steps
                     </th>
-                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+                    <th className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white" style={{minWidth: '220px', width: '25%'}}>
                       Depts
-                    </th>
-                    <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
-                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -712,13 +818,48 @@ function TravelersPage() {
                           : 'hover:bg-gray-50 dark:hover:bg-slate-700'
                       }`}
                     >
-                      <td className="px-1 py-2 text-center">
+                      <td className="px-0.5 py-2 text-center" style={{width: '30px'}}>
                         <input
                           type="checkbox"
                           checked={selectedTravelers.includes(traveler.dbId)}
                           onChange={() => toggleSelectTraveler(traveler.dbId)}
                           className="h-4 w-4 text-blue-600 rounded cursor-pointer"
                         />
+                      </td>
+                      {/* Actions — 2x2 grid */}
+                      <td className="px-1 py-1" style={{width: '70px'}}>
+                        <div className={`grid ${user?.role !== 'OPERATOR' ? 'grid-cols-2' : 'grid-cols-1'} gap-0.5 w-fit mx-auto`}>
+                          <Link href={`/travelers/${traveler.dbId}`} className="p-0.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors flex items-center justify-center" title="View">
+                            <EyeIcon className="h-4 w-4" />
+                          </Link>
+                          {user?.role !== 'OPERATOR' && (
+                            <>
+                              <Link href={`/travelers/${traveler.dbId}?edit=true`} className="p-0.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors flex items-center justify-center" title="Edit">
+                                <PencilIcon className="h-4 w-4" />
+                              </Link>
+                              <button
+                                onClick={() => {
+                                  showConfirm('Delete Traveler', `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
+                                    async () => {
+                                      try {
+                                        const token = localStorage.getItem('nexus_token');
+                                        const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                                        if (response.ok) { showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success'); fetchTravelers(); }
+                                        else { showToast('Failed to delete traveler', 'error'); }
+                                      } catch (error) { console.error('Error:', error); showToast('Failed to delete traveler', 'error'); }
+                                      closeConfirm();
+                                    }, 'Delete');
+                                }}
+                                className="p-0.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors flex items-center justify-center" title="Delete"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')} className="p-0.5 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded transition-colors flex items-center justify-center" title="Print">
+                                <PrinterIcon className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                       <td className="px-2 py-2">
                         <div className="space-y-0.5 overflow-hidden">
@@ -740,7 +881,7 @@ function TravelersPage() {
                           <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">Part# <span className="underline">{traveler.partNumber}</span></div>
                           <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={traveler.description}>Desc: {traveler.description || 'N/A'}</div>
                           <div className="text-xs text-gray-500 dark:text-slate-400 space-y-0">
-                            <div>Trav Rev: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</span> · Cust Rev: <span className="font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</span></div>
+                            <div>Job Rev: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</span> · Cust Rev: <span className="font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</span></div>
                             <div>Qty: <span className="font-bold text-gray-900 dark:text-slate-100">{traveler.quantity}</span></div>
                           </div>
                         </div>
@@ -796,7 +937,7 @@ function TravelersPage() {
                         </Link>
                       </td>
                       {/* Department Progress Column */}
-                      <td className="px-1 py-2">
+                      <td className="px-2 py-2" style={{minWidth: '220px', width: '25%'}}>
                         <Link href={`/travelers/${traveler.dbId}`} className="block hover:opacity-80 transition-opacity cursor-pointer">
                           {traveler.departmentProgress.length > 0 ? (
                             <div className="space-y-0.5">
@@ -806,7 +947,7 @@ function TravelersPage() {
                                 return (
                                   <div key={dept.department} className="flex items-center gap-1">
                                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isComplete ? 'bg-green-500' : isNotStarted ? 'bg-gray-300 dark:bg-slate-600' : 'bg-blue-500 animate-pulse'}`} />
-                                    <span className="text-xs font-semibold w-12 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }} title={dept.department}>{dept.department}</span>
+                                    <span className="text-xs font-semibold w-16 truncate" style={{ color: DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280' }} title={dept.department}>{dept.department}</span>
                                     <div className="flex-1 bg-gray-100 dark:bg-slate-600 rounded-full h-2 overflow-hidden">
                                       <div className="h-2 rounded-full transition-all duration-500"
                                         style={{ width: `${dept.percent_complete}%`, backgroundColor: isComplete ? '#16a34a' : (DEPARTMENT_BAR_COLORS[dept.department] || '#6b7280') }}
@@ -821,69 +962,6 @@ function TravelersPage() {
                             <div className="text-[11px] text-gray-400 dark:text-slate-500 text-center">—</div>
                           )}
                         </Link>
-                      </td>
-                      <td className="px-1 py-2">
-                        <div className={`grid ${user?.role !== 'OPERATOR' ? 'grid-cols-2' : 'grid-cols-1'} gap-0.5`}>
-                          <Link
-                            href={`/travelers/${traveler.dbId}`}
-                            className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors flex items-center justify-center"
-                            title="View"
-                          >
-                            <EyeIcon className="h-4 w-4" />
-                          </Link>
-                          {user?.role !== 'OPERATOR' && (
-                            <>
-                              <Link
-                                href={`/travelers/${traveler.dbId}?edit=true`}
-                                className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors flex items-center justify-center"
-                                title="Edit"
-                              >
-                                <PencilIcon className="h-4 w-4" />
-                              </Link>
-                              <button
-                                onClick={() => {
-                                  showConfirm(
-                                    'Delete Traveler',
-                                    `Are you sure you want to DELETE traveler ${traveler.jobNumber}?\n\nThis cannot be undone!`,
-                                    async () => {
-                                      try {
-                                        const token = localStorage.getItem('nexus_token');
-                                        const response = await fetch(`${API_BASE_URL}/travelers/${traveler.dbId}`, {
-                                          method: 'DELETE',
-                                          headers: {
-                                            'Authorization': `Bearer ${token}`
-                                          }
-                                        });
-                                        if (response.ok) {
-                                          showToast(`Traveler ${traveler.jobNumber} deleted!`, 'success');
-                                          fetchTravelers();
-                                        } else {
-                                          showToast('Failed to delete traveler', 'error');
-                                        }
-                                      } catch (error) {
-                                        console.error('Error:', error);
-                                        showToast('Failed to delete traveler', 'error');
-                                      }
-                                      closeConfirm();
-                                    },
-                                    'Delete'
-                                  );
-                                }}
-                                className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors flex items-center justify-center"
-                                title="Delete"
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => window.open(`/travelers/${traveler.dbId}?print=true`, '_blank')}
-                                className="p-1 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded transition-colors flex items-center justify-center"
-                                title="Print"
-                              >
-                                <PrinterIcon className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   ))}

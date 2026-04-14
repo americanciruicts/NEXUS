@@ -8,8 +8,25 @@ export interface WorkCenterItem {
   departments?: string[];
 }
 
-// PCB Assembly work centers with descriptions and departments (46 steps)
+// Default PCB Assembly steps that auto-fill when creating a new PCBA traveler (12 core steps)
+// Users can add additional steps as needed from ALL_PCB_ASSEMBLY_WORK_CENTERS
 export const PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'ENGINEERING', description: 'Reverse engineering and design', department: 'Engineering/Prep' },
+  { name: 'CREATE BOM', description: 'Create Bill of Materials for the assembly', department: 'Engineering/Prep' },
+  { name: 'KITTING', description: 'Pull parts from inventory to place in a kit for manufacturing', department: 'Receiving' },
+  { name: 'FEEDER LOAD', description: 'The time it takes to load all needed parts onto feeders/Matrix trays', department: 'SMT' },
+  { name: 'SMT SET UP', description: 'The time it takes to align parts/make needed changes to programs', department: 'SMT' },
+  { name: 'SMT TOP', description: 'SMT top placed', department: 'SMT' },
+  { name: 'MANUAL INSERTION', description: 'Install prepared parts before wave', department: 'TH' },
+  { name: 'WASH', description: 'Process of cleaning a dirty PCB', department: 'ALL' },
+  { name: 'AOI', description: 'Automated Optical Inspection of the PCB', department: 'Quality' },
+  { name: 'LABELING', description: 'Place a label on the board per BOM instructions', department: 'Shipping' },
+  { name: 'FINAL INSPECTION', description: 'Final quality inspection before shipping', department: 'Quality' },
+  { name: 'SHIPPING', description: 'Send product to customer per packing request', department: 'Shipping' },
+];
+
+// ALL available PCB Assembly work centers (full list for adding steps manually - no duplicates)
+export const ALL_PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'ENGINEERING', description: 'Reverse engineering and design', department: 'Engineering/Prep' },
   { name: 'GENERATE CAD', description: 'Generate CAD design files', department: 'Engineering/Prep' },
   { name: 'VERIFY BOM', description: 'Verify no BOM or rev changes', department: 'Engineering/Prep' },
@@ -22,16 +39,16 @@ export const PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'PROGRAM PART', description: 'Parts that need to be programmed prior to SMT', department: 'Test/Soldering' },
   { name: 'HAND SOLDER', description: 'Anything that must be soldered by hand, no wave, no SMT', department: 'Soldering' },
   { name: 'SMT PROGRAMING', description: 'Programming the SMT placement machine', department: 'SMT' },
+  { name: 'SMT PROGRAMMING', description: 'Programming the SMT placement machine', department: 'SMT' },
   { name: 'FEEDER LOAD', description: 'The time it takes to load all needed parts onto feeders/Matrix trays', department: 'SMT' },
   { name: 'SMT SET UP', description: 'The time it takes to align parts/make needed changes to programs', department: 'SMT' },
   { name: 'GLUE', description: 'Gluing done at SMT after paste to make sure parts stay on', department: 'SMT' },
   { name: 'SMT TOP', description: 'SMT top placed', department: 'SMT' },
   { name: 'SMT BOTTOM', description: 'SMT bottom placed', department: 'SMT' },
-  { name: 'WASH', description: 'Process of cleaning a dirty PCB', department: 'ALL' },
+  { name: 'WASH', description: 'Process of cleaning a PCB', department: 'ALL' },
   { name: 'X-RAY', description: 'Visual continuity check of components as requested by customer', department: 'SMT/Soldering/Test' },
   { name: 'MANUAL INSERTION', description: 'Install prepared parts before wave', department: 'TH' },
   { name: 'WAVE', description: 'Wave soldering process', department: 'TH' },
-  { name: 'WASH', description: 'Post-wave cleaning process', department: 'ALL' },
   { name: 'CLEAN TEST', description: 'Use the ion tester to check cleanliness', department: 'ALL' },
   { name: 'TRIM', description: 'Cut excess leads on backside', department: 'TH/Soldering' },
   { name: 'PRESS FIT', description: 'Use pressure to insert a part on the PCB', department: 'Soldering' },
@@ -43,18 +60,16 @@ export const PCB_ASSEMBLY_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'INTERNAL TESTING', description: 'In house test at ACI', department: 'Test' },
   { name: 'LABELING', description: 'Place a label on the board per BOM instructions', department: 'Shipping' },
   { name: 'DEPANEL', description: 'Break panel into individual boards', department: 'Shipping' },
-  { name: 'PRODUCT PICTURES', description: 'Take pictures of product before shipping to ESS, Parylene, or customer', department: 'Quality/Shipping/Test' },
+  { name: 'PRODUCT PICTURES', description: 'Take pictures of product before shipping', department: 'Quality/Shipping/Test' },
   { name: 'SEND TO EXTERNAL COATING', description: 'Operator to sign and ship to coating', department: 'Shipping' },
   { name: 'RETURN FROM EXTERNAL COATING', description: 'Operator to sign when received from coating', department: 'Receiving/Test' },
   { name: 'INTERNAL COATING', description: 'In house coating at ACI', department: 'Coating' },
-  { name: 'INTERNAL TESTING', description: 'Post-coating in house test at ACI', department: 'Test' },
   { name: 'SEND TO ESS', description: 'Operator to sign and ship to ESS', department: 'Shipping' },
   { name: 'RETURN FROM ESS', description: 'Operator to sign when received from ESS', department: 'Receiving/Test' },
-  { name: 'INTERNAL TESTING', description: 'Post-ESS in house test at ACI', department: 'Test' },
   { name: 'VISUAL INSPECTION', description: 'Human visual inspection parts and coating, no AOI', department: 'Quality' },
   { name: 'MANUAL ASSEMBLY', description: 'Put the assembly together by hand', department: 'Soldering/Cable' },
   { name: 'BOX ASSEMBLY', description: 'Mechanical build consisting of the PCBA, hardware, and/or housings', department: 'Soldering/Cable' },
-  { name: 'HARDWARE', description: 'Adding screws, nuts, bolts, brackets, displays, etc. that need to be installed or individually packaged for shipment to customer', department: 'Soldering/Cable' },
+  { name: 'HARDWARE', description: 'Adding screws, nuts, bolts, brackets, displays, etc.', department: 'Soldering/Cable' },
   { name: 'FINAL INSPECTION', description: 'Final quality inspection before shipping', department: 'Quality' },
   { name: 'SHIPPING', description: 'Send product to customer per packing request', department: 'Shipping' },
 ];
@@ -115,6 +130,55 @@ export const PURCHASING_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'PURCHASING', description: 'Procure parts in sufficient quantities for build at the lowest price' },
   { name: 'QUOTE', description: 'Estimation of material, labor, and PCB costs to build an assembly' },
   { name: 'INVENTORY', description: 'Add to inventory and track stock levels' },
+];
+
+// RMA work centers (shared by RMA Same Job and RMA Diff Job types)
+export const RMA_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'INCOMING INSPECTION', description: 'Inspect incoming RMA units, verify quantity and condition', department: 'Quality' },
+  { name: 'REPAIR', description: 'Repair defective units per customer complaint', department: 'Soldering' },
+  { name: 'COATING', description: 'Apply conformal coating if required', department: 'Coating' },
+  { name: 'TESTING', description: 'Test repaired units per original test procedures', department: 'Test' },
+  { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
+  { name: 'PURCHASING', description: 'Parts ordered and waiting to be received for repair', department: 'Purchasing' },
+  { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
+  { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
+  { name: 'STOCK', description: 'Check stock - do we have any PCBA or cable assemblies in stock?', department: 'Receiving' },
+  { name: 'SHIPPING', description: 'Ship repaired units back to customer', department: 'Shipping' },
+];
+
+// Modification RMA work centers (same as RMA but no STOCK step)
+export const MODIFICATION_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'INCOMING INSPECTION', description: 'Inspect incoming modification units, verify quantity and condition', department: 'Quality' },
+  { name: 'REPAIR', description: 'Perform required modifications per work order', department: 'Soldering' },
+  { name: 'COATING', description: 'Apply conformal coating if required', department: 'Coating' },
+  { name: 'TESTING', description: 'Test modified units per test procedures', department: 'Test' },
+  { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
+  { name: 'PURCHASING', description: 'Parts ordered and waiting to be received', department: 'Purchasing' },
+  { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
+  { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
+  { name: 'SHIPPING', description: 'Ship modified units back to customer', department: 'Shipping' },
+];
+
+// All commonly used RMA steps (superset for adding steps manually)
+export const ALL_RMA_WORK_CENTERS: WorkCenterItem[] = [
+  { name: 'CUSTOMER APPROVAL', description: 'Get customer approval before proceeding', department: 'Quality' },
+  { name: 'DETAILED INSPEC', description: 'Detailed inspection - sample or 100% inspection', department: 'Quality' },
+  { name: 'INCOMING INSPECTION', description: 'Inspect incoming RMA units, verify quantity and condition', department: 'Quality' },
+  { name: 'TESTING', description: 'Test units per original test procedures', department: 'Test' },
+  { name: 'PROGRAMMING', description: 'Program or reprogram units', department: 'Test' },
+  { name: 'TROUBLESHOOTING', description: 'Diagnose and troubleshoot defective units', department: 'Test' },
+  { name: 'REPAIR', description: 'Repair defective units', department: 'Soldering' },
+  { name: 'INTERIM INSPEC', description: 'Interim inspection during repair process', department: 'Quality' },
+  { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
+  { name: 'PURCHASING', description: 'Parts ordered and waiting to be received for repair', department: 'Purchasing' },
+  { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
+  { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
+  { name: 'INVOICING', description: 'Credit on receive, charge on ship (Add-On/Chemring)', department: 'Other' },
+  { name: 'QUALITY', description: 'Send boards with CofC (Chemring)', department: 'Quality' },
+  { name: 'STOCK', description: 'Check stock - PCBA or cable assemblies in stock?', department: 'Receiving' },
+  { name: 'LABELLING', description: 'Apply labels as required', department: 'Shipping' },
+  { name: 'SHIPPING', description: 'Ship units back to customer', department: 'Shipping' },
+  { name: 'COATING', description: 'Apply conformal coating if required', department: 'Coating' },
 ];
 
 // Department color mapping for consistent styling
@@ -196,9 +260,19 @@ export const getWorkCentersByType = (type: string): WorkCenterItem[] => {
       return CABLES_WORK_CENTERS;
     case 'PURCHASING':
       return PURCHASING_WORK_CENTERS;
+    case 'RMA_SAME':
+    case 'RMA_DIFF':
+      return RMA_WORK_CENTERS;
+    case 'MODIFICATION':
+      return MODIFICATION_WORK_CENTERS;
     default:
       return PCB_ASSEMBLY_WORK_CENTERS;
   }
+};
+
+// Helper to check if a traveler type is an RMA type
+export const isRmaType = (type: string): boolean => {
+  return type === 'RMA_SAME' || type === 'RMA_DIFF' || type === 'MODIFICATION';
 };
 
 // Legacy export for backward compatibility

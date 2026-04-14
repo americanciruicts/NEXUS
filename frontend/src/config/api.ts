@@ -53,6 +53,8 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS: `${API_BASE_URL}/notifications`,
   // Search
   SEARCH: `${API_BASE_URL}/search`,
+  // Jobs (KOSH)
+  JOBS: `${API_BASE_URL}/jobs`,
 };
 
 export default API_BASE_URL;

@@ -86,7 +86,8 @@ export default function LaborTrendsChart({ data, departmentData }: LaborTrendsCh
       return { date: entry.date, totalHours, entries };
     });
 
-    return { days: parsedDays, maxHours: maxH, allCategories: sortedCats };
+    // Reverse to show newest first
+    return { days: parsedDays.reverse(), maxHours: maxH, allCategories: sortedCats };
   }, [activeData]);
 
   const emptyState = (

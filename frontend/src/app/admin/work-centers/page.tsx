@@ -18,6 +18,8 @@ import {
   PCB_WORK_CENTERS,
   CABLES_WORK_CENTERS,
   PURCHASING_WORK_CENTERS,
+  RMA_WORK_CENTERS,
+  MODIFICATION_WORK_CENTERS,
   DEPARTMENT_COLORS,
   parseDepartments,
   getDepartmentColor,
@@ -63,6 +65,9 @@ const TABS = [
   { key: 'PCB', label: 'PCB' },
   { key: 'CABLE', label: 'Cables' },
   { key: 'PURCHASING', label: 'Purchasing' },
+  { key: 'RMA_SAME', label: 'RMA Same Job' },
+  { key: 'RMA_DIFF', label: 'RMA Diff Job' },
+  { key: 'MODIFICATION', label: 'Modification RMA' },
 ];
 
 // Static data map for initial sync
@@ -71,6 +76,9 @@ const STATIC_DATA: Record<string, { name: string; description: string; departmen
   PCB: PCB_WORK_CENTERS,
   CABLE: CABLES_WORK_CENTERS,
   PURCHASING: PURCHASING_WORK_CENTERS,
+  RMA_SAME: RMA_WORK_CENTERS,
+  RMA_DIFF: RMA_WORK_CENTERS,
+  MODIFICATION: MODIFICATION_WORK_CENTERS,
 };
 
 export default function WorkCenterManagementPage() {

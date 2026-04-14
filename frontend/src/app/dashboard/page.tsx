@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import Layout from '@/components/layout/Layout';
 import { useAuth } from '@/context/AuthContext';
 import { useDashboardData } from '@/hooks/useDashboardData';
@@ -14,19 +15,21 @@ import {
   BoltIcon,
   ClockIcon,
   ClipboardDocumentListIcon,
+  ChartBarSquareIcon,
 } from '@heroicons/react/24/solid';
 
-// Dashboard components
+// Eagerly loaded (above the fold)
 import DateRangePicker from './components/DateRangePicker';
 import MetricsGrid from './components/MetricsGrid';
-import LaborTrendsChart from './components/LaborTrendsChart';
-import WorkCenterUtilizationChart from './components/WorkCenterUtilizationChart';
-import WorkCenterStatusCard from './components/WorkCenterStatusCard';
-import AnalyticsSection from './components/AnalyticsSection';
-import StuckTravelersCard from './components/StuckTravelersCard';
-import ForecastCard from './components/ForecastCard';
 
-import OperatorDashboard from './components/OperatorDashboard';
+// Lazy loaded (below the fold)
+const StuckTravelersCard = dynamic(() => import('./components/StuckTravelersCard'), {
+  loading: () => <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-gray-100 dark:border-slate-700 h-48 animate-pulse" />,
+});
+
+const OperatorDashboard = dynamic(() => import('./components/OperatorDashboard'), {
+  loading: () => <div className="min-h-[50vh] flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>,
+});
 import { API_BASE_URL } from '@/config/api';
 import { DEPARTMENT_BAR_COLORS } from '@/data/workCenters';
 
@@ -130,6 +133,9 @@ const TYPE_CONFIG: Record<string, { bg: string; text: string; label: string }> =
   'CABLE': { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', label: 'CABLE' },
   'CABLES': { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', label: 'CABLE' },
   'PURCHASING': { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', label: 'PURCH' },
+  'RMA_SAME': { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', label: 'RMA' },
+  'RMA_DIFF': { bg: 'bg-pink-100 dark:bg-pink-900/30', text: 'text-pink-700 dark:text-pink-300', label: 'RMA DIFF' },
+  'MODIFICATION': { bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-700 dark:text-rose-300', label: 'MOD RMA' },
 };
 
 export default function Dashboard() {
@@ -152,24 +158,54 @@ export default function Dashboard() {
   const [travelerPage, setTravelerPage] = useState(1);
   const travelerPageSize = 10;
 
+  // Use merged data from dashboardData instead of separate fetches
   useEffect(() => {
-    fetchTrackingEntries();
+    if (!dashboardData) return;
 
-    const interval = setInterval(() => {
+    // Travelers from merged data
+    if (dashboardData.travelers_list && Array.isArray(dashboardData.travelers_list)) {
+      const formatted = (dashboardData.travelers_list as Record<string, unknown>[]).map((t) => ({
+        id: Number(t.id), job_number: String(t.job_number || ''), part_number: String(t.part_number || ''),
+        part_description: String(t.part_description || ''), traveler_type: String(t.traveler_type || ''),
+        quantity: Number(t.quantity || 0), status: String(t.status || ''), priority: String(t.priority || 'NORMAL'),
+        work_center: String(t.work_center || ''), due_date: t.due_date ? String(t.due_date) : undefined,
+        ship_date: t.ship_date ? String(t.ship_date) : undefined, created_at: t.created_at ? String(t.created_at) : undefined,
+        total_steps: Number(t.total_steps || 0), completed_steps: Number(t.completed_steps || 0),
+        percent_complete: Number(t.percent_complete || 0), current_step: '', current_work_center: '',
+        qty_accepted: 0, qty_rejected: 0,
+        department_progress: Array.isArray(t.department_progress) ? t.department_progress as DeptProgress[] : [],
+        labor_progress: (t.labor_progress as LaborProgress) || { total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 },
+      }));
+      setDashTravelers(formatted);
+    }
+
+    // Labor/tracking from merged data
+    if (dashboardData.labor_entries && Array.isArray(dashboardData.labor_entries)) {
+      const data = dashboardData.labor_entries as unknown as RawTrackingEntry[];
+      setTrackingEntries(data);
+      const updates: LiveUpdate[] = data.map((entry) => {
+        const startTime = new Date(entry.start_time);
+        const endTime = entry.end_time ? new Date(entry.end_time) : new Date();
+        const diffMs = endTime.getTime() - startTime.getTime();
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const isActive = !entry.end_time;
+        return {
+          job_number: entry.job_number, work_center: entry.work_center,
+          operator_name: entry.employee_name || 'Unknown',
+          start_time: startTime.toLocaleTimeString(),
+          end_time: entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : 'In Progress',
+          time_in_step: `${hours}h ${minutes}m`, hours_worked: entry.hours_worked || 0,
+          status: isActive ? 'IN_PROGRESS' : 'COMPLETED', is_active: isActive
+        };
+      });
+      updates.sort((a, b) => (a.is_active && !b.is_active ? -1 : !a.is_active && b.is_active ? 1 : 0));
+      setLiveUpdates(updates.slice(0, 15));
+    } else if (!dashboardData.labor_entries) {
+      // Fallback: fetch separately if not in merged data
       fetchTrackingEntries();
-    }, 300000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch all travelers on mount + auto-refresh every 30s for live progress updates
-  useEffect(() => {
-    fetchDashboardTravelers();
-    const interval = setInterval(() => {
-      fetchDashboardTravelers();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    }
+  }, [dashboardData]);
 
   // Derive overdue jobs from dashboard travelers
   useEffect(() => {
@@ -718,30 +754,70 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Stuck Travelers & Forecast Row */}
+            {/* Stuck Travelers + Due Date Heatmap */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <StuckTravelersCard data={dashboardData.stuck_travelers} />
-              <ForecastCard data={dashboardData.forecast} />
+
+              {/* Due Date Heatmap */}
+              {dashboardData.insights && (() => {
+                const insights = dashboardData.insights as { due_date_heatmap?: { overdue: number; today: number; this_week: number; next_week: number; later: number; no_date: number } };
+                const heatmap = insights.due_date_heatmap;
+                if (!heatmap) return null;
+                const segments = [
+                  { label: 'Overdue', count: heatmap.overdue, color: 'bg-red-500', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20' },
+                  { label: 'Today', count: heatmap.today, color: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/20' },
+                  { label: 'This Week', count: heatmap.this_week, color: 'bg-yellow-500', text: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
+                  { label: 'Next Week', count: heatmap.next_week, color: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                  { label: 'Later', count: heatmap.later, color: 'bg-green-500', text: 'text-green-700 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' },
+                ];
+                const total = segments.reduce((s, seg) => s + seg.count, 0);
+                return (
+                  <div className="bg-white dark:bg-slate-800 shadow-md rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+                    <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center gap-1.5 bg-gray-50/80 dark:bg-slate-900/50">
+                      <ClipboardDocumentListIcon className="w-3.5 h-3.5 text-orange-500" />
+                      <h2 className="text-xs font-bold text-gray-700 dark:text-slate-300">Due Date Heatmap</h2>
+                      <span className="text-[10px] text-gray-400 dark:text-slate-500 ml-auto">{total} total</span>
+                    </div>
+                    <div className="p-3">
+                      {/* Stacked bar */}
+                      {total > 0 && (
+                        <div className="flex h-4 rounded-full overflow-hidden mb-3">
+                          {segments.map((seg) => seg.count > 0 && (
+                            <div key={seg.label} className={`${seg.color} transition-all`} style={{ width: `${(seg.count / total) * 100}%` }} title={`${seg.label}: ${seg.count}`} />
+                          ))}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {segments.map((seg) => (
+                          <div key={seg.label} className={`${seg.bg} rounded-lg p-2 text-center`}>
+                            <p className={`text-lg font-extrabold ${seg.text} leading-none`}>{seg.count}</p>
+                            <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400 uppercase mt-0.5">{seg.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Work Center Utilization */}
-            <div className="grid grid-cols-1 gap-4 mt-4">
-              <WorkCenterUtilizationChart data={dashboardData.labor_by_work_center} />
-            </div>
-
-            {/* Labor Trends (full width) */}
+            {/* Analytics CTA */}
             <div className="mt-4">
-              <LaborTrendsChart data={dashboardData.labor_trend} departmentData={dashboardData.department_trend} />
-            </div>
-
-            {/* Work Center Status */}
-            <div className="mt-4">
-              <WorkCenterStatusCard liveUpdates={liveUpdates} />
-            </div>
-
-            {/* Production Analytics */}
-            <div className="mt-4">
-              <AnalyticsSection />
+              <Link
+                href="/analytics"
+                className="flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 hover:shadow-md transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-indigo-100 dark:bg-indigo-900/40 p-2 rounded-lg">
+                    <ChartBarSquareIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-indigo-800 dark:text-indigo-300">Analytics & Insights</p>
+                    <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70">Trends, forecasts, operator efficiency, bottlenecks, and more</p>
+                  </div>
+                </div>
+                <svg className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
             </div>
           </>
         )}

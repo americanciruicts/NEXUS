@@ -95,6 +95,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return;
       }
+
+      // Double-check localStorage before redirecting — prevents logout on deploy/chunk errors
+      try {
+        const authData = localStorage.getItem('nexus_auth');
+        const token = localStorage.getItem('nexus_token');
+        if (authData && token) {
+          const parsed = JSON.parse(authData);
+          const loginTime = parsed.loginTime || 0;
+          if (parsed.isAuthenticated && parsed.role && (Date.now() - loginTime) < SESSION_TIMEOUT_MS) {
+            // Auth is still valid in localStorage — restore it instead of redirecting
+            const derivedFirstName = parsed.first_name || (parsed.username?.includes('@') ? parsed.username.split('@')[0].charAt(0).toUpperCase() + parsed.username.split('@')[0].slice(1) : parsed.username);
+            setUser({
+              id: parsed.id,
+              username: parsed.username,
+              email: parsed.email,
+              first_name: derivedFirstName,
+              role: parsed.role,
+              isApprover: parsed.isApprover || false,
+              isItar: parsed.isItar || false
+            });
+            return; // Don't redirect — user is still logged in
+          }
+        }
+      } catch { /* localStorage error — proceed to redirect */ }
+
       // Detect if we're on local network
       const isLocal = typeof window !== 'undefined' && (
         window.location.hostname.includes('.local') ||
@@ -175,8 +200,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    // Check every 30 seconds
-    const intervalId = setInterval(checkSessionExpiration, 30000);
+    // Check every 2 minutes — session is 9 hours so no need for 30s checks
+    const intervalId = setInterval(checkSessionExpiration, 120000);
     return () => clearInterval(intervalId);
   }, [user, logout]);
 

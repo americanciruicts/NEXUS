@@ -65,6 +65,35 @@ class ManualStep(ManualStepBase):
     class Config:
         from_attributes = True
 
+class RmaUnitTrackingBase(BaseModel):
+    unit_number: int
+    serial_number: Optional[str] = None
+    customer_complaint: Optional[str] = None
+    incoming_inspection_notes: Optional[str] = None
+    disposition: Optional[str] = None
+    troubleshooting_notes: Optional[str] = None
+    repairing_notes: Optional[str] = None
+    final_inspection_notes: Optional[str] = None
+    # Additional fields for RMA_DIFF (per-unit original job info)
+    customer_ncr: Optional[str] = None
+    original_po_number: Optional[str] = None
+    original_wo_number: Optional[str] = None
+    customer_revision_sent: Optional[str] = None
+    customer_revision_received: Optional[str] = None
+    original_built_quantity: Optional[int] = None
+    units_shipped: Optional[int] = None
+
+class RmaUnitTrackingCreate(RmaUnitTrackingBase):
+    pass
+
+class RmaUnitTracking(RmaUnitTrackingBase):
+    id: int
+    traveler_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class TravelerBase(BaseModel):
     job_number: str = Field(..., max_length=50)
     work_order_number: Optional[str] = Field(None, max_length=50)
@@ -91,11 +120,27 @@ class TravelerBase(BaseModel):
     due_date: Optional[str] = Field(None, max_length=20)
     ship_date: Optional[str] = Field(None, max_length=20)
     include_labor_hours: bool = False
+    # RMA-specific fields
+    customer_contact: Optional[str] = Field(None, max_length=100)
+    original_wo_number: Optional[str] = Field(None, max_length=50)
+    original_po_number: Optional[str] = Field(None, max_length=255)
+    return_po_number: Optional[str] = Field(None, max_length=255)
+    rma_po_number: Optional[str] = Field(None, max_length=255)
+    invoice_number: Optional[str] = Field(None, max_length=100)
+    customer_ncr: Optional[str] = Field(None, max_length=100)
+    original_built_quantity: Optional[int] = None
+    units_shipped: Optional[int] = None
+    quantity_rma_issued: Optional[int] = None
+    units_received: Optional[int] = None
+    customer_revision_sent: Optional[str] = Field(None, max_length=50)
+    customer_revision_received: Optional[str] = Field(None, max_length=50)
+    rma_notes: Optional[str] = None
 
 class TravelerCreate(TravelerBase):
     status: Optional[TravelerStatus] = None
     process_steps: List[ProcessStepCreate] = []
     manual_steps: List[ManualStepCreate] = []
+    rma_units: List[RmaUnitTrackingCreate] = []
 
 class TravelerUpdate(BaseModel):
     job_number: Optional[str] = Field(None, max_length=50)
@@ -124,6 +169,43 @@ class TravelerUpdate(BaseModel):
     due_date: Optional[str] = Field(None, max_length=20)
     ship_date: Optional[str] = Field(None, max_length=20)
     include_labor_hours: Optional[bool] = None
+    # RMA-specific fields
+    customer_contact: Optional[str] = Field(None, max_length=100)
+    original_wo_number: Optional[str] = Field(None, max_length=50)
+    original_po_number: Optional[str] = Field(None, max_length=255)
+    return_po_number: Optional[str] = Field(None, max_length=255)
+    rma_po_number: Optional[str] = Field(None, max_length=255)
+    invoice_number: Optional[str] = Field(None, max_length=100)
+    customer_ncr: Optional[str] = Field(None, max_length=100)
+    original_built_quantity: Optional[int] = None
+    units_shipped: Optional[int] = None
+    quantity_rma_issued: Optional[int] = None
+    units_received: Optional[int] = None
+    customer_revision_sent: Optional[str] = Field(None, max_length=50)
+    customer_revision_received: Optional[str] = Field(None, max_length=50)
+    rma_notes: Optional[str] = None
+
+class TravelerGroupMember(BaseModel):
+    id: int
+    job_number: str
+    traveler_type: str
+    group_sequence: int
+    group_label: Optional[str] = None
+    quantity: int
+    status: str
+    work_order_number: Optional[str] = None
+
+class TravelerGroupInfo(BaseModel):
+    group_id: int
+    group_name: Optional[str] = None
+    current_sequence: int
+    total_count: int
+    members: List[TravelerGroupMember]
+
+class LinkTravelersRequest(BaseModel):
+    traveler_ids: List[int]
+    labels: List[str]
+    group_name: Optional[str] = None
 
 class Traveler(TravelerBase):
     id: int
@@ -134,6 +216,10 @@ class Traveler(TravelerBase):
     completed_at: Optional[datetime] = None
     process_steps: List[ProcessStep] = []
     manual_steps: List[ManualStep] = []
+    rma_units: List[RmaUnitTracking] = []
+    group_id: Optional[int] = None
+    group_sequence: Optional[int] = None
+    group_label: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -166,6 +252,9 @@ class TravelerList(BaseModel):
     department_progress: Optional[list] = []
     labor_progress: Optional[dict] = None
     include_labor_hours: Optional[bool] = False
+    group_id: Optional[int] = None
+    group_sequence: Optional[int] = None
+    group_label: Optional[str] = None
 
     class Config:
         from_attributes = True

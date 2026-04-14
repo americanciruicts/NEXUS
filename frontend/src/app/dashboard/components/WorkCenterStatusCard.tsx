@@ -1,6 +1,6 @@
 'use client';
 
-import { CpuChipIcon } from '@heroicons/react/24/solid';
+import { CpuChipIcon } from '@heroicons/react/24/outline';
 
 interface LiveUpdate {
   job_number: string;
@@ -36,54 +36,61 @@ export default function WorkCenterStatusCard({ liveUpdates }: WorkCenterStatusCa
     }))
     .sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
 
+  const activeCount = workCenters.filter(wc => wc.isActive).length;
+
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden h-full flex flex-col">
-      <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 px-3 py-2.5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="bg-white/15 backdrop-blur-sm p-2 rounded-xl border border-white/20">
-            <CpuChipIcon className="w-5 h-5 text-emerald-300" />
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
+      <div className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800 px-4 py-2.5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-white/15 backdrop-blur-sm p-1.5 rounded-lg border border-white/20">
+              <CpuChipIcon className="h-4 w-4 text-emerald-300" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Work Center Status</h3>
+              <p className="text-[10px] text-teal-200/80">Live operations overview</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">Work Center Status</h3>
-            <p className="text-xs text-teal-200/80">Live operations overview</p>
-          </div>
+          {activeCount > 0 && (
+            <span className="text-xs font-bold text-white bg-white/20 px-2 py-0.5 rounded-full">
+              {activeCount} active
+            </span>
+          )}
         </div>
       </div>
-      <div className="p-4 flex-1 flex flex-col justify-center">
+      <div className="p-3 max-h-[350px] overflow-y-auto">
         {workCenters.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40">
-            <CpuChipIcon className="w-10 h-10 text-gray-200 dark:text-slate-600 mb-2" />
-            <p className="text-gray-400 dark:text-slate-500 text-sm font-medium">No work center activity</p>
+          <div className="flex flex-col items-center justify-center py-8">
+            <CpuChipIcon className="w-8 h-8 text-gray-200 dark:text-slate-600 mb-2" />
+            <p className="text-gray-400 dark:text-slate-500 text-sm">No work center activity</p>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-1.5">
             {workCenters.map((wc, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between p-3 rounded-xl border transition-all ${wc.isActive ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 shadow-sm' : 'bg-gray-50/80 dark:bg-slate-900/50 border-gray-200 dark:border-slate-700'}`}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all ${wc.isActive ? 'bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800' : 'bg-gray-50/80 dark:bg-slate-900/30'}`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="relative flex-shrink-0">
-                    <div className={`w-3 h-3 rounded-full ${wc.isActive ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-500'}`} />
-                    {wc.isActive && (
-                      <div className="absolute inset-0 w-3 h-3 rounded-full bg-emerald-500 animate-ping opacity-75" />
-                    )}
+                    <div className={`w-2.5 h-2.5 rounded-full ${wc.isActive ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-500'}`} />
+                    {wc.isActive && <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping opacity-75" />}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-800 dark:text-slate-200">{wc.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                    <p className="text-xs font-bold text-gray-800 dark:text-slate-200">{wc.name}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-slate-400">
                       {wc.isActive
-                        ? `${wc.activeOperators.slice(0, 2).join(', ')}${wc.activeOperators.length > 2 ? ` +${wc.activeOperators.length - 2}` : ''}`
+                        ? wc.activeOperators.slice(0, 2).join(', ') + (wc.activeOperators.length > 2 ? ` +${wc.activeOperators.length - 2}` : '')
                         : 'Idle'}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${wc.isActive ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
+                <div className="text-right flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400 dark:text-slate-500">{wc.totalJobs} job{wc.totalJobs !== 1 ? 's' : ''}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${wc.isActive ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
                     {wc.isActive ? 'Active' : 'Idle'}
                   </span>
-                  <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">{wc.totalJobs} job{wc.totalJobs !== 1 ? 's' : ''}</p>
                 </div>
               </div>
             ))}

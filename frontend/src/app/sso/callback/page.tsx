@@ -17,7 +17,8 @@ function SSOCallbackContent() {
       return
     }
 
-    const validateSSO = async () => {
+    const validateSSO = async (attempt = 1) => {
+      const MAX_RETRIES = 50;
       try {
         const { API_BASE_URL } = await import('@/config/api');
         const response = await fetch(`${API_BASE_URL}/auth/sso/callback`, {
@@ -28,6 +29,11 @@ function SSOCallbackContent() {
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({ detail: 'SSO validation failed' }))
+          // Retry on 401 (token timing) or 500 (server hiccup)
+          if ((response.status === 401 || response.status >= 500) && attempt < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, 1000 * attempt))
+            return validateSSO(attempt + 1)
+          }
           throw new Error(error.detail || 'SSO validation failed')
         }
 

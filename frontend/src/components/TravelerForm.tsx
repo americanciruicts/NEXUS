@@ -261,6 +261,57 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   // Dynamic work centers from DB (fetched per traveler type)
   const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
 
+  // KOSH job data (when pre-filling from KOSH inventory job)
+  const [koshJobData, setKoshJobData] = useState<{job_number: string; description: string; customer: string; cust_pn: string; order_qty: number; job_rev: string; cust_rev: string; wo_number: string} | null>(null);
+
+  // Fill form from KOSH job (fallback when no NEXUS traveler exists)
+  const fillFromKoshJob = async (jobNumber: string) => {
+    try {
+      const token = localStorage.getItem('nexus_token') || 'mock-token';
+      const res = await fetch(`${API_BASE_URL}/jobs/lookup/${encodeURIComponent(jobNumber)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const koshJobs = await res.json();
+        if (koshJobs && koshJobs.length > 0) {
+          // Use exact match first, else first result
+          const match = koshJobs.find((j: Record<string, string>) => j.job_number === jobNumber) || koshJobs[0];
+          setKoshJobData(match);
+          setFormData(prev => ({
+            ...prev,
+            jobNumber: match.job_number,
+            partDescription: match.description || prev.partDescription,
+            customerName: match.customer || prev.customerName,
+            customerCode: prev.customerCode,
+            partNumber: match.cust_pn || prev.partNumber,
+            quantity: match.order_qty || prev.quantity,
+            revision: match.job_rev || prev.revision,
+            customerRevision: match.cust_rev || prev.customerRevision,
+          }));
+          setWorkOrderPrefix(match.job_number);
+          toast.success(`Found KOSH job "${match.job_number}" — customer: ${match.customer}. Select a traveler type to continue.`);
+          return;
+        }
+      }
+      toast.warning('No existing traveler or KOSH job found. Please select a type to create a new one.');
+    } catch {
+      toast.warning('No existing traveler found. Please select a type to create a new one.');
+    }
+  };
+
+  // Handle ?job= query param (from Jobs page "Create Traveler" link)
+  useEffect(() => {
+    if (mode !== 'create') return;
+    const params = new URLSearchParams(window.location.search);
+    const jobParam = params.get('job');
+    if (jobParam) {
+      // Set the lookup input value and trigger KOSH job lookup
+      const input = document.getElementById('job-number-lookup') as HTMLInputElement;
+      if (input) input.value = jobParam;
+      fillFromKoshJob(jobParam);
+    }
+  }, [mode]);
+
   // Auto-save draft state
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [draftId, setDraftId] = useState<number | null>(null);
@@ -301,7 +352,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
   // Fetch work centers from DB when traveler type changes, fallback to static
   useEffect(() => {
     if (!selectedType) return;
-    const typeMap: Record<string, string> = { 'PCB_ASSEMBLY': 'PCB_ASSEMBLY', 'PCB': 'PCB', 'CABLE': 'CABLE', 'CABLES': 'CABLE', 'PURCHASING': 'PURCHASING' };
+    const typeMap: Record<string, string> = { 'PCB_ASSEMBLY': 'PCB_ASSEMBLY', 'PCB': 'PCB', 'CABLE': 'CABLE', 'CABLES': 'CABLE', 'PURCHASING': 'PURCHASING', 'RMA_SAME': 'RMA_SAME', 'RMA_DIFF': 'RMA_DIFF', 'MODIFICATION': 'MODIFICATION' };
     const dbType = typeMap[selectedType] || selectedType;
     const fetchWC = async () => {
       try {
@@ -421,6 +472,36 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       borderColor: 'border-orange-400',
       bgAccent: 'bg-orange-400/20',
       iconBg: 'bg-orange-400/30'
+    },
+    {
+      value: 'RMA_SAME',
+      label: 'RMA Router Same Job',
+      description: 'RMA from same job or revision',
+      gradient: 'from-red-500 to-red-700',
+      hoverGradient: 'from-red-600 to-red-800',
+      borderColor: 'border-red-400',
+      bgAccent: 'bg-red-400/20',
+      iconBg: 'bg-red-400/30'
+    },
+    {
+      value: 'RMA_DIFF',
+      label: 'RMA Router Diff Job',
+      description: 'RMA from different jobs or revisions',
+      gradient: 'from-pink-500 to-pink-700',
+      hoverGradient: 'from-pink-600 to-pink-800',
+      borderColor: 'border-pink-400',
+      bgAccent: 'bg-pink-400/20',
+      iconBg: 'bg-pink-400/30'
+    },
+    {
+      value: 'MODIFICATION',
+      label: 'Modification RMA',
+      description: 'Board modification and rework',
+      gradient: 'from-amber-500 to-amber-700',
+      hoverGradient: 'from-amber-600 to-amber-800',
+      borderColor: 'border-amber-400',
+      bgAccent: 'bg-amber-400/20',
+      iconBg: 'bg-amber-400/30'
     }
   ];
 
@@ -1036,6 +1117,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
             <div className="flex gap-2">
               <input
                 type="text"
+                id="job-number-lookup"
                 placeholder="Enter job number (e.g. test1, 8744 PARTS)"
                 className="flex-1 border-2 border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2.5 text-sm font-bold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
                 onKeyDown={async (e) => {
@@ -1050,18 +1132,18 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                       if (response.ok) {
                         const allWorkOrders: FullTravelerData[] = await response.json();
                         if (allWorkOrders && allWorkOrders.length > 1) {
-                          // Multiple work orders - show selector
                           setExistingWorkOrders(allWorkOrders);
                           setShowWorkOrderSelector(true);
                           toast.info(`Found ${allWorkOrders.length} work orders for job ${value}. Please select one to auto-fill from.`);
                         } else if (allWorkOrders && allWorkOrders.length === 1) {
-                          // Single work order - auto-fill directly
                           autoFillFromExisting(allWorkOrders[0]);
                         } else {
-                          toast.warning('No existing traveler found with that job number. Please select a type to create a new one.');
+                          // No NEXUS travelers — try KOSH job lookup
+                          await fillFromKoshJob(value);
                         }
                       } else {
-                        toast.warning('No existing traveler found. Please select a type below.');
+                        // No NEXUS travelers — try KOSH job lookup
+                        await fillFromKoshJob(value);
                       }
                     } catch {
                       toast.error('Error looking up job number.');
@@ -1084,13 +1166,16 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
                         toast.info(`Found ${allWorkOrders.length} work orders for this job. Please select one.`);
                       } else if (allWorkOrders && allWorkOrders.length === 1) {
                         autoFillFromExisting(allWorkOrders[0]);
+                      } else {
+                        // No NEXUS travelers — try KOSH job lookup silently
+                        await fillFromKoshJob(value);
                       }
                     }
                   } catch { /* silent */ }
                 }}
               />
             </div>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5">Press Enter or tab out to search. Auto-fills all details including work center steps.</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5">Press Enter or tab out to search. Checks existing travelers first, then KOSH inventory jobs.</p>
           </div>
 
           {/* Work Order Selector Modal */}

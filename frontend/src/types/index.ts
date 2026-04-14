@@ -1,4 +1,24 @@
-export type TravelerType = 'PCB_ASSEMBLY' | 'PCB' | 'CABLE' | 'PURCHASING';
+export type TravelerType = 'PCB_ASSEMBLY' | 'PCB' | 'CABLE' | 'PURCHASING' | 'RMA_SAME' | 'RMA_DIFF' | 'MODIFICATION';
+
+export interface RmaUnitTracking {
+  id?: number;
+  unit_number: number;
+  serial_number: string;
+  customer_complaint: string;
+  incoming_inspection_notes: string;
+  disposition: string;
+  troubleshooting_notes: string;
+  repairing_notes: string;
+  final_inspection_notes: string;
+  // Additional fields for RMA_DIFF (per-unit original job info)
+  customer_ncr?: string;
+  original_po_number?: string;
+  original_wo_number?: string;
+  customer_revision_sent?: string;
+  customer_revision_received?: string;
+  original_built_quantity?: number;
+  units_shipped?: number;
+}
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER';
 
@@ -148,6 +168,102 @@ export interface DropdownOption {
   value: string;
   label: string;
   description?: string;
+}
+
+// ─── KOSH Jobs Types ─────────────────────────────────────────────────────────
+
+export interface KoshJob {
+  id: number;
+  job_number: string;
+  description: string;
+  customer: string;
+  cust_pn: string;
+  build_qty: number;
+  order_qty: number;
+  job_rev: string;
+  cust_rev: string;
+  wo_number: string;
+  status: string;
+  notes: string;
+  created_by: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface BomLine {
+  line_no: string;
+  aci_pn: string;
+  description: string;
+  mpn: string;
+  manufacturer: string;
+  qty_per_board: number;
+  required: number;
+  on_hand: number;
+  mfg_floor_qty: number;
+  shortage: number;
+  location: string;
+  unit_cost: number;
+  pou: string;
+}
+
+export interface JobBomResponse {
+  job_number: string;
+  build_qty: number;
+  order_qty: number;
+  total_lines: number;
+  shortage_count: number;
+  lines: BomLine[];
+}
+
+export interface TravelerGroupMember {
+  id: number;
+  jobNumber: string;
+  travelerType: string;
+  groupSequence: number;
+  groupLabel?: string;
+  quantity: number;
+  status: string;
+  workOrderNumber?: string;
+}
+
+export interface TravelerGroupInfo {
+  groupId: number;
+  groupName?: string;
+  currentSequence: number;
+  totalCount: number;
+  members: TravelerGroupMember[];
+}
+
+export interface JobTraveler {
+  id: number;
+  job_number: string;
+  work_order_number: string;
+  traveler_type: string;
+  part_number: string;
+  part_description: string;
+  revision: string;
+  quantity: number;
+  status: string;
+  priority: string;
+  customer_name: string;
+  created_by: string;
+  created_at: string | null;
+  total_steps: number;
+  completed_steps: number;
+  group_id?: number | null;
+  group_sequence?: number | null;
+  group_label?: string | null;
+}
+
+export interface JobProgress {
+  job_number: string;
+  order_qty: number;
+  qty_manufactured: number;
+  qty_in_progress: number;
+  total_travelers: number;
+  completed_travelers: number;
+  in_progress_travelers: number;
+  percent_complete: number;
 }
 
 export interface FormData {

@@ -257,15 +257,32 @@ async def create_traveler(
     otherwise falls back to system user for backward compatibility.
     """
     try:
-        # Check for duplicate job_number + revision
-        existing = db.query(Traveler).filter(
+        # Duplicate check: same job_number + revision is allowed when the
+        # work_order_number OR po_number differs (multiple WO/PO against the
+        # same job/rev is a normal workflow). Only block when job+rev AND
+        # both work_order_number and po_number match an existing traveler.
+        dup_query = db.query(Traveler).filter(
             Traveler.job_number == traveler_data.job_number,
-            Traveler.revision == traveler_data.revision
-        ).first()
+            Traveler.revision == traveler_data.revision,
+        )
+        # Match NULL-to-NULL as well as value-to-value for WO and PO
+        if traveler_data.work_order_number:
+            dup_query = dup_query.filter(Traveler.work_order_number == traveler_data.work_order_number)
+        else:
+            dup_query = dup_query.filter(Traveler.work_order_number.is_(None))
+        if traveler_data.po_number:
+            dup_query = dup_query.filter(Traveler.po_number == traveler_data.po_number)
+        else:
+            dup_query = dup_query.filter(Traveler.po_number.is_(None))
+        existing = dup_query.first()
         if existing:
             raise HTTPException(
                 status_code=409,
-                detail=f"A traveler with Job# {traveler_data.job_number} Rev {traveler_data.revision} already exists (ID: {existing.id})"
+                detail=(
+                    f"A traveler with Job# {traveler_data.job_number} Rev {traveler_data.revision} "
+                    f"and the same Work Order / PO already exists (ID: {existing.id}). "
+                    "Change the Work Order Number or PO Number to create another traveler for this job/rev."
+                )
             )
 
         # Determine labor hours based on traveler type

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon, Bars3Icon, XMarkIcon, HomeIcon, ClipboardDocumentListIcon, ClockIcon, ChartBarSquareIcon, QueueListIcon, PlusCircleIcon, MapPinIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronDownIcon, CheckIcon, UsersIcon, Bars3Icon, XMarkIcon, HomeIcon, ClipboardDocumentListIcon, ClockIcon, ChartBarSquareIcon, QueueListIcon, PlusCircleIcon, MapPinIcon, WrenchScrewdriverIcon, BriefcaseIcon } from '@heroicons/react/24/outline';
 import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -53,8 +53,8 @@ export default function Header() {
   useEffect(() => {
     if (user && user.role === 'ADMIN') {
       fetchNotifications();
-      // Poll for new notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
+      // Poll for new notifications every 2 minutes — reduced from 30s
+      const interval = setInterval(fetchNotifications, 120000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -216,6 +216,12 @@ export default function Header() {
                 </div>
               )}
             </div>
+            {user?.role === 'ADMIN' && (
+              <Link href="/jobs" className={`${getLinkClasses('/jobs')} flex items-center space-x-1`}>
+                <BriefcaseIcon className="h-4 w-4 text-orange-300" />
+                <span>Jobs</span>
+              </Link>
+            )}
             <Link href="/labor-tracking" className={`${getLinkClasses('/labor-tracking')} flex items-center space-x-1`}>
               <ClockIcon className="h-4 w-4 text-green-300" />
               <span>Labor</span>
@@ -224,6 +230,12 @@ export default function Header() {
               <Link href="/reports" className={`${getLinkClasses('/reports')} flex items-center space-x-1`}>
                 <ChartBarSquareIcon className="h-4 w-4 text-purple-300" />
                 <span>Reports</span>
+              </Link>
+            )}
+            {user?.role === 'ADMIN' && (
+              <Link href="/analytics" className={`${getLinkClasses('/analytics')} flex items-center space-x-1`}>
+                <ChartBarSquareIcon className="h-4 w-4 text-indigo-300" />
+                <span>Analytics</span>
               </Link>
             )}
           </nav>
@@ -507,6 +519,17 @@ export default function Header() {
               )}
             </div>
 
+            {user?.role === 'ADMIN' && (
+              <Link
+                href="/jobs"
+                onClick={() => setShowMobileMenu(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/jobs') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              >
+                <BriefcaseIcon className="h-5 w-5 mr-3 text-orange-600" />
+                <span>Jobs</span>
+              </Link>
+            )}
+
             <Link
               href="/labor-tracking"
               onClick={() => setShowMobileMenu(false)}
@@ -524,6 +547,16 @@ export default function Header() {
               >
                 <ChartBarSquareIcon className="h-5 w-5 mr-3 text-purple-600" />
                 <span>Reports</span>
+              </Link>
+            )}
+            {user?.role === 'ADMIN' && (
+              <Link
+                href="/analytics"
+                onClick={() => setShowMobileMenu(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/analytics') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              >
+                <ChartBarSquareIcon className="h-5 w-5 mr-3 text-indigo-600" />
+                <span>Analytics</span>
               </Link>
             )}
 

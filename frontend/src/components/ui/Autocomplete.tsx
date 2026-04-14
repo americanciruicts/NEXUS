@@ -179,17 +179,38 @@ export default function Autocomplete({
         }
         return;
       }
-      // Normal Enter handling
+      // Normal Enter handling — only select if user explicitly highlighted with arrow keys
+      // or if there's an exact match. Never auto-select the first suggestion.
       if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
         handleSelect(suggestions[selectedIndex]);
       } else if (suggestions.length > 0) {
         const exactMatch = suggestions.find(s => s.value.toLowerCase() === value.toLowerCase() || s.label.toLowerCase() === value.toLowerCase());
-        handleSelect(exactMatch || suggestions[0]);
-      } else if (value) {
-        setIsOpen(false);
-        if (onSelect) {
-          onSelect({ value, label: value });
+        if (exactMatch) {
+          handleSelect(exactMatch);
+        } else if (inputValue.trim().length > 0 && onSelect) {
+          // Barcode-scanner path: scanner types fast and appends Enter before
+          // the debounced fetch returns, so suggestions is empty. Treat the
+          // raw value as a selection so downstream handlers (e.g. load work
+          // centers for a scanned job number) can run.
+          justSelectedRef.current = true;
+          isFocusedRef.current = false;
+          setIsOpen(false);
+          setSuggestions([]);
+          onChange(inputValue);
+          onSelect({ value: inputValue, label: inputValue });
+        } else {
+          setIsOpen(false);
         }
+      } else if (inputValue.trim().length > 0 && onSelect) {
+        // Same scanner path when the suggestion list never populated.
+        justSelectedRef.current = true;
+        isFocusedRef.current = false;
+        setIsOpen(false);
+        setSuggestions([]);
+        onChange(inputValue);
+        onSelect({ value: inputValue, label: inputValue });
+      } else {
+        setIsOpen(false);
       }
       return;
     }

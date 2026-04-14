@@ -5,6 +5,10 @@ from barcode.writer import ImageWriter
 from io import BytesIO
 import base64
 from PIL import Image
+from functools import lru_cache
+
+# In-memory cache for QR codes — keyed by qr_string, survives across requests
+_qr_cache: dict[str, str] = {}
 
 class BarcodeService:
     """Service for generating barcodes and QR codes for travelers"""
@@ -15,20 +19,34 @@ class BarcodeService:
         barcode_data = job_number
 
         try:
-            # Generate Code128 barcode with options for better rectangle shape
+            # Code128 options tuned for reliable laser-scanner decoding from print.
+            # Prior values (module_width=0.2, quiet_zone=3) produced bars thinner than
+            # the 0.33mm ANSI minimum and a quiet zone below the 10x-module requirement,
+            # so scanners could not lock onto the symbol.
             writer_options = {
-                'module_height': 12,      # Height of barcode bars (taller for print)
-                'module_width': 0.2,      # Width of individual bars (tighter spacing)
-                'font_size': 11,          # Font size for text
-                'text_distance': 4,       # Distance between barcode and text
-                'quiet_zone': 3,          # Margin around barcode (reduced for bigger barcode)
+                'module_height': 20,      # Taller bars — better optical signal margin
+                'module_width': 0.4,      # 0.4mm bar width (well above 0.33mm minimum)
+                'font_size': 12,
+                'text_distance': 5,
+                'quiet_zone': 10,         # 10x module width on each side (ANSI spec)
+                'dpi': 300,               # Print-grade resolution
             }
 
             code128 = Code128(barcode_data, writer=ImageWriter())
-            buffer = BytesIO()
-            code128.write(buffer, options=writer_options)
+            raw_buffer = BytesIO()
+            code128.write(raw_buffer, options=writer_options)
 
-            # Convert to base64 for easy storage and transmission
+            # Convert to pure 1-bit black & white. The library's RGB output has
+            # anti-aliased grey pixels on bar edges, which reduces print contrast
+            # and makes scans fail — especially on cheap/low-toner laser printers.
+            # A 1-bit ("1" mode) PNG guarantees pure black bars on pure white.
+            raw_buffer.seek(0)
+            img = Image.open(raw_buffer).convert('L')       # to grayscale
+            img = img.point(lambda p: 0 if p < 200 else 255) # threshold
+            img = img.convert('1')                          # 1-bit pure B&W
+
+            buffer = BytesIO()
+            img.save(buffer, format='PNG', optimize=True)
             buffer.seek(0)
             barcode_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
@@ -117,48 +135,38 @@ class BarcodeService:
 
     @staticmethod
     def generate_step_qr_code(traveler_id: int, job_number: str, work_center: str, step_id: int = None, step_type: str = "PROCESS", step_number: int = None, operation: str = "", work_order: str = "") -> str:
-        """Generate a smaller QR code for a specific routing table step with ONLY work center name
+        """Generate a QR code for a specific routing table step. Cached in memory."""
+        qr_string = f"NEXUS-STEP|{traveler_id}|{job_number}|{work_order}|{work_center}|{step_number or 0}|{operation}|{step_type}|{step_id or 0}|AC"
 
-        Args:
-            traveler_id: The traveler ID
-            job_number: The job number
-            work_center: The work center code
-            step_id: Optional step ID for tracking
-            step_type: Type of step - "PROCESS" or "MANUAL"
-            step_number: Step sequence number
-            operation: Operation description
-            work_order: Work order number
-        """
-        # Strip traveler type prefix from work center code to get clean name
-        # e.g. PCB_ASSEMBLY_ENGINEERING -> ENGINEERING, PCB_SMT_TOP -> SMT TOP, CABLE_CUTTING -> CUTTING
-        prefixes = ['PCB_ASSEMBLY_', 'PCB_', 'CABLE_', 'CABLES_', 'PURCHASING_']
-        qr_string = work_center
-        for prefix in prefixes:
-            if work_center.startswith(prefix):
-                qr_string = work_center[len(prefix):].replace('_', ' ')
-                break
+        # Return cached QR if available
+        if qr_string in _qr_cache:
+            return _qr_cache[qr_string]
 
         try:
-            # Generate smaller QR code with higher error correction for better scannability
             qr = qrcode.QRCode(
-                version=1,  # Smallest version
-                error_correction=qrcode.constants.ERROR_CORRECT_H,  # Highest error correction
-                box_size=4,  # Smaller box size (was 10)
-                border=2,   # Smaller border (was 4)
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=10,
+                border=2,
             )
             qr.add_data(qr_string)
             qr.make(fit=True)
 
-            # Create QR code image
             qr_image = qr.make_image(fill_color="black", back_color="white")
 
-            # Convert to base64
             buffer = BytesIO()
             qr_image.save(buffer, format='PNG')
             buffer.seek(0)
-            qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            result = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-            return qr_base64
+            # Cache it (limit cache to 5000 entries to avoid memory issues)
+            if len(_qr_cache) > 5000:
+                # Remove oldest 1000 entries
+                keys = list(_qr_cache.keys())[:1000]
+                for k in keys:
+                    del _qr_cache[k]
+            _qr_cache[qr_string] = result
+            return result
 
         except Exception as e:
             print(f"Error generating step QR code: {str(e)}")

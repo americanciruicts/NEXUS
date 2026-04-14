@@ -34,15 +34,15 @@ export default function StuckTravelersCard({ data }: StuckTravelersCardProps) {
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
-      <div className="bg-gradient-to-br from-red-600 via-red-700 to-rose-800 px-3 py-2.5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="bg-gradient-to-r from-red-600 via-red-700 to-rose-800 px-4 py-2.5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
         <div className="relative z-10 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-white">Stuck Travelers</h3>
-            <p className="text-xs text-red-200/80">Idle &gt; 48 hours in a work center</p>
+            <p className="text-[10px] text-red-200/80">Idle &gt; 48 hours in a work center</p>
           </div>
           {stuckList.length > 0 && (
-            <span className="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+            <span className="text-xs font-bold text-white bg-white/25 px-2 py-0.5 rounded-full">
               {stuckList.length}
             </span>
           )}

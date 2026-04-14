@@ -239,13 +239,16 @@ async def get_step_qr_code(
             detail="Traveler not found for this step"
         )
 
-    # Generate step-specific QR code
+    # Generate step-specific QR code with all fields
     qr_code_image = BarcodeService.generate_step_qr_code(
         traveler.id,
         traveler.job_number,
         step.work_center_code,
         step.id,
-        "PROCESS"
+        "PROCESS",
+        step.step_number,
+        step.operation,
+        traveler.work_order_number
     )
 
     return {
@@ -256,7 +259,7 @@ async def get_step_qr_code(
         "operation": step.operation,
         "step_number": step.step_number,
         "qr_code_image": qr_code_image,
-        "qr_data": f"NEXUS-STEP|{traveler.id}|{traveler.job_number}|{step.work_center_code}|PROCESS|{step.id}|AC"
+        "qr_data": f"NEXUS-STEP|{traveler.id}|{traveler.job_number}|{traveler.work_order_number}|{step.work_center_code}|{step.step_number}|{step.operation}|PROCESS|{step.id}|AC"
     }
 
 @router.get("/traveler/{traveler_id}/steps-qr")
@@ -313,11 +316,11 @@ async def get_all_step_qr_codes(
         ).all()
 
         for manual_step in manual_steps:
-            # Use "CUSTOM" as work center for manual steps
+            # Use actual description as work center so scanning shows the right name
             qr_code_image = BarcodeService.generate_step_qr_code(
                 traveler.id,
                 traveler.job_number,
-                "CUSTOM",
+                manual_step.description,
                 manual_step.id,
                 "MANUAL",
                 0,  # manual steps don't have step numbers
@@ -329,9 +332,9 @@ async def get_all_step_qr_codes(
                 "step_id": manual_step.id,
                 "step_type": "MANUAL",
                 "description": manual_step.description,
-                "work_center": "CUSTOM",
+                "work_center": manual_step.description,
                 "qr_code_image": qr_code_image,
-                "qr_data": f"NEXUS-STEP|{traveler.id}|{traveler.job_number}|{traveler.work_order_number}|CUSTOM|0|{manual_step.description}|MANUAL|{manual_step.id}|AC"
+                "qr_data": f"NEXUS-STEP|{traveler.id}|{traveler.job_number}|{traveler.work_order_number}|{manual_step.description}|0|{manual_step.description}|MANUAL|{manual_step.id}|AC"
             })
 
     return {
