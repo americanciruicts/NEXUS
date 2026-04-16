@@ -379,12 +379,19 @@ async def lifespan(app: FastAPI):
     # Auto-migrate: add RMA enum values to travelertype
     try:
         from sqlalchemy import text as text_rma_enum
+        import re as _re_enum
+        _enum_val_re = _re_enum.compile(r'^[A-Z_][A-Z0-9_]*$')
         with engine.connect() as conn:
             for val in ['RMA_SAME', 'RMA_DIFF', 'MODIFICATION']:
+                if not _enum_val_re.match(val):
+                    print(f"Skipping unsafe enum value: {val}")
+                    continue
                 try:
                     conn.execute(text_rma_enum(f"ALTER TYPE travelertype ADD VALUE IF NOT EXISTS '{val}'"))
-                except Exception:
-                    pass  # Value already exists
+                except Exception as enum_err:
+                    # Expected when value already exists on older PG versions
+                    # that don't support ADD VALUE IF NOT EXISTS cleanly in a tx.
+                    print(f"Note: enum value '{val}' not added ({enum_err})")
             conn.commit()
             print("Ensured RMA enum values exist in travelertype")
     except Exception as e:
@@ -412,8 +419,14 @@ async def lifespan(app: FastAPI):
                 'customer_revision_received': 'VARCHAR(50)',
                 'rma_notes': 'TEXT',
             }
+            import re as _re_ident
+            _ident_re = _re_ident.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+            _type_re = _re_ident.compile(r'^[A-Z]+(\(\d+\))?$')
             for col_name, col_type in rma_columns.items():
                 if col_name not in traveler_cols:
+                    if not _ident_re.match(col_name) or not _type_re.match(col_type):
+                        print(f"Skipping unsafe column definition: {col_name} {col_type}")
+                        continue
                     conn.execute(text(f"ALTER TABLE travelers ADD COLUMN {col_name} {col_type}"))
                     print(f"Added '{col_name}' column to travelers table")
             conn.commit()

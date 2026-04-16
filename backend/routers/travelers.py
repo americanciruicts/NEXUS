@@ -26,21 +26,16 @@ async def get_user_or_system(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Get current authenticated user. Falls back to first admin if token is missing/invalid.
-    Never creates a 'system' user.
+    Get current authenticated user. Requires a valid Bearer token (JWT issued
+    by /auth/login or /auth/sso/callback). Missing or invalid tokens return 401.
     """
-    if credentials:
-        try:
-            return await get_current_user(credentials, db)
-        except Exception:
-            pass
-
-    # Fallback: use first admin user (never create a fake system user)
-    admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
-    if admin_user:
-        return admin_user
-
-    raise HTTPException(status_code=401, detail="Authentication required")
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await get_current_user(credentials, db)
 
 # Memory store for manufacturing process steps
 MANUFACTURING_STEPS = {
