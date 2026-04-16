@@ -996,6 +996,13 @@ export default function LaborTrackingPage() {
   const confirmStopTimer = async () => {
     if (!pendingStopEntryId) return;
 
+    // Qty must be entered. Leaving it blank was letting users bypass the
+    // zero-qty-requires-reason rule by simply not typing anything.
+    if (qtyCompleted.trim() === '') {
+      toast.error('Please enter a quantity (use 0 with a reason if no units were completed).');
+      return;
+    }
+
     // Zero qty must be justified — the Stop button is already gated on this,
     // but guard here too in case the handler is reached via Enter-in-input.
     if (qtyCompleted === '0' && !stopComment.trim()) {
@@ -2732,7 +2739,7 @@ export default function LaborTrackingPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-slate-400">
-            How many units did you complete during this time? <span className="text-gray-400 text-xs">(optional — enter 0 with a reason if none were completed)</span>
+            How many units did you complete during this time? <span className="text-red-500 text-xs">(required — enter 0 with a reason if none were completed)</span>
             {travelerMaxQty != null && (
               <span className="block mt-1 font-semibold text-blue-600 dark:text-blue-400">
                 Traveler quantity: {travelerMaxQty}
@@ -2800,7 +2807,10 @@ export default function LaborTrackingPage() {
             <button
               onClick={confirmStopTimer}
               disabled={
-                !!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)
+                // Qty must be entered — blank was the workaround users were
+                // using to bypass the zero-qty-requires-reason rule.
+                qtyCompleted.trim() === ''
+                || !!(travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)
                 || (qtyCompleted === '0' && !stopComment.trim())
               }
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
