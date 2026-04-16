@@ -140,56 +140,6 @@ const extractDateOnly = (dateStr: unknown): string => {
   return '';
 };
 
-// Helper function to increment revision: A → B, B → C, ..., Z → AA, etc.
-const incrementRevision = (revision: string): string => {
-  if (!revision) return 'A';
-
-  const trimmed = revision.trim().toUpperCase();
-
-  // Handle single letter (A-Z)
-  if (trimmed.length === 1 && /^[A-Z]$/.test(trimmed)) {
-    const charCode = trimmed.charCodeAt(0);
-    if (charCode < 90) { // A-Y
-      return String.fromCharCode(charCode + 1);
-    } else { // Z
-      return 'AA';
-    }
-  }
-
-  // Handle multi-letter (AA, AB, etc.)
-  if (/^[A-Z]+$/.test(trimmed)) {
-    const result = trimmed.split('');
-    let i = result.length - 1;
-
-    while (i >= 0) {
-      if (result[i] === 'Z') {
-        result[i] = 'A';
-        i--;
-      } else {
-        result[i] = String.fromCharCode(result[i].charCodeAt(0) + 1);
-        break;
-      }
-    }
-
-    if (i < 0) {
-      result.unshift('A');
-    }
-
-    return result.join('');
-  }
-
-  // Handle numeric versions (V1.0, V1.1, etc.) - increment last number
-  const numMatch = trimmed.match(/^(.*)(\d+)$/);
-  if (numMatch) {
-    const prefix = numMatch[1];
-    const number = parseInt(numMatch[2]);
-    return prefix + (number + 1);
-  }
-
-  // Default: just append 'B' if we can't parse
-  return trimmed + 'B';
-};
-
 export default function TravelerForm({ mode = 'create', initialData, travelerId, isClone = false }: TravelerFormProps) {
   // Step 1: Select Traveler Type
   const [selectedType, setSelectedType] = useState<TravelerType | ''>(initialData?.traveler_type as TravelerType || '');
@@ -748,10 +698,8 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
     // PCB travelers should never have labor hours
     const finalIncludeLaborHours = (selectedType === 'PCB') ? false : includeLaborHours;
 
-    // Auto-increment revision when editing (if changes were made)
-    const finalRevision = mode === 'edit' && initialData?.revision
-      ? incrementRevision(String(initialData.revision))
-      : formData.revision || 'A';
+    // BOM Rev is manual-only. Persist whatever the user typed in the form.
+    const finalRevision = formData.revision || String(initialData?.revision || 'A');
 
     // Prepare API payload. Clones persist an empty WO — it's filled later when
     // the status transitions Draft → Awaiting Start.
@@ -993,9 +941,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
 
   // Shared auto-fill function used by both type selection screen and job number field
   const autoFillFromExisting = async (fullData: FullTravelerData) => {
-    // Auto-increment the traveler revision
+    // BOM Rev is manual-only — carry the source revision through unchanged
+    // and let the user edit it before saving.
     const oldRevision = String(fullData.revision || 'A');
-    const newRevision = incrementRevision(oldRevision);
+    const newRevision = oldRevision;
 
     // Parse specs
     let specsText = '';

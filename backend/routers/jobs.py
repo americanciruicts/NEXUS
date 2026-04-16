@@ -889,34 +889,24 @@ def auto_create_traveler(job_number: str, db: Session = Depends(get_db), current
     else:
         trav_type = TravelerType.PCB_ASSEMBLY  # Default
 
-    # Check for existing traveler with same job_number to determine revision
-    existing = (
+    # BOM Rev is manual-only. Seed the new traveler from the KOSH job_rev if
+    # available; if that collides with an existing traveler on the same job
+    # (uq_traveler_job_revision), surface a clear error asking the user to
+    # clone and set a unique BOM Rev manually instead of silently bumping it.
+    new_rev = job.get("job_rev") or "A"
+    collision = (
         db.query(Traveler)
-        .filter(Traveler.job_number.ilike(f"{job_number}%"))
-        .order_by(Traveler.created_at.desc())
+        .filter(Traveler.job_number == job_number, Traveler.revision == new_rev)
         .first()
     )
-
-    if existing:
-        # Increment revision
-        rev = existing.revision or "A"
-        if rev.isdigit():
-            new_rev = str(int(rev) + 1)
-        else:
-            chars = list(rev.upper())
-            carry = True
-            for i in range(len(chars) - 1, -1, -1):
-                if carry:
-                    if chars[i] == 'Z':
-                        chars[i] = 'A'
-                    else:
-                        chars[i] = chr(ord(chars[i]) + 1)
-                        carry = False
-            if carry:
-                chars.insert(0, 'A')
-            new_rev = ''.join(chars)
-    else:
-        new_rev = job.get("job_rev") or "A"
+    if collision:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A traveler already exists for job {job_number} at BOM Rev {new_rev}. "
+                "Use Clone and set a unique BOM Rev manually."
+            ),
+        )
 
     # Get default work center steps for this type
     type_map = {
@@ -977,7 +967,7 @@ def auto_create_traveler(job_number: str, db: Session = Depends(get_db), current
         "revision": traveler.revision,
         "status": traveler.status.value,
         "quantity": traveler.quantity,
-        "message": f"Draft traveler created for job {job_number} (Rev {new_rev}, Type: {trav_type.value})",
+        "message": f"Draft traveler created for job {job_number} (BOM Rev {new_rev}, Type: {trav_type.value})",
     }
 
 

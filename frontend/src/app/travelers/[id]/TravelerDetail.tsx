@@ -726,26 +726,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     window.scrollTo(0, 0);
   };
 
-  const incrementRevision = (rev: string): string => {
-    if (!rev) return 'A';
-    // Handle numeric revisions (1 → 2, 5 → 6)
-    const num = parseInt(rev);
-    if (!isNaN(num)) return String(num + 1);
-    // Handle letter revisions (A → B, Z → AA)
-    const chars = rev.toUpperCase().split('');
-    let carry = true;
-    for (let i = chars.length - 1; i >= 0 && carry; i--) {
-      if (chars[i] === 'Z') {
-        chars[i] = 'A';
-      } else {
-        chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
-        carry = false;
-      }
-    }
-    if (carry) chars.unshift('A');
-    return chars.join('');
-  };
-
   const handleSave = async () => {
     if (!editedTraveler) return;
 
@@ -1144,7 +1124,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       const custRevChanged = (editedTraveler.customerRevision || '') !== autoFilledFrom.customerRevision;
 
       if (!woChanged && !revChanged && !custRevChanged) {
-        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.');
+        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, BOM Rev, or Customer Rev before saving.');
         return;
       }
     }
@@ -1325,7 +1305,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       const custRevChanged = (editedTraveler.customerRevision || '') !== autoFilledFrom.customerRevision;
 
       if (!woChanged && !revChanged && !custRevChanged) {
-        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.');
+        toast.warning('This traveler was auto-filled from an existing one. You must change at least one of: Work Order, BOM Rev, or Customer Rev before saving.');
         return;
       }
     }
@@ -1462,8 +1442,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         return;
       }
 
+      // BOM Rev is manually set — carry the source revision through as-is
+      // and require the user to change it (or another unique field) before
+      // save. See the warning toast below.
       const oldRevision = String(data.revision || 'A');
-      const newRevision = incrementRevision(oldRevision);
+      const newRevision = oldRevision;
       const type = (data.traveler_type || 'PCB_ASSEMBLY') as TravelerType;
 
       // Parse specs
@@ -1560,7 +1543,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customerRevision: data.customer_revision || '',
       });
 
-      toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. You must change at least one of: Work Order, Job Rev, or Customer Rev before saving.`);
+      toast.info(`Auto-filled from existing traveler (BOM Rev ${oldRevision}). Update the BOM Rev manually, or change Work Order / Customer Rev, before saving.`);
 
       // Check for BOM shortages (non-blocking warning)
       try {
@@ -2737,7 +2720,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     ) : (displayTraveler.workOrder || '-')}</span></div>
                     <div className="flex justify-between"><span className="font-semibold">PO:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.poNumber || ''} onChange={(e) => updateField('poNumber', e.target.value)} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.poNumber || '-')}</span></div>
                     <div className="flex justify-between"><span className="font-semibold">Quantity:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" inputMode="numeric" pattern="[0-9]*" value={editData.quantity === 0 ? '' : editData.quantity} onFocus={(e) => { if (e.target.value === '0') e.target.select(); }} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); updateField('quantity', v === '' ? 0 : parseInt(v)); }} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : displayTraveler.quantity}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Job Rev:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.revision || '- -')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">BOM Rev:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.revision} onChange={(e) => updateField('revision', e.target.value)} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.revision || '- -')}</span></div>
                   </div>
                 </div>
 
@@ -2930,7 +2913,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1 ">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Job Rev:</span>
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">BOM Rev:</span>
                   {isEditing ? (
                     <input
                       type="text"

@@ -350,7 +350,7 @@ export default function JobDetailPage() {
               {[
                 { label: 'Order QTY', value: String(job.order_qty) },
                 { label: 'Build QTY', value: String(job.build_qty) },
-                { label: 'Job Rev', value: job.job_rev || '-' },
+                { label: 'BOM Rev', value: job.job_rev || '-' },
                 { label: 'Cust Rev', value: job.cust_rev || '-' },
                 { label: 'WO #', value: job.wo_number || '-' },
                 { label: 'Created By', value: job.created_by || '-' },
@@ -502,7 +502,7 @@ export default function JobDetailPage() {
                     <PlusCircleIcon className="h-4 w-4" />
                     {creatingRerun ? 'Creating...' : 'Create Another Run'}
                   </button>
-                  <span className="text-xs text-gray-500 dark:text-slate-400">Clones with bumped revision</span>
+                  <span className="text-xs text-gray-500 dark:text-slate-400">Creates a draft from this job — set BOM Rev manually</span>
                 </div>
               )}
             </div>

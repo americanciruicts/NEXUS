@@ -881,7 +881,7 @@ function TravelersPage() {
                           <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">Part# <span className="underline">{traveler.partNumber}</span></div>
                           <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={traveler.description}>Desc: {traveler.description || 'N/A'}</div>
                           <div className="text-xs text-gray-500 dark:text-slate-400 space-y-0">
-                            <div>Job Rev: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</span> · Cust Rev: <span className="font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</span></div>
+                            <div>BOM Rev: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</span> · Cust Rev: <span className="font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</span></div>
                             <div>Qty: <span className="font-bold text-gray-900 dark:text-slate-100">{traveler.quantity}</span></div>
                           </div>
                         </div>
