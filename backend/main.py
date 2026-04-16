@@ -397,6 +397,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not add RMA enum values: {e}")
 
+    # Auto-migrate: add WORK_CENTER_* values to the notificationtype enum so
+    # admin notifications for work-center changes can be written without a
+    # full schema migration.
+    try:
+        from sqlalchemy import text as text_wc_enum
+        import re as _re_wc_enum
+        _wc_val_re = _re_wc_enum.compile(r'^[A-Z_][A-Z0-9_]*$')
+        with engine.connect() as conn:
+            for val in [
+                'WORK_CENTER_CREATED',
+                'WORK_CENTER_UPDATED',
+                'WORK_CENTER_DELETED',
+                'WORK_CENTER_REORDERED',
+            ]:
+                if not _wc_val_re.match(val):
+                    print(f"Skipping unsafe enum value: {val}")
+                    continue
+                try:
+                    conn.execute(text_wc_enum(f"ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS '{val}'"))
+                except Exception as wc_enum_err:
+                    print(f"Note: notificationtype value '{val}' not added ({wc_enum_err})")
+            conn.commit()
+            print("Ensured WORK_CENTER_* values exist in notificationtype")
+    except Exception as e:
+        print(f"Warning: Could not add WORK_CENTER_* enum values: {e}")
+
     # Auto-migrate: add RMA-specific columns to travelers table and create rma_unit_tracking table
     try:
         from sqlalchemy import text, inspect as sa_inspect_rma

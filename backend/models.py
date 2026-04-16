@@ -78,6 +78,30 @@ class WorkCenter(Base):
     # Relationships
     process_steps = relationship("ProcessStep", back_populates="work_center")
 
+
+class WorkCenterAuditLog(Base):
+    """Immutable audit trail for all work-center create/update/delete/reorder
+    actions. Created because the generic AuditLog table requires a traveler_id
+    and work centers aren't scoped to a single traveler."""
+    __tablename__ = "work_center_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(20), nullable=False)  # CREATED / UPDATED / DELETED / REORDERED
+    work_center_id = Column(Integer, nullable=True)  # nullable so deletes can still log
+    work_center_name = Column(String(100))
+    work_center_code = Column(String(100))
+    traveler_type = Column(String(20))
+    field_changed = Column(String(50))  # single field, or '*' for full create/delete
+    old_value = Column(Text)
+    new_value = Column(Text)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    ip_address = Column(String(45))
+    user_agent = Column(String(500))
+
+    user = relationship("User")
+
+
 class Part(Base):
     __tablename__ = "parts"
 
@@ -402,6 +426,10 @@ class NotificationType(enum.Enum):
     TRACKING_ENTRY_UPDATED = "TRACKING_ENTRY_UPDATED"  # Legacy - kept for existing notifications
     TRACKING_ENTRY_DELETED = "TRACKING_ENTRY_DELETED"  # Legacy - kept for existing notifications
     USER_LOGIN = "USER_LOGIN"
+    WORK_CENTER_CREATED = "WORK_CENTER_CREATED"
+    WORK_CENTER_UPDATED = "WORK_CENTER_UPDATED"
+    WORK_CENTER_DELETED = "WORK_CENTER_DELETED"
+    WORK_CENTER_REORDERED = "WORK_CENTER_REORDERED"
 
 class Notification(Base):
     __tablename__ = "notifications"
