@@ -52,6 +52,10 @@ const Autocomplete = forwardRef<AutocompleteHandle, AutocompleteProps>(function 
   const isFocusedRef = useRef(false);
   const justSelectedRef = useRef(false);
   const fetchRef = useRef(fetchSuggestions);
+  // When the parent programmatically focuses us (autoFocus on mount, or a
+  // ref.focus() after a scan) we DON'T want the dropdown to auto-open — the
+  // user didn't ask for it. This flag suppresses the next handleFocus-open.
+  const suppressNextAutoOpenRef = useRef(false);
 
   // Keep fetchRef up to date without triggering effects
   fetchRef.current = fetchSuggestions;
@@ -59,12 +63,20 @@ const Autocomplete = forwardRef<AutocompleteHandle, AutocompleteProps>(function 
   // Expose imperative focus() so parents can pull focus into this input after
   // a scan in another field. Also mount-time autoFocus.
   useImperativeHandle(externalRef, () => ({
-    focus: () => inputRef.current?.focus(),
-    select: () => { inputRef.current?.focus(); inputRef.current?.select(); },
+    focus: () => {
+      suppressNextAutoOpenRef.current = true;
+      inputRef.current?.focus();
+    },
+    select: () => {
+      suppressNextAutoOpenRef.current = true;
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    },
   }), []);
 
   useEffect(() => {
     if (autoFocus) {
+      suppressNextAutoOpenRef.current = true;
       // Defer to next frame so the ref is attached.
       const id = requestAnimationFrame(() => inputRef.current?.focus());
       return () => cancelAnimationFrame(id);
@@ -264,6 +276,12 @@ const Autocomplete = forwardRef<AutocompleteHandle, AutocompleteProps>(function 
   const handleFocus = async () => {
     isFocusedRef.current = true;
     updateDropdownPosition();
+    // Skip the auto-open when the focus came from autoFocus or a programmatic
+    // ref.focus() — those cases shouldn't spring the dropdown on the user.
+    if (suppressNextAutoOpenRef.current) {
+      suppressNextAutoOpenRef.current = false;
+      return;
+    }
     // Show suggestions on focus if meets min chars
     if (value.length >= minChars || minChars === 0) {
       setIsLoading(true);
