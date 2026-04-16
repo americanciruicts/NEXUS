@@ -6,7 +6,7 @@ import Modal from '@/components/Modal';
 import { ClockIcon, UserIcon, DocumentTextIcon, PlayIcon, StopIcon, PencilIcon, TrashIcon, EyeIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { formatHoursDualCompact, formatHoursDual, formatSecondsCompact } from '@/utils/timeHelpers';
-import Autocomplete from '@/components/ui/Autocomplete';
+import Autocomplete, { AutocompleteHandle } from '@/components/ui/Autocomplete';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
 import { offlineFetch } from '@/lib/offlineSync';
@@ -68,6 +68,10 @@ export default function LaborTrackingPage() {
   });
   const [jobWorkCenterOptions, setJobWorkCenterOptions] = useState<Array<{step_id: number; step_number: number; operation: string; work_center_code: string; label: string; value: string}>>([]);
   const [workCenterConfirmed, setWorkCenterConfirmed] = useState(false);
+  // Refs used to pull focus between fields after a scan so operators don't
+  // forget to enter the job number before starting the timer.
+  const jobNumberAutocompleteRef = useRef<AutocompleteHandle | null>(null);
+  const workCenterAutocompleteRef = useRef<AutocompleteHandle | null>(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -448,10 +452,14 @@ export default function LaborTrackingPage() {
 
   // Handle job number selection from autocomplete dropdown - THIS is when we fetch steps
   const handleJobNumberSelect = async (option: any) => {
-    const jobNum = option.job_number || option.value;
+    const jobNum = (option.job_number || option.value || '').trim();
+    if (!jobNum) return;
     setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
     const steps = await fetchWorkCentersByJob(jobNum);
     setJobWorkCenterOptions(steps);
+    // After the job is scanned/selected, pull focus to the Work Center field
+    // so the operator's next scan lands on the correct input.
+    requestAnimationFrame(() => workCenterAutocompleteRef.current?.focus());
   };
 
   // Check and auto-stop entries at 5pm
@@ -652,13 +660,35 @@ export default function LaborTrackingPage() {
   };
 
   const startTimer = async () => {
-    if (!newEntry.job_number || !newEntry.work_center || !newEntry.operator_name) {
+    // Trim before validating — whitespace-only scans were slipping past the
+    // truthy check and producing entries with no job number attached.
+    const jobNumber = (newEntry.job_number || '').trim();
+    const workCenter = (newEntry.work_center || '').trim();
+    const operatorName = (newEntry.operator_name || '').trim();
+
+    if (!jobNumber) {
+      toast.error('Job Number is required — scan or select a job before starting the timer');
+      jobNumberAutocompleteRef.current?.select();
+      return;
+    }
+    if (!workCenter) {
+      toast.error('Work Center is required — scan or select a work center before starting the timer');
+      workCenterAutocompleteRef.current?.select();
+      return;
+    }
+    if (!operatorName) {
       toast.error('Please fill in all required fields');
       return;
     }
     if (!workCenterConfirmed) {
       toast.error('Please select a work center from the dropdown');
+      workCenterAutocompleteRef.current?.select();
       return;
+    }
+
+    // Sync trimmed values back into state so the request body is clean.
+    if (jobNumber !== newEntry.job_number || workCenter !== newEntry.work_center) {
+      setNewEntry(prev => ({ ...prev, job_number: jobNumber, work_center: workCenter }));
     }
 
     try {
@@ -679,15 +709,16 @@ export default function LaborTrackingPage() {
       const travelers = await travelersResponse.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const traveler = travelers.find((t: any) =>
-        String(t.job_number).toLowerCase() === newEntry.job_number.toLowerCase()
+        String(t.job_number).toLowerCase() === jobNumber.toLowerCase()
       );
 
       if (!traveler) {
-        toast.error(`Job number ${newEntry.job_number} not found`);
+        toast.error(`Job number ${jobNumber} not found`);
+        jobNumberAutocompleteRef.current?.select();
         return;
       }
 
-      const description = `${newEntry.work_center} - ${newEntry.operator_name}`;
+      const description = `${workCenter} - ${operatorName}`;
       // Use current system time when Start button is clicked
       const now = new Date();
 
@@ -1564,12 +1595,14 @@ export default function LaborTrackingPage() {
                     Job Number <span className="text-red-500">*</span>
                   </label>
                   <Autocomplete
+                    ref={jobNumberAutocompleteRef}
                     value={newEntry.job_number}
                     onChange={handleJobNumberChange}
                     onSelect={handleJobNumberSelect}
                     fetchSuggestions={fetchJobNumbers}
                     placeholder="Type or scan job #"
                     disabled={isTimerRunning}
+                    autoFocus={!isTimerRunning && !newEntry.job_number}
                     className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all disabled:bg-gray-100 dark:disabled:bg-slate-700 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200"
                     minChars={0}
                   />
@@ -1579,6 +1612,7 @@ export default function LaborTrackingPage() {
                     Work Center <span className="text-red-500">*</span>
                   </label>
                   <Autocomplete
+                    ref={workCenterAutocompleteRef}
                     value={newEntry.work_center}
                     onChange={(value) => {
                       if (!isTimerRunning) {
@@ -1657,6 +1691,14 @@ export default function LaborTrackingPage() {
                       }
                       setNewEntry(prev => ({ ...prev, work_center: selectedWC, step_id: stepId }));
                       setWorkCenterConfirmed(true);
+                      // A Work Center was picked without a Job Number in context
+                      // (e.g. generic WC barcode). Pull focus back to Job Number
+                      // so the next scan lands there and the timer can't start
+                      // without a job attached.
+                      if (!newEntry.job_number.trim()) {
+                        requestAnimationFrame(() => jobNumberAutocompleteRef.current?.select());
+                        toast.info('Scan or select a Job Number to continue');
+                      }
                     }}
                     fetchSuggestions={async (query) => {
                       // If job number is set, fetch work centers from its process steps
@@ -1710,7 +1752,7 @@ export default function LaborTrackingPage() {
                 {!isTimerRunning ? (
                   <button
                     onClick={startTimer}
-                    disabled={!newEntry.job_number || !newEntry.work_center || !workCenterConfirmed || !newEntry.operator_name}
+                    disabled={!newEntry.job_number.trim() || !newEntry.work_center.trim() || !workCenterConfirmed || !newEntry.operator_name.trim()}
                     className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                   >
                     <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5" />

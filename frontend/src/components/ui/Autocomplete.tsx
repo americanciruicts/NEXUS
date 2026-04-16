@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 
 interface AutocompleteOption {
@@ -20,9 +20,15 @@ interface AutocompleteProps {
   required?: boolean;
   minChars?: number;
   debounceMs?: number;
+  autoFocus?: boolean;
 }
 
-export default function Autocomplete({
+export interface AutocompleteHandle {
+  focus: () => void;
+  select: () => void;
+}
+
+const Autocomplete = forwardRef<AutocompleteHandle, AutocompleteProps>(function Autocomplete({
   value,
   onChange,
   onSelect,
@@ -33,7 +39,8 @@ export default function Autocomplete({
   required = false,
   minChars = 0,
   debounceMs = 300,
-}: AutocompleteProps) {
+  autoFocus = false,
+}, externalRef) {
   const [suggestions, setSuggestions] = useState<AutocompleteOption[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +55,21 @@ export default function Autocomplete({
 
   // Keep fetchRef up to date without triggering effects
   fetchRef.current = fetchSuggestions;
+
+  // Expose imperative focus() so parents can pull focus into this input after
+  // a scan in another field. Also mount-time autoFocus.
+  useImperativeHandle(externalRef, () => ({
+    focus: () => inputRef.current?.focus(),
+    select: () => { inputRef.current?.focus(); inputRef.current?.select(); },
+  }), []);
+
+  useEffect(() => {
+    if (autoFocus) {
+      // Defer to next frame so the ref is attached.
+      const id = requestAnimationFrame(() => inputRef.current?.focus());
+      return () => cancelAnimationFrame(id);
+    }
+  }, [autoFocus]);
 
   // Calculate dropdown position based on input element
   const updateDropdownPosition = useCallback(() => {
@@ -163,9 +185,12 @@ export default function Autocomplete({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Always handle Enter for QR codes — even if dropdown is closed or no suggestions
-    if (e.key === 'Enter') {
-      e.preventDefault();
+    // Treat Tab the same as Enter for barcode scanners configured with a Tab
+    // suffix. We still let the browser advance focus, but we also commit the
+    // scanned value as a selection so downstream handlers run.
+    const isCommitKey = e.key === 'Enter' || e.key === 'Tab';
+    if (isCommitKey) {
+      if (e.key === 'Enter') e.preventDefault();
       // Check both React state value AND the actual DOM input value (scanner may outpace React)
       const inputValue = e.currentTarget.value || value;
       if (inputValue.includes('NEXUS-STEP|')) {
@@ -336,4 +361,6 @@ export default function Autocomplete({
       {typeof window !== 'undefined' && dropdownContent && createPortal(dropdownContent, document.body)}
     </div>
   );
-}
+});
+
+export default Autocomplete;
