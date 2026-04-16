@@ -45,6 +45,10 @@ interface TravelerFormProps {
   mode?: 'create' | 'edit' | 'view';
   initialData?: Record<string, unknown>;
   travelerId?: string;
+  // When true, the form is cloning an existing traveler: start in DRAFT with
+  // no work-order number. WO is generated later when the user moves the
+  // traveler from Draft → Awaiting Start.
+  isClone?: boolean;
 }
 
 interface FormStep {
@@ -186,7 +190,7 @@ const incrementRevision = (revision: string): string => {
   return trimmed + 'B';
 };
 
-export default function TravelerForm({ mode = 'create', initialData, travelerId }: TravelerFormProps) {
+export default function TravelerForm({ mode = 'create', initialData, travelerId, isClone = false }: TravelerFormProps) {
   // Step 1: Select Traveler Type
   const [selectedType, setSelectedType] = useState<TravelerType | ''>(initialData?.traveler_type as TravelerType || '');
   const [showForm, setShowForm] = useState(mode === 'edit' || false);
@@ -209,7 +213,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     return { prefix: workOrder, suffix: '' };
   };
 
-  const initialWorkOrder = String(initialData?.work_order_number || '');
+  // Clones start without a work-order — the WO is assigned on Draft → Awaiting
+  // Start. For regular edit/view the incoming WO is preserved.
+  const initialWorkOrder = isClone ? '' : String(initialData?.work_order_number || '');
   const { prefix: initialPrefix, suffix: initialSuffix } = splitWorkOrder(initialWorkOrder);
 
   const [workOrderPrefix, setWorkOrderPrefix] = useState(initialPrefix);
@@ -373,9 +379,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
     fetchWC();
   }, [selectedType]);
 
-  // Fetch next sequential work order number on create mode
+  // Fetch next sequential work order number on create mode. Skipped for clones:
+  // cloned travelers stay WO-less until promoted to Awaiting Start so the
+  // sequential WO isn't burned on drafts that may never ship.
   useEffect(() => {
-    if (mode === 'create' && !initialData?.work_order_number) {
+    if (mode === 'create' && !initialData?.work_order_number && !isClone) {
       const fetchNextWorkOrderNumber = async () => {
         try {
           const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
@@ -395,7 +403,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       };
       fetchNextWorkOrderNumber();
     }
-  }, [mode, initialData?.work_order_number]);
+  }, [mode, initialData?.work_order_number, isClone]);
 
   // Sync workOrderNumber when prefix or suffix changes
   useEffect(() => {
@@ -745,10 +753,11 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       ? incrementRevision(String(initialData.revision))
       : formData.revision || 'A';
 
-    // Prepare API payload
+    // Prepare API payload. Clones persist an empty WO — it's filled later when
+    // the status transitions Draft → Awaiting Start.
     const travelerData = {
       job_number: fullJobNumber,
-      work_order_number: formData.workOrderNumber || fullJobNumber,
+      work_order_number: isClone ? (formData.workOrderNumber || '') : (formData.workOrderNumber || fullJobNumber),
       po_number: formData.poNumber || '',
       traveler_type: travelerTypeMap[selectedType] || 'PCB_ASSEMBLY',
       part_number: formData.partNumber,
@@ -761,7 +770,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       customer_name: formData.customerName || '',
       priority: formData.priority || 'NORMAL',
       work_center: formSteps[0]?.workCenter || 'ASSEMBLY',
-      status: 'CREATED',
+      // Clones start as DRAFT so the WO is only burned on the Draft →
+      // Awaiting Start transition (handled server-side in PATCH /travelers/{id}).
+      status: isClone ? 'DRAFT' : 'CREATED',
       is_active: true,
       include_labor_hours: finalIncludeLaborHours,
       notes: formData.notes || '',
@@ -1006,24 +1017,31 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId 
       specsText = String(fullData.specs || '');
     }
 
-    // Fetch a NEW work order number for the new traveler (not reuse the existing one)
-    try {
-      const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.next_work_order_prefix) {
-          setWorkOrderPrefix(data.next_work_order_prefix);
-          setWorkOrderSuffix('');
+    // For clones, skip WO allocation entirely — it is assigned later on
+    // Draft → Awaiting Start. For non-clone autofill (new revision of an
+    // existing job), fetch a fresh sequential WO as before.
+    if (isClone) {
+      setWorkOrderPrefix('');
+      setWorkOrderSuffix('');
+    } else {
+      try {
+        const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.next_work_order_prefix) {
+            setWorkOrderPrefix(data.next_work_order_prefix);
+            setWorkOrderSuffix('');
+          }
         }
-      }
-    } catch {
-      // Fallback: use existing work order if fetch fails
-      if (fullData.work_order_number) {
-        const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
-        setWorkOrderPrefix(prefix);
-        setWorkOrderSuffix(suffix);
+      } catch {
+        // Fallback: use existing work order if fetch fails
+        if (fullData.work_order_number) {
+          const { prefix, suffix } = splitWorkOrder(fullData.work_order_number);
+          setWorkOrderPrefix(prefix);
+          setWorkOrderSuffix(suffix);
+        }
       }
     }
 

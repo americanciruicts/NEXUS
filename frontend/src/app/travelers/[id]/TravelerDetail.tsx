@@ -2378,9 +2378,16 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                     body: JSON.stringify({ status: opt.value }),
                                   });
                                   if (res.ok) {
-                                    setTraveler(prev => prev ? { ...prev, status: opt.value } : prev);
-                                    setEditedTraveler(prev => prev ? { ...prev, status: opt.value } : prev);
-                                    toast.success(`Status changed to ${opt.label}`);
+                                    const payload = await res.json().catch(() => null);
+                                    const returnedWO = payload?.traveler?.work_order_number as string | undefined;
+                                    const prevStatus = displayTraveler.status;
+                                    setTraveler(prev => prev ? { ...prev, status: opt.value, ...(returnedWO ? { workOrder: returnedWO } : {}) } : prev);
+                                    setEditedTraveler(prev => prev ? { ...prev, status: opt.value, ...(returnedWO ? { workOrder: returnedWO } : {}) } : prev);
+                                    if (prevStatus === 'DRAFT' && opt.value === 'CREATED' && returnedWO) {
+                                      toast.success(`Status changed to ${opt.label} — WO ${returnedWO} assigned`);
+                                    } else {
+                                      toast.success(`Status changed to ${opt.label}`);
+                                    }
                                   } else {
                                     toast.error('Failed to update status');
                                   }

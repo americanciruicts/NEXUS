@@ -1596,6 +1596,32 @@ async def patch_traveler(
             updates['status'] = traveler.previous_status
             print(f"Restoring to previous_status: {traveler.previous_status}")
 
+    # DRAFT → CREATED (Awaiting Start): allocate a WO if one isn't already set.
+    # Clones reach this branch: they are saved as DRAFT with no WO, and the WO
+    # is burned only when an operator promotes the traveler to Awaiting Start.
+    # If the user has manually typed a WO in the form we honor it.
+    if (
+        updates.get('status') == 'CREATED'
+        and traveler.status.value == 'DRAFT'
+        and not (updates.get('work_order_number') or traveler.work_order_number)
+    ):
+        import re as _wo_re
+        existing = db.query(Traveler.work_order_number).filter(
+            Traveler.work_order_number.isnot(None),
+            Traveler.work_order_number != '',
+            Traveler.status != 'DRAFT',
+        ).all()
+        max_prefix = 26014
+        for (wo,) in existing:
+            m = _wo_re.match(r'^(\d{5})', str(wo or ''))
+            if m:
+                n = int(m.group(1))
+                if n > max_prefix:
+                    max_prefix = n
+        allocated = str(max_prefix + 1).zfill(5)
+        updates['work_order_number'] = allocated
+        print(f"Allocated WO {allocated} on DRAFT → CREATED transition for traveler {traveler_id}")
+
     # Update only the provided fields
     for key, value in updates.items():
         if hasattr(traveler, key):
@@ -1619,7 +1645,9 @@ async def patch_traveler(
         "traveler": {
             "id": traveler.id,
             "job_number": traveler.job_number,
-            "is_active": traveler.is_active
+            "is_active": traveler.is_active,
+            "status": traveler.status.value if traveler.status else None,
+            "work_order_number": traveler.work_order_number,
         }
     }
 

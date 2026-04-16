@@ -27,6 +27,10 @@ export default function CloneTravelerPage() {
           const data = await response.json();
           // Remove the id so it creates a new traveler
           delete data.id;
+          // Clones inherit everything except the WO. The WO will be assigned
+          // when the cloned traveler's status transitions Draft → Awaiting Start.
+          data.work_order_number = '';
+          data.status = 'DRAFT';
           setTravelerData(data);
         } else {
           console.error('Failed to fetch traveler');
@@ -103,7 +107,7 @@ export default function CloneTravelerPage() {
           </div>
 
           {/* TravelerForm in create mode with initialData (will auto-increment revision) */}
-          <TravelerForm mode="create" initialData={travelerData} />
+          <TravelerForm mode="create" initialData={travelerData} isClone />
         </div>
       </div>
     </Layout>
