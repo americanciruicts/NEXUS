@@ -996,9 +996,20 @@ export default function LaborTrackingPage() {
   const confirmStopTimer = async () => {
     if (!pendingStopEntryId) return;
 
+    // Zero qty must be justified — the Stop button is already gated on this,
+    // but guard here too in case the handler is reached via Enter-in-input.
+    if (qtyCompleted === '0' && !stopComment.trim()) {
+      toast.error('Please enter a reason explaining why quantity is 0.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('nexus_token');
       const endTime = new Date();
+
+      // Use != '' instead of a truthy check so '0' is preserved (previously
+      // '0' survived the ternary but we're making the intent explicit).
+      const parsedQty = qtyCompleted !== '' ? parseInt(qtyCompleted) : null;
 
       const response = await offlineFetch(`${API_BASE_URL}/labor/${pendingStopEntryId}`, {
         method: 'PUT',
@@ -1009,7 +1020,7 @@ export default function LaborTrackingPage() {
         body: JSON.stringify({
           end_time: endTime.toISOString(),
           is_completed: true,
-          qty_completed: qtyCompleted ? parseInt(qtyCompleted) : null,
+          qty_completed: Number.isFinite(parsedQty as number) ? parsedQty : null,
           comment: stopComment || null
         }),
         offlineType: 'labor_stop'
@@ -1179,6 +1190,12 @@ export default function LaborTrackingPage() {
       return;
     }
 
+    // Zero qty requires a written explanation for accountability.
+    if (manualEntryData.qty_completed === '0' && !(manualEntryData.comment && manualEntryData.comment.trim())) {
+      toast.error('Please enter a reason in the Comment field when quantity is 0.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('nexus_token');
 
@@ -1277,8 +1294,19 @@ export default function LaborTrackingPage() {
   const handleEditEntry = async () => {
     if (!editEntryData.id) return;
 
+    // Zero qty must be accompanied by an explanation — same accountability
+    // rule as the stop and manual-entry flows.
+    if (editEntryData.qty_completed === '0' && !(editEntryData.comment && editEntryData.comment.trim())) {
+      toast.error('Please enter a reason in the Comment field when quantity is 0.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('nexus_token');
+
+      const parsedEditQty = editEntryData.qty_completed !== ''
+        ? parseInt(editEntryData.qty_completed)
+        : null;
 
       const response = await fetch(`${API_BASE_URL}/labor/${editEntryData.id}`, {
         method: 'PUT',
@@ -1291,7 +1319,7 @@ export default function LaborTrackingPage() {
           end_time: editEntryData.end_time,
           description: `${editEntryData.work_center} - ${editEntryData.operator_name}`,
           comment: editEntryData.comment || null,
-          qty_completed: editEntryData.qty_completed ? parseInt(editEntryData.qty_completed) : null
+          qty_completed: Number.isFinite(parsedEditQty as number) ? parsedEditQty : null
         })
       });
 
@@ -2704,7 +2732,7 @@ export default function LaborTrackingPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-slate-400">
-            How many units did you complete during this time? <span className="text-gray-400 text-xs">(optional)</span>
+            How many units did you complete during this time? <span className="text-gray-400 text-xs">(optional — enter 0 with a reason if none were completed)</span>
             {travelerMaxQty != null && (
               <span className="block mt-1 font-semibold text-blue-600 dark:text-blue-400">
                 Traveler quantity: {travelerMaxQty}
@@ -2736,15 +2764,26 @@ export default function LaborTrackingPage() {
           )}
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">
-              Comment <span className="text-gray-400 text-xs">(optional)</span>
+              {qtyCompleted === '0'
+                ? <>Reason <span className="text-red-500 text-xs">(required — qty is 0)</span></>
+                : <>Comment <span className="text-gray-400 text-xs">(optional)</span></>}
             </label>
             <textarea
               value={stopComment}
               onChange={(e) => setStopComment(e.target.value)}
-              placeholder="Add a note about this work..."
+              placeholder={qtyCompleted === '0'
+                ? 'Explain why no units were completed (e.g. waiting on parts, machine down, training)'
+                : 'Add a note about this work...'}
               rows={2}
-              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-white resize-none"
+              className={`w-full px-4 py-2 border-2 rounded-lg text-sm focus:ring-2 focus:outline-none transition-all dark:bg-slate-700 dark:text-white resize-none ${
+                qtyCompleted === '0' && !stopComment.trim()
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                  : 'border-gray-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-200'
+              }`}
             />
+            {qtyCompleted === '0' && !stopComment.trim() && (
+              <p className="text-xs text-red-600 font-medium mt-1">An explanation is required when the quantity is 0.</p>
+            )}
           </div>
           <div className="flex justify-end space-x-3 pt-2">
             <button
@@ -2760,7 +2799,10 @@ export default function LaborTrackingPage() {
             </button>
             <button
               onClick={confirmStopTimer}
-              disabled={!!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)}
+              disabled={
+                !!(qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)
+                || (qtyCompleted === '0' && !stopComment.trim())
+              }
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
               Stop Timer
@@ -2978,14 +3020,22 @@ export default function LaborTrackingPage() {
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
-              Comment <span className="text-gray-400 text-xs">(optional)</span>
+              {manualEntryData.qty_completed === '0'
+                ? <>Reason <span className="text-red-500 text-xs">(required — qty is 0)</span></>
+                : <>Comment <span className="text-gray-400 text-xs">(optional)</span></>}
             </label>
             <textarea
               value={manualEntryData.comment}
               onChange={(e) => setManualEntryData({ ...manualEntryData, comment: e.target.value })}
-              placeholder="Add a note about this work..."
+              placeholder={manualEntryData.qty_completed === '0'
+                ? 'Explain why no units were completed'
+                : 'Add a note about this work...'}
               rows={2}
-              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 resize-none"
+              className={`w-full px-4 py-2 border-2 rounded-lg text-sm focus:ring-2 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 resize-none ${
+                manualEntryData.qty_completed === '0' && !(manualEntryData.comment && manualEntryData.comment.trim())
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                  : 'border-gray-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-200'
+              }`}
             />
           </div>
         </div>
@@ -3142,14 +3192,20 @@ export default function LaborTrackingPage() {
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
-              Comment <span className="text-gray-400 text-xs">(optional)</span>
+              {editEntryData.qty_completed === '0'
+                ? <>Reason <span className="text-red-500 text-xs">(required — qty is 0)</span></>
+                : <>Comment <span className="text-gray-400 text-xs">(optional)</span></>}
             </label>
             <textarea
               value={editEntryData.comment}
               onChange={(e) => setEditEntryData({ ...editEntryData, comment: e.target.value })}
-              placeholder="Add or edit comment..."
+              placeholder={editEntryData.qty_completed === '0' ? 'Explain why qty is 0' : 'Add or edit comment...'}
               rows={2}
-              className="w-full px-4 py-2 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 resize-none"
+              className={`w-full px-4 py-2 border-2 rounded-lg text-sm focus:ring-2 focus:outline-none transition-all dark:bg-slate-700 dark:text-slate-200 resize-none ${
+                editEntryData.qty_completed === '0' && !(editEntryData.comment && editEntryData.comment.trim())
+                  ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                  : 'border-gray-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-200'
+              }`}
             />
           </div>
         </div>

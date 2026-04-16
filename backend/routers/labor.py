@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from database import get_db
-from models import User, LaborEntry, Traveler, ProcessStep, ManualStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog
+from models import User, LaborEntry, Traveler, ProcessStep, ManualStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog, AuditLog
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
 
@@ -54,6 +54,16 @@ def update_step_and_traveler_progress(db: Session, labor_entry: LaborEntry):
 
     db.flush()
 
+# Zero qty is allowed but must be justified — we require a non-empty comment on
+# any payload that sets qty_completed to 0 and audit the submission so
+# reporting can trace "no units produced" entries back to the operator and the
+# stated reason.
+ZERO_QTY_COMMENT_ERROR = (
+    "A quantity of 0 requires an explanation — enter the reason in the "
+    "Comment field before submitting."
+)
+
+
 class LaborEntryCreate(BaseModel):
     traveler_id: int
     step_id: Optional[int] = None
@@ -64,6 +74,13 @@ class LaborEntryCreate(BaseModel):
     employee_id: Optional[int] = None  # Admin can specify a different employee
     comment: Optional[str] = None
     qty_completed: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _require_comment_on_zero_qty(self):
+        if self.qty_completed == 0 and not (self.comment and self.comment.strip()):
+            raise ValueError(ZERO_QTY_COMMENT_ERROR)
+        return self
+
 
 class LaborEntryUpdate(BaseModel):
     pause_time: Optional[datetime] = None
@@ -76,6 +93,37 @@ class LaborEntryUpdate(BaseModel):
     qty_completed: Optional[int] = None
     comment: Optional[str] = None
     start_time: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _require_comment_on_zero_qty(self):
+        if self.qty_completed == 0 and not (self.comment and self.comment.strip()):
+            raise ValueError(ZERO_QTY_COMMENT_ERROR)
+        return self
+
+
+def _write_zero_qty_audit(
+    db: Session,
+    labor_entry: LaborEntry,
+    user: User,
+    previous_qty: Optional[int],
+    comment: Optional[str],
+    request: Optional[Request] = None,
+) -> None:
+    """Append an AuditLog row whenever qty_completed is set to 0 so reports
+    can trace who entered the zero, when, and the justification they gave."""
+    ip = request.client.host if request and request.client else None
+    ua = request.headers.get("user-agent") if request else None
+    audit = AuditLog(
+        traveler_id=labor_entry.traveler_id,
+        user_id=user.id,
+        action="LABOR_ZERO_QTY",
+        field_changed="qty_completed",
+        old_value=(str(previous_qty) if previous_qty is not None else None),
+        new_value=f"0 | {(comment or '').strip()}",
+        ip_address=ip,
+        user_agent=ua,
+    )
+    db.add(audit)
 
 class PauseLogResponse(BaseModel):
     id: int
@@ -208,6 +256,7 @@ async def scan_qr_lookup(
 @router.post("", response_model=LaborEntryResponse, include_in_schema=False)
 async def start_labor_entry(
     labor_data: LaborEntryCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -378,6 +427,17 @@ async def start_labor_entry(
     if labor_data.end_time and db_labor_entry.is_completed:
         update_step_and_traveler_progress(db, db_labor_entry)
 
+    # Audit zero-quantity submissions for accountability.
+    if labor_data.qty_completed == 0:
+        _write_zero_qty_audit(
+            db,
+            db_labor_entry,
+            current_user,
+            previous_qty=None,
+            comment=labor_data.comment,
+            request=request,
+        )
+
     db.commit()
     db.refresh(db_labor_entry)
 
@@ -414,6 +474,7 @@ async def start_labor_entry(
 async def update_labor_entry(
     labor_id: int,
     labor_data: LaborEntryUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -434,8 +495,9 @@ async def update_labor_entry(
             detail="Not authorized to update this labor entry"
         )
 
-    # Capture original state before updates (for notification logic)
+    # Capture original state before updates (for notification logic + audit)
     had_end_time_before = labor_entry.end_time is not None
+    previous_qty = labor_entry.qty_completed
 
     # Log pause event
     if labor_data.pause_time:
@@ -510,6 +572,22 @@ async def update_labor_entry(
     # When labor entry is completed, update linked step and traveler progress
     if labor_data.end_time and labor_entry.is_completed:
         update_step_and_traveler_progress(db, labor_entry)
+
+    # Audit any transition into qty_completed == 0 so reporting can surface
+    # who entered it and the justification they gave.
+    if (
+        "qty_completed" in labor_data.model_fields_set
+        and labor_data.qty_completed == 0
+        and previous_qty != 0
+    ):
+        _write_zero_qty_audit(
+            db,
+            labor_entry,
+            current_user,
+            previous_qty=previous_qty,
+            comment=labor_data.comment if labor_data.comment is not None else labor_entry.comment,
+            request=request,
+        )
 
     db.commit()
     db.refresh(labor_entry)
