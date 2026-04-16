@@ -21,7 +21,7 @@ interface Notification {
   id: number;
   title: string;
   message: string;
-  notification_type: 'TRAVELER_CREATED' | 'TRAVELER_UPDATED' | 'TRAVELER_DELETED' | 'LABOR_ENTRY_CREATED' | 'LABOR_ENTRY_UPDATED' | 'LABOR_ENTRY_DELETED' | 'TRACKING_ENTRY_CREATED' | 'TRACKING_ENTRY_UPDATED' | 'TRACKING_ENTRY_DELETED' | 'USER_LOGIN';
+  notification_type: 'TRAVELER_CREATED' | 'TRAVELER_UPDATED' | 'TRAVELER_DELETED' | 'LABOR_ENTRY_CREATED' | 'LABOR_ENTRY_UPDATED' | 'LABOR_ENTRY_DELETED' | 'TRACKING_ENTRY_CREATED' | 'TRACKING_ENTRY_UPDATED' | 'TRACKING_ENTRY_DELETED' | 'USER_LOGIN' | 'WORK_CENTER_CREATED' | 'WORK_CENTER_UPDATED' | 'WORK_CENTER_DELETED' | 'WORK_CENTER_REORDERED';
   is_read: boolean;
   created_at: string;
   related_entity_type?: string;
@@ -237,6 +237,7 @@ export default function NotificationsPage() {
 
   const getNotificationIcon = (type: string) => {
     if (type === 'USER_LOGIN') return <InformationCircleIcon className="h-6 w-6 text-blue-600" />;
+    if (type.includes('REORDERED')) return <InformationCircleIcon className="h-6 w-6 text-indigo-600" />;
     if (type.includes('CREATED')) return <CheckCircleIcon className="h-6 w-6 text-green-600" />;
     if (type.includes('UPDATED')) return <InformationCircleIcon className="h-6 w-6 text-yellow-600" />;
     if (type.includes('DELETED')) return <ExclamationCircleIcon className="h-6 w-6 text-red-600" />;
@@ -245,6 +246,7 @@ export default function NotificationsPage() {
 
   const getNotificationColor = (type: string) => {
     if (type === 'USER_LOGIN') return 'from-teal-50 to-emerald-50 dark:from-teal-900/30 dark:to-emerald-900/30 border-blue-200 dark:border-blue-700';
+    if (type.includes('REORDERED')) return 'from-indigo-50 to-sky-50 dark:from-indigo-900/30 dark:to-sky-900/30 border-indigo-200 dark:border-indigo-700';
     if (type.includes('CREATED')) return 'from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border-green-200 dark:border-green-700';
     if (type.includes('UPDATED')) return 'from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30 border-yellow-200 dark:border-yellow-700';
     if (type.includes('DELETED')) return 'from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 border-red-200 dark:border-red-700';
@@ -389,6 +391,10 @@ export default function NotificationsPage() {
                     <option value="LABOR_ENTRY_CREATED">Labor Entry Created</option>
                     <option value="LABOR_ENTRY_UPDATED">Labor Entry Updated</option>
                     <option value="LABOR_ENTRY_DELETED">Labor Entry Deleted</option>
+                    <option value="WORK_CENTER_CREATED">Work Center Created</option>
+                    <option value="WORK_CENTER_UPDATED">Work Center Updated</option>
+                    <option value="WORK_CENTER_DELETED">Work Center Deleted</option>
+                    <option value="WORK_CENTER_REORDERED">Work Center Reordered</option>
                   </select>
                 </div>
 
