@@ -8,6 +8,7 @@ import { UserCircleIcon, BellIcon, UserIcon, ArrowRightOnRectangleIcon, ChevronD
 import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
+import { canAccessMaintenance } from '@/lib/access';
 import GlobalSearch from '@/components/GlobalSearch';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
@@ -236,6 +237,12 @@ export default function Header() {
               <Link href="/analytics" className={`${getLinkClasses('/analytics')} flex items-center space-x-1`}>
                 <ChartBarSquareIcon className="h-4 w-4 text-indigo-300" />
                 <span>Analytics</span>
+              </Link>
+            )}
+            {canAccessMaintenance(user) && (
+              <Link href="/maintenance" className={`${getLinkClasses('/maintenance')} flex items-center space-x-1`}>
+                <WrenchScrewdriverIcon className="h-4 w-4 text-orange-300" />
+                <span>Maintenance</span>
               </Link>
             )}
           </nav>
@@ -557,6 +564,16 @@ export default function Header() {
               >
                 <ChartBarSquareIcon className="h-5 w-5 mr-3 text-indigo-600" />
                 <span>Analytics</span>
+              </Link>
+            )}
+            {canAccessMaintenance(user) && (
+              <Link
+                href="/maintenance"
+                onClick={() => setShowMobileMenu(false)}
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${isActive('/maintenance') ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+              >
+                <WrenchScrewdriverIcon className="h-5 w-5 mr-3 text-orange-600" />
+                <span>Maintenance</span>
               </Link>
             )}
 
