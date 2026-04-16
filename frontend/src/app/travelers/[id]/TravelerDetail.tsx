@@ -212,6 +212,13 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [editedTraveler, setEditedTraveler] = useState<Traveler | null>(null);
   const [stepQRCodes, setStepQRCodes] = useState<Record<number, string>>({});
   const [headerBarcode, setHeaderBarcode] = useState<string>('');
+  const [headerBarcodeLoaded, setHeaderBarcodeLoaded] = useState(false);
+  const [stepQRCodesLoaded, setStepQRCodesLoaded] = useState(false);
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
+  const headerBarcodeLoadedRef = useRef(false);
+  const stepQRCodesLoadedRef = useRef(false);
+  useEffect(() => { headerBarcodeLoadedRef.current = headerBarcodeLoaded; }, [headerBarcodeLoaded]);
+  useEffect(() => { stepQRCodesLoadedRef.current = stepQRCodesLoaded; }, [stepQRCodesLoaded]);
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -504,6 +511,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         }
       } catch (error) {
         console.error('❌ Error fetching header barcode:', error);
+      } finally {
+        setHeaderBarcodeLoaded(true);
       }
     };
 
@@ -551,6 +560,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           }
 
           setStepQRCodes(qrCodeMap);
+          setStepQRCodesLoaded(true);
         } else {
           // Retry once after 2 seconds
           setTimeout(async () => {
@@ -567,11 +577,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 });
                 setStepQRCodes(qrMap);
               }
-            } catch { /* silent retry */ }
+            } catch { /* silent retry */ } finally {
+              setStepQRCodesLoaded(true);
+            }
           }, 2000);
         }
       } catch (error) {
         console.error('Error fetching QR codes:', error);
+        setStepQRCodesLoaded(true);
       }
     };
 
@@ -622,20 +635,60 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     }
   }, [autoEdit, traveler]);
 
-  const handlePrint = () => {
-    // Dismiss all toasts so they don't appear in print output
-    toast.dismiss();
-    const wasDark = document.documentElement.classList.contains('dark');
-    if (wasDark) {
-      // Temporarily remove dark class so print uses light mode styles
-      document.documentElement.classList.remove('dark');
-    }
-    window.addEventListener('afterprint', () => {
-      if (wasDark) document.documentElement.classList.add('dark');
-    }, { once: true });
-    setTimeout(() => {
+  // Print is only safe once barcodes have finished fetching. Clicking before
+  // barcode state lands caused pages to render without barcodes (see Alex's
+  // missing-barcode reports). We also await each <img>.decode() to guarantee
+  // the browser has rasterized every base64 barcode before window.print().
+  const isPrintReady = !isLoading && headerBarcodeLoaded && stepQRCodesLoaded;
+
+  const handlePrint = async () => {
+    if (isPreparingPrint) return;
+    setIsPreparingPrint(true);
+    try {
+      toast.dismiss();
+
+      if (!isPrintReady) {
+        const toastId = toast.loading('Preparing barcodes for print…');
+        const start = Date.now();
+        while (
+          (!headerBarcodeLoadedRef.current || !stepQRCodesLoadedRef.current) &&
+          Date.now() - start < 8000
+        ) {
+          await new Promise(r => setTimeout(r, 150));
+        }
+        toast.dismiss(toastId);
+      }
+
+      // Wait for every barcode/QR <img> in the DOM to finish decoding.
+      const images = Array.from(document.querySelectorAll<HTMLImageElement>('img'));
+      await Promise.all(
+        images.map(img => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          if (typeof img.decode === 'function') {
+            return img.decode().catch(() => {});
+          }
+          return new Promise<void>(resolve => {
+            const done = () => resolve();
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+          });
+        })
+      );
+
+      const wasDark = document.documentElement.classList.contains('dark');
+      if (wasDark) {
+        document.documentElement.classList.remove('dark');
+      }
+      window.addEventListener('afterprint', () => {
+        if (wasDark) document.documentElement.classList.add('dark');
+      }, { once: true });
+
+      // Let the browser flush the dark-mode style change before print dialog.
+      await new Promise(r => setTimeout(r, 150));
       window.print();
-    }, 100);
+    } finally {
+      setIsPreparingPrint(false);
+    }
   };
 
   const handleEdit = () => {
@@ -2226,10 +2279,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <>
                     <button
                       onClick={handlePrint}
-                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
+                      disabled={!isPrintReady || isPreparingPrint}
+                      title={!isPrintReady ? 'Loading barcodes — print will be available shortly' : isPreparingPrint ? 'Preparing print…' : 'Print traveler'}
+                      className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-base font-medium whitespace-nowrap shadow-sm"
                     >
-                      <PrinterIcon className="h-5 w-5" />
-                      <span>Print</span>
+                      {isPreparingPrint || !isPrintReady ? (
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                      ) : (
+                        <PrinterIcon className="h-5 w-5" />
+                      )}
+                      <span>{isPreparingPrint ? 'Preparing…' : !isPrintReady ? 'Loading…' : 'Print'}</span>
                     </button>
                 {user?.role !== 'OPERATOR' && (
                   <>
