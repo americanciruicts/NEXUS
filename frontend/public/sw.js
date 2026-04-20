@@ -4,7 +4,7 @@
 // keep serving the prior build. Bumping purges every client's cache on their
 // next visit so newly-shipped UI (e.g. Generate WO button, labor tracker
 // fixes) becomes visible without users needing to clear site data manually.
-const CACHE_VERSION = 'nexus-v3';
+const CACHE_VERSION = 'nexus-v4';
 const CACHE_NAME = `${CACHE_VERSION}-all`;
 
 // Install: activate immediately
