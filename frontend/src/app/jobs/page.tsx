@@ -285,7 +285,7 @@ export default function JobsPage() {
                     <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Travelers</th>
                     <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Progress</th>
                     <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase hidden md:table-cell">Labor</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Rev</th>
+                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">BOM Rev</th>
                     <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase"></th>
                   </tr>
                 </thead>

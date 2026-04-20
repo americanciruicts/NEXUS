@@ -202,6 +202,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [showForm, setShowForm] = useState(!createMode);
   const [workOrderPrefix, setWorkOrderPrefix] = useState('');
   const [workOrderSuffix, setWorkOrderSuffix] = useState('');
+  const [isGeneratingWO, setIsGeneratingWO] = useState(false);
   const [isLeadFree, setIsLeadFree] = useState(false);
   const [isITAR, setIsITAR] = useState(false);
   const [includeLaborHours, setIncludeLaborHours] = useState(true);
@@ -212,13 +213,40 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [editedTraveler, setEditedTraveler] = useState<Traveler | null>(null);
   const [stepQRCodes, setStepQRCodes] = useState<Record<number, string>>({});
   const [headerBarcode, setHeaderBarcode] = useState<string>('');
-  const [headerBarcodeLoaded, setHeaderBarcodeLoaded] = useState(false);
-  const [stepQRCodesLoaded, setStepQRCodesLoaded] = useState(false);
+  // Readiness is driven by the <img onLoad> of each code, not by fetch completion.
+  // Empty/failed fetches cannot flip these to true, so Print stays disabled until
+  // pixels actually render. Prevents the "print a page with missing barcode" bug.
+  const [headerBarcodeRendered, setHeaderBarcodeRendered] = useState(false);
+  const [stepQRCodesRenderedCount, setStepQRCodesRenderedCount] = useState(0);
+  const [stepQRCodesFetchDone, setStepQRCodesFetchDone] = useState(false);
   const [isPreparingPrint, setIsPreparingPrint] = useState(false);
-  const headerBarcodeLoadedRef = useRef(false);
-  const stepQRCodesLoadedRef = useRef(false);
-  useEffect(() => { headerBarcodeLoadedRef.current = headerBarcodeLoaded; }, [headerBarcodeLoaded]);
-  useEffect(() => { stepQRCodesLoadedRef.current = stepQRCodesLoaded; }, [stepQRCodesLoaded]);
+  const headerBarcodeRenderedRef = useRef(false);
+  const stepQRCodesRenderedCountRef = useRef(0);
+  const stepQRCodesFetchDoneRef = useRef(false);
+  const renderedStepIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => { headerBarcodeRenderedRef.current = headerBarcodeRendered; }, [headerBarcodeRendered]);
+  useEffect(() => { stepQRCodesRenderedCountRef.current = stepQRCodesRenderedCount; }, [stepQRCodesRenderedCount]);
+  useEffect(() => { stepQRCodesFetchDoneRef.current = stepQRCodesFetchDone; }, [stepQRCodesFetchDone]);
+
+  // Reset the rendered tracker whenever the barcode src or QR map changes
+  // (e.g. when the traveler is reloaded or refreshed). Otherwise stale "rendered"
+  // state from a previous traveler would falsely unblock Print.
+  useEffect(() => {
+    if (!headerBarcode) setHeaderBarcodeRendered(false);
+  }, [headerBarcode]);
+  useEffect(() => {
+    renderedStepIdsRef.current = new Set();
+    setStepQRCodesRenderedCount(0);
+  }, [stepQRCodes]);
+
+  const handleHeaderBarcodeLoad = () => {
+    if (!headerBarcodeRenderedRef.current) setHeaderBarcodeRendered(true);
+  };
+  const handleStepQRLoad = (stepId: number) => {
+    if (renderedStepIdsRef.current.has(stepId)) return;
+    renderedStepIdsRef.current.add(stepId);
+    setStepQRCodesRenderedCount(c => c + 1);
+  };
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -490,29 +518,26 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     };
 
     const fetchHeaderBarcode = async (travelerDbId: number) => {
+      // Readiness is flipped only when a usable image arrives AND the <img> tag
+      // fires onLoad. An empty/failed response must NOT unblock Print — the old
+      // finally-based toggle let users print a page with no barcode rendered.
       try {
         const token = localStorage.getItem('nexus_token');
-        console.log('Fetching header barcode for traveler', travelerDbId);
-
         const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}`, {
-          headers: {
-            'Authorization': `Bearer ${token || ''}`
-          }
+          headers: { 'Authorization': `Bearer ${token || ''}` }
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.barcode_image) {
-            setHeaderBarcode(data.barcode_image);
-            console.log('✅ Successfully loaded header barcode');
-          }
-        } else {
-          console.error('❌ Failed to fetch header barcode, status:', response.status);
+        if (!response.ok) {
+          console.error('❌ Header barcode fetch failed, status:', response.status);
+          return;
         }
+        const data = await response.json();
+        if (!data.barcode_image) {
+          console.error('❌ Header barcode endpoint returned empty image');
+          return;
+        }
+        setHeaderBarcode(data.barcode_image);
       } catch (error) {
         console.error('❌ Error fetching header barcode:', error);
-      } finally {
-        setHeaderBarcodeLoaded(true);
       }
     };
 
@@ -535,56 +560,44 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     };
 
     const fetchStepQRCodes = async (travelerDbId: number) => {
+      // Same intent as fetchHeaderBarcode: the state map is the *source of truth*
+      // for expected images. Print readiness then waits for each <img onLoad>.
       try {
-        // No auth needed for QR endpoint — fetch without token to avoid auth issues
         const response = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`);
-
         if (response.ok) {
           const data = await response.json();
           const qrCodeMap: Record<number, string> = {};
-
-          if (data.process_steps) {
-            data.process_steps.forEach((step: {step_id: number; qr_code_image: string}) => {
-              if (step.qr_code_image) {
-                qrCodeMap[step.step_id] = step.qr_code_image;
-              }
-            });
-          }
-
-          if (data.manual_steps) {
-            data.manual_steps.forEach((step: {step_id: number; qr_code_image: string}) => {
-              if (step.qr_code_image) {
-                qrCodeMap[step.step_id] = step.qr_code_image;
-              }
-            });
-          }
-
+          (data.process_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
+            if (s.qr_code_image) qrCodeMap[s.step_id] = s.qr_code_image;
+          });
+          (data.manual_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
+            if (s.qr_code_image) qrCodeMap[s.step_id] = s.qr_code_image;
+          });
           setStepQRCodes(qrCodeMap);
-          setStepQRCodesLoaded(true);
-        } else {
-          // Retry once after 2 seconds
-          setTimeout(async () => {
-            try {
-              const retryRes = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`);
-              if (retryRes.ok) {
-                const data = await retryRes.json();
-                const qrMap: Record<number, string> = {};
-                (data.process_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
-                  if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
-                });
-                (data.manual_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
-                  if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
-                });
-                setStepQRCodes(qrMap);
-              }
-            } catch { /* silent retry */ } finally {
-              setStepQRCodesLoaded(true);
-            }
-          }, 2000);
+          setStepQRCodesFetchDone(true);
+          return;
         }
+        setTimeout(async () => {
+          try {
+            const retryRes = await fetch(`${API_BASE_URL}/barcodes/traveler/${travelerDbId}/steps-qr`);
+            if (retryRes.ok) {
+              const data = await retryRes.json();
+              const qrMap: Record<number, string> = {};
+              (data.process_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
+                if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
+              });
+              (data.manual_steps || []).forEach((s: {step_id: number; qr_code_image: string}) => {
+                if (s.qr_code_image) qrMap[s.step_id] = s.qr_code_image;
+              });
+              setStepQRCodes(qrMap);
+            }
+          } catch { /* silent retry */ } finally {
+            setStepQRCodesFetchDone(true);
+          }
+        }, 2000);
       } catch (error) {
         console.error('Error fetching QR codes:', error);
-        setStepQRCodesLoaded(true);
+        setStepQRCodesFetchDone(true);
       }
     };
 
@@ -635,11 +648,36 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     }
   }, [autoEdit, traveler]);
 
+  // Intercept Ctrl+P / Cmd+P so the keyboard shortcut can't bypass the
+  // disabled Print button while barcodes are still loading. Without this,
+  // users who hit the shortcut mid-fetch ended up printing a 2-page preview
+  // with missing barcodes.
+  useEffect(() => {
+    if (createMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePrint();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+    // handlePrint is stable enough via closures over refs; we don't need it in deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createMode]);
+
   // Print is only safe once barcodes have finished fetching. Clicking before
   // barcode state lands caused pages to render without barcodes (see Alex's
   // missing-barcode reports). We also await each <img>.decode() to guarantee
   // the browser has rasterized every base64 barcode before window.print().
-  const isPrintReady = !isLoading && headerBarcodeLoaded && stepQRCodesLoaded;
+  const expectedStepQRCount = Object.keys(stepQRCodes).length;
+  const stepQRCodesAllRendered = stepQRCodesFetchDone && stepQRCodesRenderedCount >= expectedStepQRCount;
+  // A traveler is only print-ready once every barcode/QR <img> has fired onLoad.
+  // Header: rendered flag. Steps: rendered count ≥ expected count (post-fetch).
+  // If header barcode fetch fails outright, src stays '' and onLoad never fires,
+  // so print remains blocked — which is what we want.
+  const isPrintReady = !isLoading && headerBarcodeRendered && stepQRCodesAllRendered;
 
   const handlePrint = async () => {
     if (isPreparingPrint) return;
@@ -651,12 +689,26 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         const toastId = toast.loading('Preparing barcodes for print…');
         const start = Date.now();
         while (
-          (!headerBarcodeLoadedRef.current || !stepQRCodesLoadedRef.current) &&
-          Date.now() - start < 8000
+          (!headerBarcodeRenderedRef.current
+            || !stepQRCodesFetchDoneRef.current
+            || stepQRCodesRenderedCountRef.current < Object.keys(stepQRCodes).length) &&
+          Date.now() - start < 20000
         ) {
           await new Promise(r => setTimeout(r, 150));
         }
         toast.dismiss(toastId);
+
+        // If readiness still didn't land, abort instead of printing a
+        // half-rendered traveler. Users were getting 2-page previews with
+        // missing barcodes because we used to proceed regardless.
+        const stillMissingHeader = !headerBarcodeRenderedRef.current;
+        const stillMissingSteps =
+          !stepQRCodesFetchDoneRef.current ||
+          stepQRCodesRenderedCountRef.current < Object.keys(stepQRCodes).length;
+        if (stillMissingHeader || stillMissingSteps) {
+          toast.error('Barcodes are still loading. Please wait a moment and try Print again.');
+          return;
+        }
       }
 
       // Wait for every barcode/QR <img> in the DOM to finish decoding.
@@ -979,25 +1031,42 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
   // ---- Create Mode Logic ----
 
+  // Allocate the next sequential WO number from the backend and seed the
+  // prefix input. Shared by the create-mode auto-populate and the manual
+  // Generate button shown in edit mode so users can refresh the number
+  // without re-entering the whole traveler.
+  const generateWorkOrder = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    try {
+      if (!silent) setIsGeneratingWO(true);
+      const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.next_work_order_prefix) {
+          setWorkOrderPrefix(data.next_work_order_prefix);
+          setWorkOrderSuffix('');
+          updateField('workOrder', data.next_work_order_prefix);
+          if (!silent) toast.success(`Generated WO ${data.next_work_order_prefix}`);
+          return data.next_work_order_prefix as string;
+        }
+      }
+      if (!silent) toast.error('Failed to generate next work order number');
+    } catch (error) {
+      console.error('Failed to fetch next work order number:', error);
+      if (!silent) toast.error('Failed to generate next work order number');
+    } finally {
+      if (!silent) setIsGeneratingWO(false);
+    }
+    return null;
+  };
+
   // Fetch next work order number in create mode
   useEffect(() => {
     if (!createMode) return;
-    const fetchNextWO = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.next_work_order_prefix) {
-            setWorkOrderPrefix(data.next_work_order_prefix);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch next work order number:', error);
-      }
-    };
-    fetchNextWO();
+    generateWorkOrder({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createMode]);
 
   const travelerTypes = [
@@ -2681,6 +2750,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       alt={`Barcode for ${displayTraveler.jobNumber}`}
                       className="mx-auto w-32 h-10 sm:w-40 sm:h-12"
                       style={{ objectFit: 'contain' }}
+                      onLoad={handleHeaderBarcodeLoad}
                       onError={() => {
                         console.error('Failed to load header barcode');
                       }}
@@ -2716,6 +2786,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         <input type="text" value={workOrderPrefix} onFocus={(e) => e.target.select()} onKeyDown={(e) => { const input = e.target as HTMLInputElement; const hasSelection = input.selectionStart !== input.selectionEnd; if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) { e.preventDefault(); const newSuffix = e.key + workOrderSuffix; setWorkOrderSuffix(newSuffix); updateField('workOrder', workOrderPrefix + '-' + newSuffix); focusSuffixInput(1); } }} onChange={(e) => { const val = e.target.value.slice(0, 5); setWorkOrderPrefix(val); const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val || workOrderSuffix; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-center text-black dark:text-white" style={{width: '90px', padding: '2px 4px', fontFamily: 'monospace', fontSize: '14px'}} placeholder="Prefix" />
                         <span className="text-gray-400 dark:text-slate-500 font-bold">-</span>
                         <input ref={suffixInputRef} type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix || e.target.value; updateField('workOrder', wo); }} className="border border-gray-300 dark:border-slate-600 rounded text-sm text-black dark:text-white" style={{width: '75px', padding: '2px 4px'}} placeholder="Suffix" />
+                        <button type="button" onClick={() => generateWorkOrder()} disabled={isGeneratingWO} title="Generate next sequential work order number" className="px-2 py-0.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded disabled:cursor-not-allowed">
+                          {isGeneratingWO ? '…' : 'Generate'}
+                        </button>
                       </span>
                     ) : (displayTraveler.workOrder || '-')}</span></div>
                     <div className="flex justify-between"><span className="font-semibold">PO:</span> <span className="text-black dark:text-white">{isEditing ? <input type="text" value={editData.poNumber || ''} onChange={(e) => updateField('poNumber', e.target.value)} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-1 text-black dark:text-white"/> : (displayTraveler.poNumber || '-')}</span></div>
@@ -2805,6 +2878,15 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           className="w-16 sm:w-24 min-w-0 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-black dark:text-white"
                           placeholder="Suffix"
                         />
+                        <button
+                          type="button"
+                          onClick={() => generateWorkOrder()}
+                          disabled={isGeneratingWO}
+                          title="Generate next sequential work order number"
+                          className="flex-shrink-0 px-2 py-0.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingWO ? '…' : 'Generate'}
+                        </button>
                       </div>
                   ) : (
                     <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.workOrder || '-'}</span>
@@ -2879,6 +2961,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         alt={`Barcode for ${displayTraveler.jobNumber}`}
                         className="mx-auto w-44 h-14 print:w-[100px] print:h-[30px]"
                         style={{ objectFit: 'contain' }}
+                        onLoad={handleHeaderBarcodeLoad}
                         onError={() => {
                           console.error('Failed to load header barcode');
                         }}
@@ -3044,7 +3127,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         </div>
                         <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
                           {headerBarcode ? (
-                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} />
+                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} onLoad={handleHeaderBarcodeLoad} />
                           ) : (
                             <div className="flex items-center justify-center h-14 print:h-28" style={{width: '160px'}}>
                               <span className="text-[10px] text-gray-400">{createMode ? 'Barcode after save' : 'Loading...'}</span>
@@ -3336,6 +3419,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 alt={`QR Code for ${step.workCenter}`}
                                 className="border border-gray-200 dark:border-gray-600 flex-shrink-0 rounded bg-white"
                                 style={{ width: '70px', height: '70px', padding: '1px' }}
+                                onLoad={() => handleStepQRLoad(step.id!)}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -3435,6 +3519,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 alt={`QR Code for ${step.workCenter}`}
                                 className="border border-gray-200 dark:border-slate-600 flex-shrink-0 print:w-[50px] print:h-[50px] bg-white rounded"
                                 style={{ width: '70px', height: '70px', padding: '1px' }}
+                                onLoad={() => handleStepQRLoad(step.id!)}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -3684,6 +3769,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           alt={`QR Code for ${step.workCenter}`}
                           className="border border-gray-200 dark:border-gray-600 rounded bg-white"
                           style={{ width: '80px', height: '80px', padding: '1px' }}
+                          onLoad={() => handleStepQRLoad(step.id!)}
                           onError={() => {
                             console.error('Failed to load QR code for step', step.id);
                           }}
@@ -3720,7 +3806,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </div>
                     {step.id && stepQRCodes[step.id] && (
                       <div className="flex justify-center pt-2 border-t border-gray-200 dark:border-slate-700">
-                        <img src={`data:image/png;base64,${stepQRCodes[step.id]}`} alt={`QR Code for ${step.workCenter}`} className="border border-gray-200 dark:border-gray-600 rounded bg-white" style={{ width: '60px', height: '60px', padding: '3px' }} />
+                        <img src={`data:image/png;base64,${stepQRCodes[step.id]}`} alt={`QR Code for ${step.workCenter}`} className="border border-gray-200 dark:border-gray-600 rounded bg-white" style={{ width: '60px', height: '60px', padding: '3px' }} onLoad={() => handleStepQRLoad(step.id!)} />
                       </div>
                     )}
                   </div>

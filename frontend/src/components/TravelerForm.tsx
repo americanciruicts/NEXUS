@@ -329,30 +329,43 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
     fetchWC();
   }, [selectedType]);
 
+  const [isGeneratingWO, setIsGeneratingWO] = useState(false);
+  const fetchNextWorkOrderNumber = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    try {
+      if (!silent) setIsGeneratingWO(true);
+      const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.next_work_order_prefix) {
+          setWorkOrderPrefix(data.next_work_order_prefix);
+          setWorkOrderSuffix('');
+          if (!silent) toast.success(`Generated WO ${data.next_work_order_prefix}`);
+          return data.next_work_order_prefix as string;
+        }
+      }
+      if (!silent) toast.error('Failed to generate next work order number');
+    } catch (error) {
+      console.error('Failed to fetch next work order number:', error);
+      if (!silent) toast.error('Failed to generate next work order number');
+    } finally {
+      if (!silent) setIsGeneratingWO(false);
+    }
+    return null;
+  };
+
   // Fetch next sequential work order number on create mode. Skipped for clones:
   // cloned travelers stay WO-less until promoted to Awaiting Start so the
   // sequential WO isn't burned on drafts that may never ship.
   useEffect(() => {
     if (mode === 'create' && !initialData?.work_order_number && !isClone) {
-      const fetchNextWorkOrderNumber = async () => {
-        try {
-          const response = await fetch(`${API_BASE_URL}/travelers/next-work-order-number`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('nexus_token') || 'mock-token'}`
-            }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data.next_work_order_prefix) {
-              setWorkOrderPrefix(data.next_work_order_prefix);
-            }
-          }
-        } catch (error) {
-          console.error('Failed to fetch next work order number:', error);
-        }
-      };
-      fetchNextWorkOrderNumber();
+      fetchNextWorkOrderNumber({ silent: true });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, initialData?.work_order_number, isClone]);
 
   // Sync workOrderNumber when prefix or suffix changes
@@ -678,7 +691,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
 
     // Check if form was auto-populated and revision hasn't been changed
     if (mode === 'create' && wasAutoPopulated && formData.revision === autoPopulatedRevision) {
-      toast.warning('Revision Not Changed: This was auto-populated from revision ' + autoPopulatedRevision + '. You MUST change the revision before saving.');
+      toast.warning('BOM Revision Not Changed: This was auto-populated from BOM Rev ' + autoPopulatedRevision + '. You MUST change the BOM Revision before saving.');
       return;
     }
 
@@ -1050,7 +1063,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
     // Show the form
     setShowForm(true);
 
-    toast.info(`Auto-filled from existing traveler (Rev ${oldRevision}). Revision set to ${newRevision}. Please verify Customer Rev and Traveler Rev.`);
+    toast.info(`Auto-filled from existing traveler (BOM Rev ${oldRevision}). BOM Rev set to ${newRevision}. Please verify Customer Rev and BOM Rev.`);
     setTimeout(() => window.scrollTo(0, 0), 0);
   };
 
@@ -1174,7 +1187,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-bold text-sm text-gray-800 dark:text-slate-200">WO: {wo.work_order_number}</span>
-                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">Rev: {wo.revision}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">BOM Rev: {wo.revision}</span>
                         <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">| {wo.traveler_type}</span>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -1428,6 +1441,15 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
                   placeholder="1"
                   title="Work order suffix"
                 />
+                <button
+                  type="button"
+                  onClick={() => fetchNextWorkOrderNumber()}
+                  disabled={isGeneratingWO}
+                  title="Generate next sequential work order number"
+                  className="flex-shrink-0 px-2 py-1.5 text-xs sm:text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded border-2 border-blue-700 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isGeneratingWO ? '…' : 'Generate'}
+                </button>
               </div>
             </div>
             <div>
@@ -1488,7 +1510,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-bold text-sm text-gray-800 dark:text-slate-200">WO: {wo.work_order_number}</span>
-                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">Rev: {wo.revision}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">BOM Rev: {wo.revision}</span>
                         <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">| {wo.traveler_type}</span>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -1581,10 +1603,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
               </div>
             </div>
 
-            {/* Row 4: Traveler Revision + Customer Revision (side by side) */}
+            {/* Row 4: BOM Revision + Customer Revision (side by side) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Traveler Revision</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">BOM Revision</label>
                 <input
                   type="text"
                   value={formData.revision}

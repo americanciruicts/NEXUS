@@ -1622,6 +1622,21 @@ async def patch_traveler(
         updates['work_order_number'] = allocated
         print(f"Allocated WO {allocated} on DRAFT → CREATED transition for traveler {traveler_id}")
 
+    # WO uniqueness is enforced by partial unique index uq_traveler_work_order_number.
+    # Catch the collision up-front so the user gets a 409 with a specific message
+    # instead of a generic 500 from IntegrityError at commit time.
+    prospective_wo = updates.get('work_order_number')
+    if prospective_wo:
+        dup = db.query(Traveler.id).filter(
+            Traveler.work_order_number == prospective_wo,
+            Traveler.id != traveler_id,
+        ).first()
+        if dup:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Work order number '{prospective_wo}' is already assigned to another traveler."
+            )
+
     # Update only the provided fields
     for key, value in updates.items():
         if hasattr(traveler, key):

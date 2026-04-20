@@ -95,7 +95,17 @@ class LaborEntryUpdate(BaseModel):
     start_time: Optional[datetime] = None
 
     @model_validator(mode="after")
-    def _require_comment_on_zero_qty(self):
+    def _require_qty_on_stop(self):
+        # Stopping a timer (is_completed=True) must carry a qty_completed value.
+        # Blank/null qty was the hole that let rapid double-clicks close out
+        # sessions with no production data recorded.
+        if self.is_completed is True and self.qty_completed is None:
+            raise ValueError(
+                "qty_completed is required when stopping a timer. "
+                "Enter the units completed (use 0 with a reason if none)."
+            )
+        if self.qty_completed is not None and self.qty_completed < 0:
+            raise ValueError("qty_completed must be zero or a positive integer.")
         if self.qty_completed == 0 and not (self.comment and self.comment.strip()):
             raise ValueError(ZERO_QTY_COMMENT_ERROR)
         return self

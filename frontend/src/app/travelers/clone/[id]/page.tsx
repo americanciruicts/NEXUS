@@ -94,7 +94,7 @@ export default function CloneTravelerPage() {
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Clone Traveler</h1>
-                  <p className="text-sm text-teal-200/80 mt-0.5">Creating a new traveler based on {travelerId} with incremented revision</p>
+                  <p className="text-sm text-teal-200/80 mt-0.5">Creating a new traveler based on {travelerId} — set a new BOM Rev manually before saving</p>
                 </div>
               </div>
               <button
@@ -106,7 +106,7 @@ export default function CloneTravelerPage() {
             </div>
           </div>
 
-          {/* TravelerForm in create mode with initialData (will auto-increment revision) */}
+          {/* TravelerForm in create mode with initialData — BOM Rev is manual-only; user must change it before saving */}
           <TravelerForm mode="create" initialData={travelerData} isClone />
         </div>
       </div>

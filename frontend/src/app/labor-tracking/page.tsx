@@ -123,6 +123,7 @@ export default function LaborTrackingPage() {
   const [qtyCompleted, setQtyCompleted] = useState('');
   const [stopComment, setStopComment] = useState('');
   const [pendingStopEntryId, setPendingStopEntryId] = useState<number | null>(null);
+  const [isStopping, setIsStopping] = useState(false);
   const [travelerMaxQty, setTravelerMaxQty] = useState<number | null>(null);
 
   // Pagination states
@@ -138,6 +139,17 @@ export default function LaborTrackingPage() {
   const [jobListExpanded, setJobListExpanded] = useState(true);
   const [summaryJobSearch, setSummaryJobSearch] = useState('');
   const [selectedJobChip, setSelectedJobChip] = useState<string | null>(null);
+
+  // The traveler_id returned by /labor/scan when a WC QR is scanned. We
+  // persist this so startTimer can target the exact traveler the operator
+  // scanned — otherwise two travelers sharing a job_number (e.g. breakouts)
+  // get confused and labor lands on the wrong WO. Cleared whenever the job
+  // number or work center is edited manually so stale scan data can't leak.
+  const scannedTravelerIdRef = useRef<number | null>(null);
+  // The WO that the scanned QR resolved to. Shown in the form so the operator
+  // can visually confirm the scan picked the correct breakout before hitting
+  // Start. Cleared alongside scannedTravelerIdRef.
+  const [scannedWorkOrder, setScannedWorkOrder] = useState<string | null>(null);
 
   // Track the running timer's work center/step for auto-stop on re-scan
   const lastStartedWorkCenterRef = useRef<string>('');
@@ -159,12 +171,21 @@ export default function LaborTrackingPage() {
     if (!isTimerRunning) return;
 
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && globalScanBufferRef.current.length > 1) {
+      // Some scanners emit a Tab suffix instead of Enter. Treat both as the
+      // terminator so scanner config doesn't have to match one specific setting.
+      const isScanTerminator = (e.key === 'Enter' || e.key === 'Tab') && globalScanBufferRef.current.length > 1;
+      if (isScanTerminator) {
         const scannedValue = globalScanBufferRef.current.trim();
         globalScanBufferRef.current = '';
         if (globalScanTimeoutRef.current) clearTimeout(globalScanTimeoutRef.current);
 
         if (scannedValue.startsWith('NEXUS-STEP|')) {
+          // Always preventDefault on Tab so the buffered scan doesn't move focus
+          // to the next control before we process it.
+          if (e.key === 'Tab') {
+            e.preventDefault();
+            e.stopPropagation();
+          }
           try {
             const token = localStorage.getItem('nexus_token');
             const scanResp = await fetch(
@@ -296,6 +317,10 @@ export default function LaborTrackingPage() {
       );
       if (scanResp.ok) {
         const scanData = await scanResp.json();
+        if (typeof scanData.traveler_id === 'number') {
+          scannedTravelerIdRef.current = scanData.traveler_id;
+        }
+        setScannedWorkOrder(scanData.work_order || null);
         setNewEntry(prev => ({
           ...prev,
           job_number: scanData.job_number || prev.job_number,
@@ -444,6 +469,10 @@ export default function LaborTrackingPage() {
 
   // When job number text changes (typing), just update the value - don't fetch steps yet
   const handleJobNumberChange = (value: string) => {
+    // Any manual edit of the job number invalidates a previously-scanned
+    // traveler_id — the operator may now mean a different traveler entirely.
+    scannedTravelerIdRef.current = null;
+    setScannedWorkOrder(null);
     setNewEntry(prev => ({ ...prev, job_number: value }));
     if (!value) {
       setJobWorkCenterOptions([]);
@@ -454,6 +483,10 @@ export default function LaborTrackingPage() {
   const handleJobNumberSelect = async (option: any) => {
     const jobNum = (option.job_number || option.value || '').trim();
     if (!jobNum) return;
+    // Picking a job from the dropdown is manual disambiguation — drop any
+    // scanned traveler_id since the user is choosing by job, not by scan.
+    scannedTravelerIdRef.current = null;
+    setScannedWorkOrder(null);
     setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
     const steps = await fetchWorkCentersByJob(jobNum);
     setJobWorkCenterOptions(steps);
@@ -708,9 +741,35 @@ export default function LaborTrackingPage() {
 
       const travelers = await travelersResponse.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const traveler = travelers.find((t: any) =>
+      const matchesByJob = travelers.filter((t: any) =>
         String(t.job_number).toLowerCase() === jobNumber.toLowerCase()
       );
+
+      // If a WC QR was scanned, the scan response pinned the exact traveler.
+      // Prefer that over a job_number lookup — multiple travelers can share a
+      // job_number (different WO breakouts) and picking the first by job
+      // alone silently logs labor against the wrong work order.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let traveler: any = null;
+      const scannedId = scannedTravelerIdRef.current;
+      if (scannedId != null) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        traveler = matchesByJob.find((t: any) => t.id === scannedId)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ?? travelers.find((t: any) => t.id === scannedId)
+          ?? null;
+      } else if (matchesByJob.length === 1) {
+        traveler = matchesByJob[0];
+      } else if (matchesByJob.length > 1) {
+        // Ambiguous manual entry — don't guess. Force the operator to scan the
+        // WC QR (which pins traveler_id) so labor lands on the correct WO.
+        toast.error(
+          `Job ${jobNumber} has ${matchesByJob.length} open travelers (different WOs). ` +
+          `Scan the Work Center QR on the correct traveler to continue.`
+        );
+        workCenterAutocompleteRef.current?.select();
+        return;
+      }
 
       if (!traveler) {
         toast.error(`Job number ${jobNumber} not found`);
@@ -762,6 +821,10 @@ export default function LaborTrackingPage() {
         totalPauseSecondsRef.current = 0;
         setIsTimerRunning(true);
         setTravelerMaxQty(traveler.quantity || null);
+        // Scan is now consumed by an active timer; reset so a later manual
+        // start doesn't accidentally inherit this traveler_id.
+        scannedTravelerIdRef.current = null;
+        setScannedWorkOrder(null);
         lastStartedWorkCenterRef.current = newEntry.work_center; // display name e.g. "FEEDER LOAD"
         lastStartedTravelerIdRef.current = traveler.id;
         // Find the matching work center code from job steps for QR auto-stop matching
@@ -987,36 +1050,42 @@ export default function LaborTrackingPage() {
       toast.error('No active timer found');
       return;
     }
-    // Show qty modal before stopping
+    // Show qty modal before stopping. Clear both qty and comment so the modal
+    // never opens with stale input from a prior failed attempt — that was the
+    // source of confusing "first click fails, second works" reports.
     setPendingStopEntryId(activeEntryId);
     setQtyCompleted('');
+    setStopComment('');
     setIsQtyModalOpen(true);
   };
 
   const confirmStopTimer = async () => {
     if (!pendingStopEntryId) return;
+    if (isStopping) return;
 
-    // Qty must be entered. Leaving it blank was letting users bypass the
-    // zero-qty-requires-reason rule by simply not typing anything.
-    if (qtyCompleted.trim() === '') {
+    const trimmedQty = qtyCompleted.trim();
+    if (trimmedQty === '') {
       toast.error('Please enter a quantity (use 0 with a reason if no units were completed).');
       return;
     }
-
-    // Zero qty must be justified — the Stop button is already gated on this,
-    // but guard here too in case the handler is reached via Enter-in-input.
-    if (qtyCompleted === '0' && !stopComment.trim()) {
+    if (!/^\d+$/.test(trimmedQty)) {
+      toast.error('Quantity must be a whole number.');
+      return;
+    }
+    const parsedQtyNum = parseInt(trimmedQty, 10);
+    if (!Number.isFinite(parsedQtyNum) || parsedQtyNum < 0) {
+      toast.error('Quantity must be zero or a positive whole number.');
+      return;
+    }
+    if (parsedQtyNum === 0 && !stopComment.trim()) {
       toast.error('Please enter a reason explaining why quantity is 0.');
       return;
     }
 
+    setIsStopping(true);
     try {
       const token = localStorage.getItem('nexus_token');
       const endTime = new Date();
-
-      // Use != '' instead of a truthy check so '0' is preserved (previously
-      // '0' survived the ternary but we're making the intent explicit).
-      const parsedQty = qtyCompleted !== '' ? parseInt(qtyCompleted) : null;
 
       const response = await offlineFetch(`${API_BASE_URL}/labor/${pendingStopEntryId}`, {
         method: 'PUT',
@@ -1027,13 +1096,21 @@ export default function LaborTrackingPage() {
         body: JSON.stringify({
           end_time: endTime.toISOString(),
           is_completed: true,
-          qty_completed: Number.isFinite(parsedQty as number) ? parsedQty : null,
+          qty_completed: parsedQtyNum,
           comment: stopComment || null
         }),
         offlineType: 'labor_stop'
       });
 
       const respData = await response.json().catch(() => ({}));
+
+      const closeModalAndReset = () => {
+        setIsQtyModalOpen(false);
+        setPendingStopEntryId(null);
+        setQtyCompleted('');
+        setStopComment('');
+      };
+
       if (respData.offline && respData.queued) {
         setIsTimerRunning(false);
         setIsPaused(false);
@@ -1041,7 +1118,7 @@ export default function LaborTrackingPage() {
         setStartTime(null);
         setPauseTime(null);
         setActiveEntryId(null);
-        setIsQtyModalOpen(false);
+        closeModalAndReset();
         toast.info('Offline: Stop saved locally. Will sync when back online.');
       } else if (response.ok) {
         // Mirror to kitting subsystem (only fires if WC was kitting)
@@ -1067,6 +1144,7 @@ export default function LaborTrackingPage() {
         lastStartedTravelerIdRef.current = null;
         lastStartedStepIdRef.current = undefined;
 
+        closeModalAndReset();
         toast.success('Timer stopped and entry saved!');
         fetchLaborEntries();
       } else if (response.status === 404) {
@@ -1092,19 +1170,19 @@ export default function LaborTrackingPage() {
         lastStartedTravelerIdRef.current = null;
         lastStartedStepIdRef.current = undefined;
 
+        closeModalAndReset();
         toast.warning('Timer entry no longer exists. Timer has been reset.');
         fetchLaborEntries();
       } else {
+        // Non-success: keep modal open with user's input so they can fix and retry.
         toast.error(`Error: ${respData.detail || 'Failed to stop timer'}`);
       }
     } catch (error) {
+      // Network/exception: keep modal open — user can retry without re-entering qty.
       console.error('Error stopping timer:', error);
       toast.error('Error stopping timer');
     } finally {
-      setIsQtyModalOpen(false);
-      setPendingStopEntryId(null);
-      setQtyCompleted('');
-      setStopComment('');
+      setIsStopping(false);
     }
   };
 
@@ -1626,8 +1704,16 @@ export default function LaborTrackingPage() {
               {/* Input Form */}
               <div className="relative z-[50] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 <div>
-                  <label className="block text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
-                    Job Number <span className="text-red-500">*</span>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
+                    <span>Job Number <span className="text-red-500">*</span></span>
+                    {scannedWorkOrder && (
+                      <span
+                        title="WO resolved from the scanned Work Center QR — confirm it matches the traveler in front of you"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-800 text-[10px] font-bold dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700"
+                      >
+                        WO {scannedWorkOrder}
+                      </span>
+                    )}
                   </label>
                   <Autocomplete
                     ref={jobNumberAutocompleteRef}
@@ -1690,6 +1776,14 @@ export default function LaborTrackingPage() {
                             return;
                           }
 
+                          // Pin the exact traveler_id from the scan so
+                          // startTimer can use it directly instead of guessing
+                          // by job_number (which is ambiguous when multiple
+                          // travelers share a job — different WO breakouts).
+                          if (typeof scanData.traveler_id === 'number') {
+                            scannedTravelerIdRef.current = scanData.traveler_id;
+                          }
+                          setScannedWorkOrder(scanData.work_order || null);
                           // Auto-fill job number from DB
                           setNewEntry(prev => ({
                             ...prev,
@@ -2807,15 +2901,15 @@ export default function LaborTrackingPage() {
             <button
               onClick={confirmStopTimer}
               disabled={
-                // Qty must be entered — blank was the workaround users were
-                // using to bypass the zero-qty-requires-reason rule.
-                qtyCompleted.trim() === ''
+                isStopping
+                || qtyCompleted.trim() === ''
+                || !/^\d+$/.test(qtyCompleted.trim())
                 || !!(travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)
                 || (qtyCompleted === '0' && !stopComment.trim())
               }
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
-              Stop Timer
+              {isStopping ? 'Stopping...' : 'Stop Timer'}
             </button>
           </div>
         </div>

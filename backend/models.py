@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, Enum, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 from database import Base
 import enum
 
@@ -132,6 +132,16 @@ class Traveler(Base):
     __tablename__ = "travelers"
     __table_args__ = (
         UniqueConstraint('job_number', 'revision', name='uq_traveler_job_revision'),
+        # Partial unique index: two travelers can't share a WO number, but many
+        # rows may still carry NULL/empty WO (Draft status hasn't generated one
+        # yet). Enforced DB-side so a race between auto-gen and manual entry
+        # cannot produce duplicates silently.
+        Index(
+            'uq_traveler_work_order_number',
+            'work_order_number',
+            unique=True,
+            postgresql_where=text("work_order_number IS NOT NULL AND work_order_number <> ''"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)

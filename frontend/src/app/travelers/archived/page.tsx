@@ -302,7 +302,7 @@ export default function ArchivedTravelersPage() {
                             <p className="text-gray-900 dark:text-slate-100 font-bold">{traveler.quantity}</p>
                           </div>
                           <div>
-                            <p className="text-gray-500 dark:text-slate-400 font-semibold">Revision</p>
+                            <p className="text-gray-500 dark:text-slate-400 font-semibold">BOM Revision</p>
                             <p className="text-gray-900 dark:text-slate-100 font-bold">{traveler.revision}</p>
                           </div>
                         </div>
