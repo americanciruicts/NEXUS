@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -8,6 +10,8 @@ from database import get_db
 from models import User, LaborEntry, Traveler, ProcessStep, ManualStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog, AuditLog
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -239,6 +243,27 @@ async def scan_qr_lookup(
     if not traveler:
         raise HTTPException(status_code=404, detail="Traveler not found for this step")
 
+    # Instrumentation for the "wrong WO on shared job number" floor report.
+    # Logs which traveler/WO the scanned step_id resolved to so we can confirm
+    # from server logs whether the QR itself encodes the wrong step or the
+    # downstream code was mis-binding.
+    qr_work_order = parts[3] if len(parts) > 3 else None
+    qr_job_number = parts[2] if len(parts) > 2 else None
+    if qr_work_order and traveler.work_order_number and qr_work_order != traveler.work_order_number:
+        logger.warning(
+            "scan_qr_lookup WO mismatch: step_id=%s qr_job=%s qr_wo=%s "
+            "-> traveler_id=%s traveler_job=%s traveler_wo=%s user=%s",
+            qr_step_id, qr_job_number, qr_work_order,
+            traveler.id, traveler.job_number, traveler.work_order_number,
+            current_user.username,
+        )
+    else:
+        logger.info(
+            "scan_qr_lookup: step_id=%s -> traveler_id=%s job=%s wo=%s op=%s user=%s",
+            qr_step_id, traveler.id, traveler.job_number,
+            traveler.work_order_number, step.operation, current_user.username,
+        )
+
     # Look up work center for display name
     work_center = None
     if step.work_center_code:
@@ -294,6 +319,26 @@ async def start_labor_entry(
             )
         sequence_num = step.step_number
         work_center_name = step.operation
+        # Defense-in-depth for the "3 travelers, same job number, wrong WO
+        # logged" floor report: a scanned WC QR carries the exact step_id of
+        # the traveler the operator is working. That step is pinned to one
+        # traveler via step.traveler_id, so trust it over the client-supplied
+        # traveler_id — which can go stale when the operator swaps between
+        # breakouts of the same job. Rebind the traveler here so the labor
+        # entry always lands on the correct WO.
+        if step.traveler_id and step.traveler_id != labor_data.traveler_id:
+            rebound = db.query(Traveler).filter(Traveler.id == step.traveler_id).first()
+            if rebound:
+                logger.warning(
+                    "start_labor_entry traveler_id rebind: client sent "
+                    "traveler_id=%s job=%s wo=%s but step_id=%s belongs to "
+                    "traveler_id=%s job=%s wo=%s -- using step's traveler. user=%s",
+                    traveler.id, traveler.job_number, traveler.work_order_number,
+                    step_id, rebound.id, rebound.job_number, rebound.work_order_number,
+                    current_user.username,
+                )
+                traveler = rebound
+                labor_data.traveler_id = rebound.id
     else:
         # If no step_id provided, try to find it from description
         # Description format: "WORK_CENTER - OPERATOR"
@@ -504,6 +549,25 @@ async def update_labor_entry(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this labor entry"
         )
+
+    # Idempotent stop: if the entry is already closed and this is another
+    # stop attempt (end_time + is_completed=True), return the current state
+    # instead of re-running the validators / progress updates. Handles the
+    # "first stop fails, second stop works" report where a retried Stop after
+    # a network blip or scanner-triggered Enter produces a duplicate PUT.
+    if (
+        labor_entry.is_completed
+        and labor_entry.end_time is not None
+        and labor_data.is_completed is True
+        and labor_data.end_time is not None
+        and labor_data.pause_time is None
+        and not labor_data.clear_pause
+    ):
+        traveler = db.query(Traveler).filter(Traveler.id == labor_entry.traveler_id).first()
+        employee = db.query(User).filter(User.id == labor_entry.employee_id).first()
+        labor_entry.employee_name = f"{employee.first_name} {employee.last_name}" if employee else "Unknown"
+        labor_entry.job_number = traveler.job_number if traveler else None
+        return labor_entry
 
     # Capture original state before updates (for notification logic + audit)
     had_end_time_before = labor_entry.end_time is not None

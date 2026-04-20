@@ -2851,13 +2851,33 @@ export default function LaborTrackingPage() {
                 toast.error(`Quantity cannot exceed traveler quantity (${travelerMaxQty})`);
                 return;
               }
+              // Reject pasted/scanned QR content. The qty modal auto-focuses
+              // this input, so a habitual scan of the Work Center QR to
+              // "confirm stop" fires keystrokes here — that landed a garbage
+              // string in qty and made the first Stop attempt fail validation
+              // (second attempt worked because the operator then cleared and
+              // retyped). Strip anything that isn't a digit.
+              if (/[^0-9]/.test(val)) {
+                setQtyCompleted(val.replace(/[^0-9]/g, ''));
+                return;
+              }
               setQtyCompleted(val);
             }}
             placeholder={travelerMaxQty != null ? `Max: ${travelerMaxQty}` : 'Enter quantity completed'}
             className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:bg-slate-700 dark:text-white"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter') confirmStopTimer();
+              // Only submit on Enter when the current qty value is actually
+              // valid. Without this guard, a scanner emitting NEXUS-STEP|...
+              // into the focused qty field would end with Enter and fire
+              // confirmStopTimer with garbage in the qty — producing the
+              // "first stop fails" symptom reported from the floor.
+              if (e.key !== 'Enter') return;
+              const trimmed = qtyCompleted.trim();
+              if (!/^\d+$/.test(trimmed)) return;
+              if (trimmed === '0' && !stopComment.trim()) return;
+              if (travelerMaxQty != null && parseInt(trimmed) > travelerMaxQty) return;
+              confirmStopTimer();
             }}
           />
           {qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty && (
