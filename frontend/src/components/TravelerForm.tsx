@@ -684,8 +684,16 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
   };
 
   const handleSubmit = async () => {
-    if (!formData.jobNumber || !formData.workOrderNumber || !formData.partNumber) {
-      toast.warning('Missing Required Fields: Please fill in Job Number, Work Order Number, Part Number');
+    // Clones intentionally save without a WO — the WO is allocated when the
+    // traveler later transitions Draft → Awaiting Start. Don't block the
+    // save just because the WO field is empty in clone mode.
+    const woRequired = !isClone;
+    if (!formData.jobNumber || !formData.partNumber || (woRequired && !formData.workOrderNumber)) {
+      const missing: string[] = [];
+      if (!formData.jobNumber) missing.push('Job Number');
+      if (woRequired && !formData.workOrderNumber) missing.push('Work Order Number');
+      if (!formData.partNumber) missing.push('Part Number');
+      toast.warning(`Missing Required Fields: Please fill in ${missing.join(', ')}`);
       return;
     }
 
@@ -837,7 +845,9 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
     if (isLeadFree) fullJobNumber += 'L';
     if (isITAR) fullJobNumber += 'M';
 
-    // Construct proper work order number from prefix and suffix
+    // Construct work order number from prefix and suffix. Drafts persist
+    // whatever the user typed — if they left WO empty we keep it empty so
+    // the WO is only allocated on the Draft → Awaiting Start transition.
     let fullWorkOrderNumber = '';
     if (workOrderPrefix && workOrderSuffix) {
       fullWorkOrderNumber = `${workOrderPrefix}-${workOrderSuffix}`;
@@ -846,7 +856,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
     } else if (workOrderSuffix) {
       fullWorkOrderNumber = workOrderSuffix;
     } else {
-      fullWorkOrderNumber = formData.workOrderNumber || fullJobNumber;
+      fullWorkOrderNumber = formData.workOrderNumber || '';
     }
 
     // Map traveler type to backend enum
