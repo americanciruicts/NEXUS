@@ -1713,7 +1713,7 @@ export default function LaborTrackingPage() {
               )}
 
               {/* Input Form */}
-              <div className="relative z-[50] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
+              <div className="relative z-[50] grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4">
                 <div>
                   <label className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     <span>Job Number <span className="text-red-500">*</span></span>
