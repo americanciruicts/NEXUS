@@ -332,16 +332,18 @@ export default function LaborTrackingPage() {
           const steps = await fetchWorkCentersByJob(scanData.job_number);
           setJobWorkCenterOptions(steps);
         }
-        if (scanData.is_step_completed) {
-          toast.warning(`Step "${scanData.operation}" is already marked completed`);
-        }
+        // Intentionally NOT warning on already-completed steps. Operators
+        // legitimately re-scan completed steps (logging additional time,
+        // touch-ups, returning to a step). The toast is noise that's been
+        // confusing operators on the floor — let the start/stop flow speak
+        // for itself.
       }
     } catch (err) {
       console.error('QR resolve failed:', err);
     } finally {
       qrResolvingRef.current = false;
     }
-  }, []);
+  }, [isTimerRunning]);
 
   useEffect(() => {
     if (qrResolveRef.current) clearTimeout(qrResolveRef.current);
@@ -443,11 +445,14 @@ export default function LaborTrackingPage() {
     }
   };
 
-  // Fetch work centers from process steps for a specific job number
-  const fetchWorkCentersByJob = async (jobNumber: string, query: string = '') => {
+  // Fetch work centers from process steps for a specific job number.
+  // travelerId pins the lookup to a specific WO breakout when the same
+  // job_number has multiple travelers (the dropdown supplies it).
+  const fetchWorkCentersByJob = async (jobNumber: string, query: string = '', travelerId?: number | null) => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const url = `${API_BASE_URL}/search/autocomplete/work-centers-by-job?job_number=${encodeURIComponent(jobNumber)}&q=${encodeURIComponent(query)}`;
+      const travelerParam = travelerId != null ? `&traveler_id=${encodeURIComponent(travelerId)}` : '';
+      const url = `${API_BASE_URL}/search/autocomplete/work-centers-by-job?job_number=${encodeURIComponent(jobNumber)}&q=${encodeURIComponent(query)}${travelerParam}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
       });
@@ -483,12 +488,18 @@ export default function LaborTrackingPage() {
   const handleJobNumberSelect = async (option: any) => {
     const jobNum = (option.job_number || option.value || '').trim();
     if (!jobNum) return;
-    // Picking a job from the dropdown is manual disambiguation — drop any
-    // scanned traveler_id since the user is choosing by job, not by scan.
-    scannedTravelerIdRef.current = null;
-    setScannedWorkOrder(null);
+    // The dropdown now returns one row per traveler (job_number + WO). If the
+    // picked option carries a traveler_id, pin it so the start-timer flow
+    // lands on the correct WO breakout instead of erroring out with the
+    // "Job has N open travelers" guard. Falls back to the prior behavior
+    // (no pin) for legacy options that don't include an id.
+    const pickedTravelerId =
+      typeof option.traveler_id === 'number' ? option.traveler_id :
+      typeof option.id === 'number' ? option.id : null;
+    scannedTravelerIdRef.current = pickedTravelerId;
+    setScannedWorkOrder(option.work_order_number || null);
     setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
-    const steps = await fetchWorkCentersByJob(jobNum);
+    const steps = await fetchWorkCentersByJob(jobNum, '', pickedTravelerId);
     setJobWorkCenterOptions(steps);
     // After the job is scanned/selected, pull focus to the Work Center field
     // so the operator's next scan lands on the correct input.
@@ -1608,7 +1619,7 @@ export default function LaborTrackingPage() {
           {/* Dashboard Grid - Timer and Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Circular Timer - Takes 2 columns on large screens */}
-            <div className="lg:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6">
+            <div className="md:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100">Timer</h2>
                 {isTimerRunning && (
@@ -1793,9 +1804,9 @@ export default function LaborTrackingPage() {
                           }));
                           setWorkCenterConfirmed(true);
 
-                          if (scanData.is_step_completed) {
-                            toast.warning(`Step "${scanData.operation}" is already marked completed`);
-                          }
+                          // Intentionally NOT warning on completed steps —
+                          // operators legitimately rescan to log additional
+                          // time. The toast was just noise.
 
                           // Fetch work center options for this job
                           if (scanData.job_number) {
