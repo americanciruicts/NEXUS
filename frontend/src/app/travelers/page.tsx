@@ -901,8 +901,8 @@ function TravelersPage() {
                       >
                         <span>Job, WO &amp; PO</span>
                         {sortField === 'jobNumber' ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
@@ -914,8 +914,8 @@ function TravelersPage() {
                       >
                         <span>Part Details</span>
                         {sortField === 'partNumber' ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
@@ -927,8 +927,8 @@ function TravelersPage() {
                       >
                         <span>Customer</span>
                         {sortField === 'customerName' ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
@@ -940,8 +940,8 @@ function TravelersPage() {
                       >
                         <span>Dates</span>
                         {(sortField === 'createdAt' || sortField === 'dueDate') ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
@@ -953,8 +953,8 @@ function TravelersPage() {
                       >
                         <span>Shipping</span>
                         {sortField === 'shipDate' ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
@@ -966,8 +966,8 @@ function TravelersPage() {
                       >
                         <span>Status</span>
                         {sortField === 'status' ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
@@ -979,8 +979,8 @@ function TravelersPage() {
                       >
                         <span>Steps</span>
                         {sortField === 'progress' ? (
-                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
-                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
+                        ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
                     </th>
                     <th className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white" style={{minWidth: '220px', width: '25%'}}>
