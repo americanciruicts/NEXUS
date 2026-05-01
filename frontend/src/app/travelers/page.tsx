@@ -15,7 +15,10 @@ import {
   FunnelIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ChevronUpDownIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/config/api';
@@ -197,6 +200,42 @@ function TravelersPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Sorting
+  type SortField = 'jobNumber' | 'partNumber' | 'customerName' | 'createdAt' | 'dueDate' | 'shipDate' | 'status' | 'quantity' | 'progress';
+  type SortDirection = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Load persisted sort on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('travelers_sort');
+      if (saved) {
+        const { field, direction } = JSON.parse(saved);
+        if (field) setSortField(field);
+        if (direction === 'asc' || direction === 'desc') setSortDirection(direction);
+      }
+    } catch {}
+  }, []);
+
+  // Persist sort changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('travelers_sort', JSON.stringify({ field: sortField, direction: sortDirection }));
+    } catch {}
+  }, [sortField, sortDirection]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      // sensible default direction per field type
+      const desc: SortField[] = ['createdAt', 'dueDate', 'shipDate', 'quantity', 'progress'];
+      setSortDirection(desc.includes(field) ? 'desc' : 'asc');
+    }
+  };
 
   // Saved filter presets
   interface FilterPreset {
@@ -400,16 +439,56 @@ function TravelersPage() {
     return matchesSearch && matchesStatus && matchesType && matchesView;
   });
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or sort change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, typeFilter, viewFilter]);
+  }, [searchTerm, statusFilter, typeFilter, viewFilter, sortField, sortDirection]);
+
+  // Sort filtered travelers
+  const sortedTravelers = [...filteredTravelers].sort((a, b) => {
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    const av = a[sortField];
+    const bv = b[sortField];
+
+    // Handle empty/undefined — push empties to the end regardless of direction
+    const aEmpty = av === null || av === undefined || av === '';
+    const bEmpty = bv === null || bv === undefined || bv === '';
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+
+    if (sortField === 'createdAt' || sortField === 'dueDate' || sortField === 'shipDate') {
+      const at = new Date(av as string).getTime();
+      const bt = new Date(bv as string).getTime();
+      const aValid = !isNaN(at);
+      const bValid = !isNaN(bt);
+      if (!aValid && !bValid) return 0;
+      if (!aValid) return 1;
+      if (!bValid) return -1;
+      return (at - bt) * dir;
+    }
+
+    if (typeof av === 'number' && typeof bv === 'number') {
+      return (av - bv) * dir;
+    }
+
+    // jobNumber: try numeric compare first, fall back to locale string compare
+    if (sortField === 'jobNumber') {
+      const an = parseFloat(String(av));
+      const bn = parseFloat(String(bv));
+      if (!isNaN(an) && !isNaN(bn) && String(an) === String(av).trim() && String(bn) === String(bv).trim()) {
+        return (an - bn) * dir;
+      }
+    }
+
+    return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+  });
 
   // Pagination calculations
-  const totalPages = Math.ceil(filteredTravelers.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedTravelers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedTravelers = filteredTravelers.slice(startIndex, endIndex);
+  const paginatedTravelers = sortedTravelers.slice(startIndex, endIndex);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -733,6 +812,37 @@ function TravelersPage() {
                   {filteredTravelers.length}
                 </span>
               </div>
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="travelers-sort" className="text-xs font-semibold text-white/90 whitespace-nowrap">Sort by:</label>
+                <select
+                  id="travelers-sort"
+                  value={`${sortField}:${sortDirection}`}
+                  onChange={(e) => {
+                    const [f, d] = e.target.value.split(':') as [SortField, SortDirection];
+                    setSortField(f);
+                    setSortDirection(d);
+                  }}
+                  className="text-xs font-semibold bg-white/95 dark:bg-slate-700 text-gray-900 dark:text-slate-100 border border-white/30 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-white/50 cursor-pointer"
+                >
+                  <option value="createdAt:desc">Latest first</option>
+                  <option value="createdAt:asc">Oldest first</option>
+                  <option value="jobNumber:asc">Job # (A → Z)</option>
+                  <option value="jobNumber:desc">Job # (Z → A)</option>
+                  <option value="dueDate:asc">Due Date (soonest)</option>
+                  <option value="dueDate:desc">Due Date (latest)</option>
+                  <option value="shipDate:asc">Ship Date (soonest)</option>
+                  <option value="shipDate:desc">Ship Date (latest)</option>
+                  <option value="status:asc">Status (A → Z)</option>
+                  <option value="customerName:asc">Customer (A → Z)</option>
+                  <option value="customerName:desc">Customer (Z → A)</option>
+                  <option value="partNumber:asc">Part # (A → Z)</option>
+                  <option value="partNumber:desc">Part # (Z → A)</option>
+                  <option value="quantity:desc">Quantity (high → low)</option>
+                  <option value="quantity:asc">Quantity (low → high)</option>
+                  <option value="progress:desc">Progress (high → low)</option>
+                  <option value="progress:asc">Progress (low → high)</option>
+                </select>
+              </div>
             </div>
           </div>
           {travelersLoading ? (
@@ -783,25 +893,95 @@ function TravelersPage() {
                     </th>
                     <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white" style={{width: '70px'}}>Actions</th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
-                      Job, WO & PO
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('jobNumber')}
+                        className="inline-flex items-center gap-1 hover:text-yellow-200 transition-colors"
+                        title="Sort by Job Number"
+                      >
+                        <span>Job, WO &amp; PO</span>
+                        {sortField === 'jobNumber' ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
-                      Part Details
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('partNumber')}
+                        className="inline-flex items-center gap-1 hover:text-yellow-200 transition-colors"
+                        title="Sort by Part Number"
+                      >
+                        <span>Part Details</span>
+                        {sortField === 'partNumber' ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
-                      Customer
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('customerName')}
+                        className="inline-flex items-center gap-1 hover:text-yellow-200 transition-colors"
+                        title="Sort by Customer"
+                      >
+                        <span>Customer</span>
+                        {sortField === 'customerName' ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
-                      Dates
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(sortField === 'dueDate' ? 'createdAt' : sortField === 'createdAt' ? 'dueDate' : 'createdAt')}
+                        className="inline-flex items-center gap-1 hover:text-yellow-200 transition-colors"
+                        title="Click to cycle: Created → Due"
+                      >
+                        <span>Dates</span>
+                        {(sortField === 'createdAt' || sortField === 'dueDate') ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
-                      Shipping
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('shipDate')}
+                        className="inline-flex items-center gap-1 hover:text-yellow-200 transition-colors"
+                        title="Sort by Ship Date"
+                      >
+                        <span>Shipping</span>
+                        {sortField === 'shipDate' ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
-                      Status
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('status')}
+                        className="inline-flex items-center gap-1 mx-auto hover:text-yellow-200 transition-colors"
+                        title="Sort by Status"
+                      >
+                        <span>Status</span>
+                        {sortField === 'status' ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-1 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white">
-                      Steps
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('progress')}
+                        className="inline-flex items-center gap-1 mx-auto hover:text-yellow-200 transition-colors"
+                        title="Sort by Progress"
+                      >
+                        <span>Steps</span>
+                        {sortField === 'progress' ? (
+                          sortDirection === 'asc' ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />
+                        ) : <ChevronUpDownIcon className="h-3.5 w-3.5 opacity-60" />}
+                      </button>
                     </th>
                     <th className="px-2 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-white" style={{minWidth: '220px', width: '25%'}}>
                       Depts
