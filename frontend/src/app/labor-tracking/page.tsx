@@ -738,23 +738,26 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
 
-      // First, find the traveler by job number
-      const travelersResponse = await fetch(`${API_BASE_URL}/travelers/`, {
-        headers: {
-          'Authorization': `Bearer ${token || 'mock-token'}`
+      // First, find the traveler by job number. We query the by-job-number
+      // endpoint directly instead of GET /travelers/ — the latter is paginated
+      // to 50 newest rows, so older travelers (e.g. 5477 KANBAN) silently
+      // dropped out of the lookup and the operator saw "Job number not found"
+      // even though the traveler existed.
+      const travelersResponse = await fetch(
+        `${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(jobNumber)}/all-work-orders`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token || 'mock-token'}`
+          }
         }
-      });
+      );
 
       if (!travelersResponse.ok) {
         toast.error('Failed to fetch travelers');
         return;
       }
 
-      const travelers = await travelersResponse.json();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const matchesByJob = travelers.filter((t: any) =>
-        String(t.job_number).toLowerCase() === jobNumber.toLowerCase()
-      );
+      const matchesByJob = await travelersResponse.json();
 
       // If a WC QR was scanned, the scan response pinned the exact traveler.
       // Prefer that over a job_number lookup — multiple travelers can share a
@@ -765,10 +768,23 @@ export default function LaborTrackingPage() {
       const scannedId = scannedTravelerIdRef.current;
       if (scannedId != null) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        traveler = matchesByJob.find((t: any) => t.id === scannedId)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ?? travelers.find((t: any) => t.id === scannedId)
-          ?? null;
+        traveler = matchesByJob.find((t: any) => t.id === scannedId) ?? null;
+        // The scanned traveler may belong to a different job_number than the
+        // one typed in the form (e.g. operator scanned a WC QR then changed
+        // the job field). Fall back to a direct fetch by id so the start
+        // still resolves rather than failing with "Job number not found".
+        if (!traveler) {
+          try {
+            const byIdResp = await fetch(`${API_BASE_URL}/travelers/${scannedId}`, {
+              headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
+            });
+            if (byIdResp.ok) {
+              traveler = await byIdResp.json();
+            }
+          } catch {
+            // ignore — fall through to the not-found toast below
+          }
+        }
       } else if (matchesByJob.length === 1) {
         traveler = matchesByJob[0];
       } else if (matchesByJob.length > 1) {

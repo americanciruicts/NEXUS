@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, model_validator
 
 from database import get_db
@@ -207,10 +207,56 @@ async def scan_qr_lookup(
     qr_step_type = parts[7] if len(parts) > 7 else "PROCESS"
 
     if qr_step_type == "MANUAL":
-        # Look up manual step
+        # Look up manual step. Fall back to (traveler, description) match
+        # across both the QR's traveler_id and any sibling traveler with the
+        # same job_number + work_order — handles cases where the original
+        # traveler was deleted/replaced after the label was printed.
         manual_step = db.query(ManualStep).filter(ManualStep.id == qr_step_id).first()
         if not manual_step:
-            raise HTTPException(status_code=404, detail=f"Manual step {qr_step_id} not found")
+            try:
+                qr_traveler_id = int(parts[1])
+            except (ValueError, IndexError):
+                qr_traveler_id = None
+            qr_job_number_fb = parts[2] if len(parts) > 2 else None
+            qr_work_order_fb = parts[3] if len(parts) > 3 else None
+            qr_description = parts[6] if len(parts) > 6 else (parts[4] if len(parts) > 4 else None)
+
+            candidate_traveler_ids: list = []
+            if qr_traveler_id:
+                candidate_traveler_ids.append(qr_traveler_id)
+            if qr_job_number_fb:
+                sibling_q = db.query(Traveler.id).filter(Traveler.job_number == qr_job_number_fb)
+                if qr_work_order_fb:
+                    sibling_q = sibling_q.filter(Traveler.work_order_number == qr_work_order_fb)
+                for (tid,) in sibling_q.all():
+                    if tid not in candidate_traveler_ids:
+                        candidate_traveler_ids.append(tid)
+
+            if qr_description and candidate_traveler_ids:
+                for tid in candidate_traveler_ids:
+                    manual_step = db.query(ManualStep).filter(
+                        ManualStep.traveler_id == tid,
+                        ManualStep.description == qr_description,
+                    ).first()
+                    if manual_step:
+                        logger.warning(
+                            "scan_qr_lookup stale MANUAL step_id=%s recovered via "
+                            "fallback to step_id=%s (qr_traveler_id=%s qr_job=%s "
+                            "qr_wo=%s desc=%s) live_traveler_id=%s user=%s",
+                            qr_step_id, manual_step.id, qr_traveler_id,
+                            qr_job_number_fb, qr_work_order_fb, qr_description,
+                            manual_step.traveler_id, current_user.username,
+                        )
+                        break
+            if not manual_step:
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        f"Manual step {qr_step_id} not found. The traveler may "
+                        f"have been deleted or replaced after this label was "
+                        f"printed — please reprint."
+                    ),
+                )
 
         traveler = db.query(Traveler).filter(Traveler.id == manual_step.traveler_id).first()
         if not traveler:
@@ -233,10 +279,89 @@ async def scan_qr_lookup(
             "is_step_completed": manual_step.is_completed if hasattr(manual_step, 'is_completed') else False,
         }
 
-    # Look up process step from DB
+    # Look up process step from DB. The printed QR's step_id can go stale when
+    # the traveler is edited (steps reordered/replaced) — those old step rows
+    # get deleted if no labor was logged against them. The QR's traveler_id
+    # can also go stale (traveler deleted/replaced/recloned). Fall back to
+    # matching by what's stable on the printed label: job_number + work_order
+    # to find the live traveler, then step_number + operation/work_center to
+    # find the live step. Works across travelers too — not job-specific.
     step = db.query(ProcessStep).filter(ProcessStep.id == qr_step_id).first()
     if not step:
-        raise HTTPException(status_code=404, detail=f"Process step {qr_step_id} not found")
+        try:
+            qr_traveler_id = int(parts[1])
+        except (ValueError, IndexError):
+            qr_traveler_id = None
+        qr_job_number_fb = parts[2] if len(parts) > 2 else None
+        qr_work_order_fb = parts[3] if len(parts) > 3 else None
+        try:
+            qr_step_number = int(parts[5]) if parts[5] else None
+        except (ValueError, IndexError):
+            qr_step_number = None
+        qr_work_center = parts[4] if len(parts) > 4 else None
+        qr_operation = parts[6] if len(parts) > 6 else None
+
+        # Build the candidate set of traveler_ids to search across — start
+        # with the QR's traveler_id, then widen to (job_number + work_order)
+        # in case the original traveler was replaced.
+        candidate_traveler_ids: list = []
+        if qr_traveler_id:
+            candidate_traveler_ids.append(qr_traveler_id)
+        if qr_job_number_fb:
+            sibling_q = db.query(Traveler.id).filter(Traveler.job_number == qr_job_number_fb)
+            if qr_work_order_fb:
+                sibling_q = sibling_q.filter(Traveler.work_order_number == qr_work_order_fb)
+            for (tid,) in sibling_q.all():
+                if tid not in candidate_traveler_ids:
+                    candidate_traveler_ids.append(tid)
+        # Last-ditch: if still empty (no job_number on QR somehow), search by
+        # step_number + operation across all travelers — bounded by the
+        # uniqueness of (operation + step_number) so it's safe enough.
+        candidate = None
+        if candidate_traveler_ids:
+            for tid in candidate_traveler_ids:
+                base_q = db.query(ProcessStep).filter(ProcessStep.traveler_id == tid)
+                if qr_step_number is not None and qr_operation:
+                    candidate = base_q.filter(
+                        ProcessStep.step_number == qr_step_number,
+                        ProcessStep.operation == qr_operation,
+                    ).first()
+                    if candidate:
+                        break
+                if qr_step_number is not None and qr_work_center:
+                    candidate = base_q.filter(
+                        ProcessStep.step_number == qr_step_number,
+                        ProcessStep.work_center_code == qr_work_center,
+                    ).first()
+                    if candidate:
+                        break
+                if qr_operation:
+                    candidate = base_q.filter(ProcessStep.operation == qr_operation).first()
+                    if candidate:
+                        break
+                if qr_work_center:
+                    candidate = base_q.filter(ProcessStep.work_center_code == qr_work_center).first()
+                    if candidate:
+                        break
+        if candidate:
+            logger.warning(
+                "scan_qr_lookup stale step_id=%s recovered via fallback to step_id=%s "
+                "(qr_traveler_id=%s qr_job=%s qr_wo=%s step_number=%s op=%s wc=%s) "
+                "live_traveler_id=%s user=%s",
+                qr_step_id, candidate.id, qr_traveler_id, qr_job_number_fb,
+                qr_work_order_fb, qr_step_number, qr_operation, qr_work_center,
+                candidate.traveler_id, current_user.username,
+            )
+            step = candidate
+        if not step:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"Process step {qr_step_id} not found and could not be matched "
+                    f"by job/WO/step number/operation. The traveler may have been "
+                    f"deleted or replaced after this label was printed — please reprint."
+                ),
+            )
 
     # Look up traveler
     traveler = db.query(Traveler).filter(Traveler.id == step.traveler_id).first()
@@ -303,6 +428,16 @@ async def start_labor_entry(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Traveler not found"
+        )
+
+    # Server-side job-number guard: the traveler we're attaching this labor
+    # entry to must actually have a job_number. A scanner mis-configured to
+    # send only the WC QR (no job scan) used to slip empty-job entries past
+    # the client-side check; this is the last line of defense.
+    if not (traveler.job_number and str(traveler.job_number).strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot start labor entry: traveler has no job number. Scan or select a Job Number first."
         )
 
     # Verify step exists if provided and extract sequence number

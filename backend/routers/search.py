@@ -237,18 +237,32 @@ async def autocomplete_job_numbers(
     # Order by most recently created first, then by job number
     travelers = query.order_by(Traveler.created_at.desc()).limit(limit).all()
 
-    return [
-        {
+    # Surface the work order in the dropdown label so an operator can pick the
+    # correct breakout when a single job_number maps to multiple travelers.
+    # Without this, `value` (the job_number) and the visible row look identical
+    # for every WO and the picker silently lands on the first match.
+    out = []
+    for t in travelers:
+        wo = (t.work_order_number or "").strip()
+        desc = t.part_description or ""
+        desc_short = f"{desc[:50]}{'...' if len(desc) > 50 else ''}"
+        label = f"{t.job_number}"
+        if wo:
+            label += f" / WO {wo}"
+        if desc_short:
+            label += f" - {desc_short}"
+        out.append({
             "id": t.id,
+            "traveler_id": t.id,
             "job_number": t.job_number,
+            "work_order_number": wo or None,
             "part_description": t.part_description,
             "customer_name": t.customer_name,
             "status": t.status,
-            "label": f"{t.job_number} - {t.part_description[:50]}{'...' if len(t.part_description) > 50 else ''}",
-            "value": t.job_number
-        }
-        for t in travelers
-    ]
+            "label": label,
+            "value": t.job_number,
+        })
+    return out
 
 
 @router.get("/autocomplete/work-centers")
@@ -377,6 +391,7 @@ async def autocomplete_operators(
 async def autocomplete_work_centers_by_job(
     job_number: str = Query(..., description="Job number to fetch process steps for"),
     q: str = Query("", description="Optional filter query"),
+    traveler_id: Optional[int] = Query(None, description="Specific traveler ID — disambiguates multiple WO breakouts of the same job"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -384,14 +399,21 @@ async def autocomplete_work_centers_by_job(
     Get work center options from a traveler's process steps by job number.
     Returns the process steps as work center dropdown options.
     Also allows manual typing/scanning - results are filtered by q if provided.
+
+    If `traveler_id` is supplied, it pins the lookup to that exact traveler
+    so picks against a job_number with multiple WO breakouts land on the
+    correct WO's process steps.
     """
     from sqlalchemy.orm import joinedload
 
-    traveler = db.query(Traveler).options(
-        joinedload(Traveler.process_steps)
-    ).filter(
-        Traveler.job_number == job_number
-    ).first()
+    base = db.query(Traveler).options(joinedload(Traveler.process_steps))
+    if traveler_id is not None:
+        traveler = base.filter(Traveler.id == traveler_id).first()
+        # Sanity-check the job number matches what the client claims.
+        if traveler and traveler.job_number != job_number:
+            traveler = None
+    else:
+        traveler = base.filter(Traveler.job_number == job_number).first()
 
     if not traveler:
         return []

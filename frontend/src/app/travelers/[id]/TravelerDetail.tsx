@@ -247,6 +247,43 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     renderedStepIdsRef.current.add(stepId);
     setStepQRCodesRenderedCount(c => c + 1);
   };
+
+  // DOM reconciler — base64 images often hit the browser cache and fire load
+  // before React attaches the onLoad listener (or never re-fire on subsequent
+  // renders), leaving Print stuck on "Loading…" even when every QR is on
+  // screen. After each barcode/QR state update, scan the DOM and mark any
+  // image that's already complete + has natural pixels. Polls a few times
+  // to catch images that decode async.
+  useEffect(() => {
+    let cancelled = false;
+    const reconcile = () => {
+      if (cancelled) return;
+      const headerImgs = document.querySelectorAll<HTMLImageElement>('img[data-print-img="header-barcode"]');
+      for (const img of Array.from(headerImgs)) {
+        if (img.complete && img.naturalWidth > 0) {
+          handleHeaderBarcodeLoad();
+          break;
+        }
+      }
+      const stepImgs = document.querySelectorAll<HTMLImageElement>('img[data-print-img="step-qr"]');
+      for (const img of Array.from(stepImgs)) {
+        const sid = Number(img.getAttribute('data-step-id'));
+        if (!Number.isFinite(sid) || sid <= 0) continue;
+        if (img.complete && img.naturalWidth > 0) {
+          handleStepQRLoad(sid);
+        }
+      }
+    };
+    // Sweep across a few frames to catch sync-cached + async-decoded loads.
+    const ids: number[] = [];
+    [0, 50, 200, 500, 1000, 2000].forEach(delay => {
+      ids.push(window.setTimeout(reconcile, delay));
+    });
+    return () => {
+      cancelled = true;
+      ids.forEach(id => window.clearTimeout(id));
+    };
+  }, [headerBarcode, stepQRCodes]);
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -2750,7 +2787,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       alt={`Barcode for ${displayTraveler.jobNumber}`}
                       className="mx-auto w-32 h-10 sm:w-40 sm:h-12"
                       style={{ objectFit: 'contain' }}
-                      onLoad={handleHeaderBarcodeLoad}
+                      data-print-img="header-barcode" onLoad={handleHeaderBarcodeLoad}
                       onError={() => {
                         console.error('Failed to load header barcode');
                       }}
@@ -2961,7 +2998,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         alt={`Barcode for ${displayTraveler.jobNumber}`}
                         className="mx-auto w-44 h-14 print:w-[100px] print:h-[30px]"
                         style={{ objectFit: 'contain' }}
-                        onLoad={handleHeaderBarcodeLoad}
+                        data-print-img="header-barcode" onLoad={handleHeaderBarcodeLoad}
                         onError={() => {
                           console.error('Failed to load header barcode');
                         }}
@@ -3127,7 +3164,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         </div>
                         <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
                           {headerBarcode ? (
-                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} onLoad={handleHeaderBarcodeLoad} />
+                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} data-print-img="header-barcode" onLoad={handleHeaderBarcodeLoad} />
                           ) : (
                             <div className="flex items-center justify-center h-14 print:h-28" style={{width: '160px'}}>
                               <span className="text-[10px] text-gray-400">{createMode ? 'Barcode after save' : 'Loading...'}</span>
@@ -3419,7 +3456,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 alt={`QR Code for ${step.workCenter}`}
                                 className="border border-gray-200 dark:border-gray-600 flex-shrink-0 rounded bg-white"
                                 style={{ width: '70px', height: '70px', padding: '1px' }}
-                                onLoad={() => handleStepQRLoad(step.id!)}
+                                data-print-img="step-qr" data-step-id={step.id} onLoad={() => handleStepQRLoad(step.id!)}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -3519,7 +3556,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 alt={`QR Code for ${step.workCenter}`}
                                 className="border border-gray-200 dark:border-slate-600 flex-shrink-0 print:w-[50px] print:h-[50px] bg-white rounded"
                                 style={{ width: '70px', height: '70px', padding: '1px' }}
-                                onLoad={() => handleStepQRLoad(step.id!)}
+                                data-print-img="step-qr" data-step-id={step.id} onLoad={() => handleStepQRLoad(step.id!)}
                                 onError={() => {
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
@@ -3769,7 +3806,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           alt={`QR Code for ${step.workCenter}`}
                           className="border border-gray-200 dark:border-gray-600 rounded bg-white"
                           style={{ width: '80px', height: '80px', padding: '1px' }}
-                          onLoad={() => handleStepQRLoad(step.id!)}
+                          data-print-img="step-qr" data-step-id={step.id} onLoad={() => handleStepQRLoad(step.id!)}
                           onError={() => {
                             console.error('Failed to load QR code for step', step.id);
                           }}
@@ -3806,7 +3843,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </div>
                     {step.id && stepQRCodes[step.id] && (
                       <div className="flex justify-center pt-2 border-t border-gray-200 dark:border-slate-700">
-                        <img src={`data:image/png;base64,${stepQRCodes[step.id]}`} alt={`QR Code for ${step.workCenter}`} className="border border-gray-200 dark:border-gray-600 rounded bg-white" style={{ width: '60px', height: '60px', padding: '3px' }} onLoad={() => handleStepQRLoad(step.id!)} />
+                        <img src={`data:image/png;base64,${stepQRCodes[step.id]}`} alt={`QR Code for ${step.workCenter}`} className="border border-gray-200 dark:border-gray-600 rounded bg-white" style={{ width: '60px', height: '60px', padding: '3px' }} data-print-img="step-qr" data-step-id={step.id} onLoad={() => handleStepQRLoad(step.id!)} />
                       </div>
                     )}
                   </div>
