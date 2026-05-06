@@ -26,6 +26,28 @@ def get_pause_data(db: Session, entry_id: int):
         "pause_count": len(logs) if logs else None,
     }
 
+
+def get_pause_data_batch(db: Session, entry_ids: list):
+    """Batch-fetch pause logs for many labor entries in a single query.
+    Returns a dict {entry_id: pause_data_dict} matching get_pause_data's shape.
+    Avoids the N+1 that crushed labor endpoints under admin polling load."""
+    if not entry_ids:
+        return {}
+    logs = db.query(PauseLog).filter(PauseLog.labor_entry_id.in_(entry_ids)).order_by(PauseLog.paused_at).all()
+    grouped: dict = {}
+    for log in logs:
+        grouped.setdefault(log.labor_entry_id, []).append(log)
+    result = {}
+    for eid in entry_ids:
+        entry_logs = grouped.get(eid, [])
+        total_seconds = sum(l.duration_seconds or 0 for l in entry_logs)
+        result[eid] = {
+            "pause_logs": [PauseLogResponse.model_validate(l) for l in entry_logs],
+            "total_pause_seconds": round(total_seconds, 1) if entry_logs else None,
+            "pause_count": len(entry_logs) if entry_logs else None,
+        }
+    return result
+
 def update_step_and_traveler_progress(db: Session, labor_entry: LaborEntry):
     """When a labor entry is completed, mark its linked process step as completed
     and update the traveler's status accordingly."""
@@ -1173,8 +1195,10 @@ async def get_labor_init(
 
     employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
     traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
+    entry_ids = [e.id for e in labor_entries]
     employees = {u.id: u for u in db.query(User).filter(User.id.in_(employee_ids)).all()} if employee_ids else {}
     travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
+    pause_map = get_pause_data_batch(db, entry_ids)
 
     entries = []
     for entry in labor_entries:
@@ -1195,7 +1219,7 @@ async def get_labor_init(
             "po_number": trav.po_number if trav else None,
             "part_number": trav.part_number if trav else None,
             "quantity": trav.quantity if trav else None,
-            **get_pause_data(db, entry.id)
+            **pause_map.get(entry.id, {"pause_logs": [], "total_pause_seconds": None, "pause_count": None})
         }
         entries.append(entry_dict)
 
@@ -1249,12 +1273,14 @@ async def get_my_labor_entries(
             (LaborEntry.created_at >= start_date)
         ).order_by(LaborEntry.created_at.desc()).all()
 
-    # Batch-fetch all related users and travelers to avoid N+1 queries
+    # Batch-fetch all related users, travelers, and pause logs to avoid N+1 queries
     employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
     traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
+    entry_ids = [e.id for e in labor_entries]
 
     employees = {u.id: u for u in db.query(User).filter(User.id.in_(employee_ids)).all()} if employee_ids else {}
     travelers = {t.id: t for t in db.query(Traveler).filter(Traveler.id.in_(traveler_ids)).all()} if traveler_ids else {}
+    pause_map = get_pause_data_batch(db, entry_ids)
 
     result = []
     for entry in labor_entries:
@@ -1283,7 +1309,7 @@ async def get_my_labor_entries(
             "po_number": traveler.po_number if traveler else None,
             "part_number": traveler.part_number if traveler else None,
             "quantity": traveler.quantity if traveler else None,
-            **get_pause_data(db, entry.id)
+            **pause_map.get(entry.id, {"pause_logs": [], "total_pause_seconds": None, "pause_count": None})
         }
         result.append(LaborEntryResponse(**entry_dict))
 
