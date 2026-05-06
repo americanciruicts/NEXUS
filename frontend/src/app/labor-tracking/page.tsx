@@ -44,6 +44,43 @@ interface PauseLogItem {
   comment?: string;
 }
 
+type LaborSortField = 'date' | 'job' | 'work_order' | 'operator' | 'work_center' | 'start' | 'end' | 'hours' | 'qty';
+type LaborSortDirection = 'asc' | 'desc';
+
+function SortableTh({
+  field,
+  label,
+  sortField,
+  sortDirection,
+  onSort,
+  align = 'left',
+}: {
+  field: LaborSortField;
+  label: string;
+  sortField: LaborSortField;
+  sortDirection: LaborSortDirection;
+  onSort: (field: LaborSortField) => void;
+  align?: 'left' | 'center';
+}) {
+  const isActive = sortField === field;
+  const justify = align === 'center' ? 'justify-center' : 'justify-start';
+  return (
+    <th
+      onClick={() => onSort(field)}
+      className={`px-4 py-3 text-${align} text-xs font-extrabold text-white uppercase tracking-wider cursor-pointer select-none hover:bg-white/10 transition-colors`}
+      title={`Sort by ${label}`}
+    >
+      <span className={`inline-flex items-center gap-1 ${justify} w-full`}>
+        <span>{label}</span>
+        <span className="flex flex-col leading-none text-[9px]">
+          <span className={isActive && sortDirection === 'asc' ? 'text-white' : 'text-white/40'}>▲</span>
+          <span className={isActive && sortDirection === 'desc' ? 'text-white' : 'text-white/40'}>▼</span>
+        </span>
+      </span>
+    </th>
+  );
+}
+
 export default function LaborTrackingPage() {
   const { user } = useAuth();
   const [laborEntries, setLaborEntries] = useState<LaborEntry[]>([]);
@@ -134,6 +171,19 @@ export default function LaborTrackingPage() {
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [manualOrder, setManualOrder] = useState(false);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<LaborSortField>('date');
+  const [sortDirection, setSortDirection] = useState<LaborSortDirection>('desc');
+  const handleSort = (field: LaborSortField) => {
+    setManualOrder(false);
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
 
   // Job Summary states
   const [jobListExpanded, setJobListExpanded] = useState(true);
@@ -602,11 +652,40 @@ export default function LaborTrackingPage() {
     return true;
   });
 
-  // Sort: latest start_time first (newest at top) — skip if admin manually reordered
+  // Sort: respects user-selected sort field/direction — skip if admin manually reordered
+  const getSortValue = (entry: LaborEntry, field: LaborSortField): string | number => {
+    switch (field) {
+      case 'date':
+      case 'start':
+        return new Date(entry.start_time).getTime() || 0;
+      case 'end':
+        return entry.end_time ? new Date(entry.end_time).getTime() : 0;
+      case 'job':
+        return (entry.job_number || '').toLowerCase();
+      case 'work_order':
+        return (entry.work_order || '').toLowerCase();
+      case 'operator':
+        return (entry.employee_name || entry.description?.split(' - ')?.[1] || '').toLowerCase();
+      case 'work_center':
+        return (entry.work_center || entry.description?.split(' - ')?.[0] || '').toLowerCase();
+      case 'hours':
+        return entry.hours_worked || 0;
+      case 'qty':
+        return entry.qty_completed || 0;
+      default:
+        return 0;
+    }
+  };
   const sortedEntries = manualOrder ? filteredEntries : [...filteredEntries].sort((a, b) => {
-    const dateA = new Date(a.start_time).getTime();
-    const dateB = new Date(b.start_time).getTime();
-    return dateB - dateA;
+    const va = getSortValue(a, sortField);
+    const vb = getSortValue(b, sortField);
+    let cmp = 0;
+    if (typeof va === 'number' && typeof vb === 'number') {
+      cmp = va - vb;
+    } else {
+      cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    return sortDirection === 'asc' ? cmp : -cmp;
   });
 
   // Pagination calculations
@@ -2222,6 +2301,31 @@ export default function LaborTrackingPage() {
                     </button>
                   )}
                 </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[10px] sm:text-xs font-semibold text-white/90 uppercase tracking-wider">Sort:</label>
+                  <select
+                    value={sortField}
+                    onChange={(e) => { setManualOrder(false); setSortField(e.target.value as LaborSortField); }}
+                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/50"
+                  >
+                    <option value="date" className="text-gray-900">Date</option>
+                    <option value="job" className="text-gray-900">Job</option>
+                    <option value="work_order" className="text-gray-900">Work Order</option>
+                    <option value="operator" className="text-gray-900">Operator</option>
+                    <option value="work_center" className="text-gray-900">Work Center</option>
+                    <option value="start" className="text-gray-900">Start</option>
+                    <option value="end" className="text-gray-900">End</option>
+                    <option value="hours" className="text-gray-900">Total Hours</option>
+                    <option value="qty" className="text-gray-900">Qty</option>
+                  </select>
+                  <button
+                    onClick={() => { setManualOrder(false); setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc'); }}
+                    className="text-xs font-bold bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded px-2 py-1 transition-colors"
+                    title={sortDirection === 'asc' ? 'Ascending — click for Descending' : 'Descending — click for Ascending'}
+                  >
+                    {sortDirection === 'asc' ? '▲ Asc' : '▼ Desc'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2415,16 +2519,16 @@ export default function LaborTrackingPage() {
                           />
                         </th>
                       )}
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Job</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Order</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Operator</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Work Center</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Start</th>
+                      <SortableTh field="date" label="Date" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="job" label="Job" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="work_order" label="Work Order" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="operator" label="Operator" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="work_center" label="Work Center" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="start" label="Start" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                       <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Pause</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">End</th>
-                      <th className="px-4 py-3 text-left text-xs font-extrabold text-white uppercase tracking-wider">Total Hours</th>
-                      <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Qty</th>
+                      <SortableTh field="end" label="End" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="hours" label="Total Hours" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      <SortableTh field="qty" label="Qty" align="center" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                       {user?.role === 'ADMIN' && (
                         <th className="px-4 py-3 text-center text-xs font-extrabold text-white uppercase tracking-wider">Actions</th>
                       )}
