@@ -1266,7 +1266,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       work_center: editedTraveler.steps.length > 0 ? editedTraveler.steps[0].workCenter || 'ASSEMBLY' : 'ASSEMBLY',
       status: 'CREATED',
       is_active: true,
-      include_labor_hours: includeLaborHours,
+      // Honor the checkbox the user toggled in the form (editedTraveler.includeLaborHours).
+      // The local `includeLaborHours` state is only set at type-select time and never
+      // updated by the form checkbox, so reading it here loses the user's uncheck —
+      // which then forced them to go into edit mode to clear labor hours.
+      include_labor_hours: editedTraveler.includeLaborHours ?? includeLaborHours,
       notes: '',
       specs: JSON.stringify(editedTraveler.specs),
       specs_date: editedTraveler.specs.length > 0 ? editedTraveler.specs[editedTraveler.specs.length - 1].date : '',
