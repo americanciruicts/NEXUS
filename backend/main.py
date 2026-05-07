@@ -543,9 +543,38 @@ async def lifespan(app: FastAPI):
     sweep_task = asyncio.create_task(sweep_long_waits_loop())
     print("Started background long-wait sweep (every 30 min)")
 
+    # Prune old notifications daily: read >30d, unread >90d
+    async def prune_notifications_loop():
+        from datetime import datetime, timedelta
+        while True:
+            try:
+                from database import SessionLocal
+                from models import Notification
+                db = SessionLocal()
+                read_cutoff = datetime.utcnow() - timedelta(days=30)
+                unread_cutoff = datetime.utcnow() - timedelta(days=90)
+                deleted_read = db.query(Notification).filter(
+                    Notification.is_read == True,
+                    Notification.created_at < read_cutoff,
+                ).delete(synchronize_session=False)
+                deleted_unread = db.query(Notification).filter(
+                    Notification.is_read == False,
+                    Notification.created_at < unread_cutoff,
+                ).delete(synchronize_session=False)
+                db.commit()
+                db.close()
+                if deleted_read or deleted_unread:
+                    print(f"Pruned notifications: {deleted_read} read, {deleted_unread} unread")
+            except Exception as e:
+                print(f"Notification prune error: {e}")
+            await asyncio.sleep(86400)  # 24 hours
+    prune_task = asyncio.create_task(prune_notifications_loop())
+    print("Started notifications prune loop (daily)")
+
     yield
     # Shutdown
     sweep_task.cancel()
+    prune_task.cancel()
     print("NEXUS Backend shutting down...")
 
 app = FastAPI(
