@@ -719,38 +719,6 @@ async def get_dashboard_insights(
     except Exception as e:
         print(f"Busiest WC error: {e}")
 
-    # ─── 3. IDLE OPERATORS (logged labor today but none active now) ──────────
-    idle_operators = []
-    try:
-        today_start = datetime.combine(today, datetime.min.time())
-        worked_today = db.query(func.distinct(LaborEntry.employee_id)).filter(
-            LaborEntry.created_at >= today_start
-        ).all()
-        worked_today_ids = {r[0] for r in worked_today}
-
-        active_now_ids = {r[0] for r in db.query(func.distinct(LaborEntry.employee_id)).filter(
-            LaborEntry.is_completed == False, LaborEntry.end_time.is_(None)
-        ).all()}
-
-        idle_ids = worked_today_ids - active_now_ids
-        if idle_ids:
-            for uid in idle_ids:
-                u = db.query(User).filter(User.id == uid).first()
-                last = db.query(LaborEntry).filter(
-                    LaborEntry.employee_id == uid, LaborEntry.end_time.isnot(None)
-                ).order_by(LaborEntry.end_time.desc()).first()
-                if u and last:
-                    idle_mins = (now - last.end_time).total_seconds() / 60 if last.end_time else 0
-                    idle_operators.append({
-                        "name": f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username,
-                        "last_activity": str(last.end_time) if last.end_time else None,
-                        "idle_minutes": round(idle_mins),
-                        "last_work_center": last.work_center or "",
-                    })
-            idle_operators.sort(key=lambda x: x["idle_minutes"], reverse=True)
-    except Exception as e:
-        print(f"Idle operators error: {e}")
-
     # ─── 4 & 5. KOSH INVENTORY: jobs waiting on parts + top shortages ────────
     jobs_waiting_on_parts = []
     top_shortages = []
@@ -980,38 +948,9 @@ async def get_dashboard_insights(
     except Exception as e:
         print(f"Labor hours trend error: {e}")
 
-    # ─── 12. CYCLE TIME TREND (avg days creation→completion, last 8 weeks) ──
-    cycle_time_trend = []
-    try:
-        for w in range(7, -1, -1):
-            week_start = today - timedelta(days=today.weekday() + 7 * w)
-            week_end = week_start + timedelta(days=6)
-            completed = db.query(Traveler).filter(
-                Traveler.completed_at >= datetime.combine(week_start, datetime.min.time()),
-                Traveler.completed_at < datetime.combine(week_end + timedelta(days=1), datetime.min.time()),
-                Traveler.completed_at.isnot(None),
-            ).all()
-            if completed:
-                cycle_days = []
-                for t in completed:
-                    if t.created_at and t.completed_at:
-                        diff = (t.completed_at - t.created_at).total_seconds() / 86400
-                        cycle_days.append(diff)
-                avg_days = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else 0
-            else:
-                avg_days = 0
-            cycle_time_trend.append({
-                "week": week_start.strftime("%m/%d"),
-                "avg_days": avg_days,
-                "count": len(completed),
-            })
-    except Exception as e:
-        print(f"Cycle time trend error: {e}")
-
     return {
         "operator_efficiency": operator_efficiency,
         "busiest_work_centers": busiest_wc,
-        "idle_operators": idle_operators,
         "jobs_waiting_on_parts": jobs_waiting_on_parts,
         "top_shortages": top_shortages,
         "rejection_rates": rejection_rates,
@@ -1020,5 +959,4 @@ async def get_dashboard_insights(
         "overdue_aging": overdue_aging,
         "throughput_trend": throughput_trend,
         "labor_hours_trend": labor_hours_trend,
-        "cycle_time_trend": cycle_time_trend,
     }

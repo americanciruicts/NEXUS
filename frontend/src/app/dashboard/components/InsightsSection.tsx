@@ -2,7 +2,6 @@
 import {
   UserGroupIcon,
   BoltIcon,
-  ClockIcon,
   ExclamationTriangleIcon,
   CubeIcon,
   ChartBarIcon,
@@ -13,7 +12,6 @@ import {
 interface InsightsData {
   operator_efficiency: Array<{ name: string; username: string; actual_hours: number; estimated_hours: number; efficiency: number; entries: number }>;
   busiest_work_centers: Array<{ work_center: string; active_entries: number; operators: number }>;
-  idle_operators: Array<{ name: string; last_activity: string | null; idle_minutes: number; last_work_center: string }>;
   jobs_waiting_on_parts: Array<{ job_number: string; customer: string; description: string; status: string; total_parts: number; short_parts: number; order_qty: number }>;
   top_shortages: Array<{ aci_pn: string; description: string; short_qty: number; affected_jobs: number; jobs: string[] }>;
   rejection_rates: Array<{ work_center: string; total_qty: number; rejected: number; accepted: number; rejection_rate: number }>;
@@ -22,7 +20,6 @@ interface InsightsData {
   overdue_aging: Array<{ job_number: string; part_description: string; customer_name: string; due_date: string; days_overdue: number; status: string }>;
   throughput_trend: Array<{ week: string; completed: number; created: number }>;
   labor_hours_trend: Array<{ date: string; day: string; hours: number; entries: number }>;
-  cycle_time_trend: Array<{ week: string; avg_days: number; count: number }>;
 }
 
 export default function InsightsSection({ data: rawData }: { data?: Record<string, unknown> | null }) {
@@ -36,15 +33,14 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
   // Reverse trends to show newest first
   const laborTrend = [...data.labor_hours_trend].reverse();
   const throughputTrend = [...data.throughput_trend].reverse();
-  const cycleTrend = [...data.cycle_time_trend].reverse();
 
   const maxLaborHrs = Math.max(...laborTrend.map(d => d.hours), 1);
   const maxThroughput = Math.max(...throughputTrend.map(d => Math.max(d.completed, d.created)), 1);
 
   return (
     <div className="space-y-4">
-      {/* Row 1: Operator Efficiency + Busiest Work Centers + Idle */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Row 1: Operator Efficiency + Active Work Centers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Operator Efficiency */}
         <Card icon={UserGroupIcon} title="Operator Efficiency" iconColor="text-cyan-300" subtitle="Last 30 days">
           <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
@@ -84,22 +80,6 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
           )}
         </Card>
 
-        {/* Idle Operators */}
-        <Card icon={ClockIcon} title="Idle Operators" iconColor="text-yellow-300" subtitle="Worked today, idle now">
-          {data.idle_operators.length === 0 ? (
-            <p className="text-sm text-green-600 dark:text-green-400 font-semibold text-center py-4">Everyone is active or off-shift</p>
-          ) : (
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
-              {data.idle_operators.map((op) => (
-                <div key={op.name} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-yellow-50/50 dark:bg-yellow-900/10">
-                  <span className="text-xs font-semibold text-gray-800 dark:text-slate-200 flex-1 truncate">{op.name}</span>
-                  <span className="text-[10px] text-gray-400 truncate">{op.last_work_center}</span>
-                  <span className="text-xs font-bold text-yellow-700 dark:text-yellow-400">{op.idle_minutes}m idle</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
       </div>
 
       {/* Row 3: KOSH Inventory — Jobs Waiting + Top Shortages */}
@@ -180,8 +160,8 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
         </Card>
       </div>
 
-      {/* Row 5: Trends — Labor Hours + Throughput + Cycle Time */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Row 5: Trends — Labor Hours + Throughput */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Labor Hours Trend */}
         <Card icon={ChartBarIcon} title="Labor Hours (14 days)" iconColor="text-emerald-300" subtitle="Daily hours logged">
           <div className="flex items-end gap-1 h-[120px]">
@@ -221,25 +201,6 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
           </div>
         </Card>
 
-        {/* Cycle Time Trend */}
-        <Card icon={ClockIcon} title="Cycle Time (8 weeks)" iconColor="text-violet-300" subtitle="Avg days to complete">
-          <div className="flex items-end gap-2 h-[120px]">
-            {cycleTrend.map((d) => {
-              const maxCycle = Math.max(...cycleTrend.map(c => c.avg_days), 1);
-              return (
-                <div key={d.week} className="flex-1 flex flex-col items-center justify-end h-full">
-                  <span className="text-[9px] font-bold text-gray-600 dark:text-slate-400 mb-0.5">{d.avg_days > 0 ? `${d.avg_days}d` : ''}</span>
-                  <div
-                    className={`w-full rounded-t transition-all ${d.avg_days > 0 ? 'bg-gradient-to-t from-violet-600 to-purple-400' : 'bg-gray-200 dark:bg-slate-700'}`}
-                    style={{ height: `${Math.max((d.avg_days / maxCycle) * 100, 2)}%`, minHeight: '2px' }}
-                  />
-                  <span className="text-[8px] text-gray-400 mt-1">{d.week}</span>
-                  {d.count > 0 && <span className="text-[7px] text-gray-300">{d.count}</span>}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
       </div>
     </div>
   );
