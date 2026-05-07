@@ -418,11 +418,13 @@ async def get_dashboard_stats(
                 ProcessStep.traveler_id == t.id
             ).order_by(ProcessStep.step_number).all()
 
-            # Actual hours worked per step
+            # Actual hours + actual distinct operators per step (from labor entries)
             step_labor = {}
+            step_operators = {}
             labor_rows = db.query(
                 LaborEntry.step_id,
-                func.sum(LaborEntry.hours_worked).label('hours')
+                func.sum(LaborEntry.hours_worked).label('hours'),
+                func.count(func.distinct(LaborEntry.employee_id)).label('operators'),
             ).filter(
                 LaborEntry.traveler_id == t.id,
                 LaborEntry.hours_worked > 0,
@@ -431,8 +433,26 @@ async def get_dashboard_stats(
             for row in labor_rows:
                 if row.step_id:
                     step_labor[row.step_id] = float(row.hours)
+                    step_operators[row.step_id] = int(row.operators or 0)
 
             total_actual = sum(step_labor.values())
+
+            # Distinct operators who have logged labor on this traveler (any step)
+            total_operators_actual = db.query(
+                func.count(func.distinct(LaborEntry.employee_id))
+            ).filter(
+                LaborEntry.traveler_id == t.id,
+                LaborEntry.hours_worked > 0,
+            ).scalar() or 0
+
+            # Operators currently active on this traveler (open labor entries)
+            active_operators_now = db.query(
+                func.count(func.distinct(LaborEntry.employee_id))
+            ).filter(
+                LaborEntry.traveler_id == t.id,
+                LaborEntry.is_completed == False,
+                LaborEntry.end_time.is_(None),
+            ).scalar() or 0
 
             # Days until due
             try:
@@ -459,10 +479,11 @@ async def get_dashboard_stats(
             for step in steps:
                 est = get_step_estimate(step.operation)
                 est_hours = est["hours"]
-                operators = est["operators"]
+                operators_estimated = est["operators"]
                 buffer = round(est_hours * BUFFER_PERCENT, 2)
                 buffered_hours = est_hours + buffer
                 actual = step_labor.get(step.id, 0)
+                operators_actual = step_operators.get(step.id, 0)
 
                 total_estimated += est_hours
                 total_buffer += buffer
@@ -478,7 +499,8 @@ async def get_dashboard_stats(
                     "buffer_hours": round(buffer, 1),
                     "buffered_total": round(buffered_hours, 1),
                     "actual_hours": round(actual, 1),
-                    "operators_needed": operators,
+                    "operators_needed": operators_estimated,
+                    "operators_actual": operators_actual,
                 })
 
             total_steps = len(steps)
@@ -583,6 +605,8 @@ async def get_dashboard_stats(
                 "remaining_buffered": round(remaining_buffered, 1),
                 "work_hours_available": round(work_hours_available, 1),
                 "min_headcount": min_headcount,
+                "actual_operators": int(total_operators_actual),
+                "active_operators": int(active_operators_now),
                 "total_steps": total_steps,
                 "completed_steps": total_completed_steps,
                 "percent_complete": percent_complete,

@@ -33,6 +33,7 @@ interface StepForecast {
   buffered_total: number;
   actual_hours: number;
   operators_needed: number;
+  operators_actual: number;
 }
 
 interface ForecastItem {
@@ -52,6 +53,8 @@ interface ForecastItem {
   remaining_buffered: number;
   work_hours_available: number;
   min_headcount: number;
+  actual_operators: number;
+  active_operators: number;
   total_steps: number;
   completed_steps: number;
   percent_complete: number;
@@ -271,20 +274,27 @@ export default function ForecastCard({ data }: ForecastCardProps) {
                           item.on_track === true ? 'text-emerald-500 dark:text-emerald-400' :
                           item.on_track === false ? 'text-red-500 dark:text-red-400' :
                           'text-gray-500 dark:text-slate-400'
-                        }`}>Headcount</div>
+                        }`}>Operators</div>
                         <div className={`text-sm font-bold ${
                           item.on_track === true ? 'text-emerald-700 dark:text-emerald-300' :
                           item.on_track === false ? 'text-red-700 dark:text-red-300' :
                           'text-gray-700 dark:text-slate-300'
                         }`}>
-                          {item.min_headcount} {item.min_headcount === 1 ? 'person' : 'people'}
+                          {item.actual_operators} worked
+                          {item.active_operators > 0 && (
+                            <span className="text-[10px] font-semibold ml-1">
+                              · <span className="text-green-600 dark:text-green-400">{item.active_operators} now</span>
+                            </span>
+                          )}
                         </div>
                         <div className={`text-[10px] ${
                           item.on_track === true ? 'text-emerald-400 dark:text-emerald-500' :
                           item.on_track === false ? 'text-red-400 dark:text-red-500' :
                           'text-gray-400 dark:text-slate-500'
                         }`}>
-                          {item.on_track === true ? 'On track' : item.on_track === false ? 'At risk' : 'No deadline'}
+                          {item.on_track === true ? `On track · need ${item.min_headcount}` :
+                           item.on_track === false ? `At risk · need ${item.min_headcount}` :
+                           'No deadline'}
                         </div>
                       </div>
                     </div>
@@ -337,7 +347,10 @@ export default function ForecastCard({ data }: ForecastCardProps) {
                                     Total: <span className="font-semibold">{step.buffered_total}h</span>
                                   </span>
                                   <span className="text-[11px] text-purple-500 dark:text-purple-400">
-                                    Crew: <span className="font-semibold">{step.operators_needed}</span>
+                                    Operators: <span className="font-semibold">{step.operators_actual}</span>
+                                    {step.operators_needed > 0 && (
+                                      <span className="text-purple-400/70"> / {step.operators_needed} est</span>
+                                    )}
                                   </span>
                                   {step.actual_hours > 0 && (
                                     <span className="text-[11px] text-green-500 dark:text-green-400">
