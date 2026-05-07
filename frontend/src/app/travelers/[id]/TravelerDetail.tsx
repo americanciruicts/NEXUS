@@ -2370,6 +2370,28 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </>
             ) : !isEditing ? (
               <>
+                    {(() => {
+                      const completed = (displayTraveler.laborEntries || [])
+                        .filter(e => e.endTime && e.workCenter)
+                        .sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+                      const last = completed[0];
+                      if (!last) return null;
+                      return (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-sm no-print">
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Last step
+                          </span>
+                          <span className="text-sm font-bold text-gray-900 dark:text-white">{last.workCenter}</span>
+                          {last.operatorName && (
+                            <span className="text-xs text-gray-500 dark:text-slate-400">by {last.operatorName}</span>
+                          )}
+                          {last.totalHours && (
+                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{last.totalHours}h</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <button
                       onClick={handlePrint}
                       disabled={!isPrintReady || isPreparingPrint}

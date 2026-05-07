@@ -1157,11 +1157,12 @@ async def get_traveler_labor_entries(
 
 @router.get("/init")
 async def get_labor_init(
-    days: int = 30,
+    days: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Combined endpoint: returns active entry + my entries + auto-stop check in one call."""
+    """Combined endpoint: returns active entry + my entries + auto-stop check in one call.
+    days=0 (default) returns all entries with no time limit."""
     from sqlalchemy import func as sqlfunc
 
     # 1. Active entry
@@ -1193,12 +1194,13 @@ async def get_labor_init(
             **get_pause_data(db, active_labor.id)
         }
 
-    # 2. My entries (same logic as /my-entries)
-    start_date = datetime.now() - timedelta(days=days)
-    if current_user.role == UserRole.ADMIN:
-        labor_entries = db.query(LaborEntry).filter(LaborEntry.created_at >= start_date).order_by(LaborEntry.created_at.desc()).all()
-    else:
-        labor_entries = db.query(LaborEntry).filter(LaborEntry.employee_id == current_user.id, LaborEntry.created_at >= start_date).order_by(LaborEntry.created_at.desc()).all()
+    # 2. My entries (same logic as /my-entries) — days=0 means no time filter
+    base_query = db.query(LaborEntry)
+    if current_user.role != UserRole.ADMIN:
+        base_query = base_query.filter(LaborEntry.employee_id == current_user.id)
+    if days and days > 0:
+        base_query = base_query.filter(LaborEntry.created_at >= datetime.now() - timedelta(days=days))
+    labor_entries = base_query.order_by(LaborEntry.created_at.desc()).all()
 
     employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
     traveler_ids = list(set(e.traveler_id for e in labor_entries if e.traveler_id))
@@ -1261,24 +1263,20 @@ async def get_labor_init(
 
 @router.get("/my-entries", response_model=List[LaborEntryResponse])
 async def get_my_labor_entries(
-    days: int = 7,
+    days: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get labor entries - for ADMIN shows all entries, for others shows only their entries"""
-
-    start_date = datetime.now() - timedelta(days=days)
+    """Get labor entries - for ADMIN shows all entries, for others shows only their entries.
+    days=0 (default) returns all entries with no time limit."""
 
     # Admin can see all entries, others see only their own
-    if current_user.role == UserRole.ADMIN:
-        labor_entries = db.query(LaborEntry).filter(
-            LaborEntry.created_at >= start_date
-        ).order_by(LaborEntry.created_at.desc()).all()
-    else:
-        labor_entries = db.query(LaborEntry).filter(
-            (LaborEntry.employee_id == current_user.id) &
-            (LaborEntry.created_at >= start_date)
-        ).order_by(LaborEntry.created_at.desc()).all()
+    base_query = db.query(LaborEntry)
+    if current_user.role != UserRole.ADMIN:
+        base_query = base_query.filter(LaborEntry.employee_id == current_user.id)
+    if days and days > 0:
+        base_query = base_query.filter(LaborEntry.created_at >= datetime.now() - timedelta(days=days))
+    labor_entries = base_query.order_by(LaborEntry.created_at.desc()).all()
 
     # Batch-fetch all related users, travelers, and pause logs to avoid N+1 queries
     employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))

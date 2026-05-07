@@ -186,7 +186,7 @@ export default function LaborTrackingPage() {
   };
 
   // Job Summary states
-  const [jobListExpanded, setJobListExpanded] = useState(true);
+  const [jobListExpanded, setJobListExpanded] = useState(false);
   const [summaryJobSearch, setSummaryJobSearch] = useState('');
   const [selectedJobChip, setSelectedJobChip] = useState<string | null>(null);
 
@@ -294,7 +294,7 @@ export default function LaborTrackingPage() {
   const fetchLaborInit = async (silent = false) => {
     try {
       const token = localStorage.getItem('nexus_token');
-      const res = await fetch(`${API_BASE_URL}/labor/init?days=30`, {
+      const res = await fetch(`${API_BASE_URL}/labor/init`, {
         headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
       });
       if (res.ok) {
@@ -761,7 +761,7 @@ export default function LaborTrackingPage() {
     if (!silent) setIsLoading(true);
     try {
       const token = localStorage.getItem('nexus_token');
-      const response = await fetch(`${API_BASE_URL}/labor/my-entries?days=30`, {
+      const response = await fetch(`${API_BASE_URL}/labor/my-entries`, {
         headers: {
           'Authorization': `Bearer ${token || 'mock-token'}`
         }
@@ -2181,7 +2181,7 @@ export default function LaborTrackingPage() {
                   </button>
 
                   {jobListExpanded && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {visibleJobs.length > 0 ? visibleJobs.map((job) => (
                         <button
                           key={job}
@@ -2194,19 +2194,16 @@ export default function LaborTrackingPage() {
                               setFilter(prev => ({ ...prev, jobNumber: job }));
                             }
                           }}
-                          className={`flex flex-col items-center justify-center px-3 py-3 rounded-xl border-2 transition-all cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-md border text-xs font-semibold tracking-wide transition-all cursor-pointer ${
                             selectedJobChip === job
-                              ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-blue-500 shadow-lg scale-[1.03] ring-2 ring-blue-300 dark:ring-blue-800'
-                              : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-200 border-gray-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md hover:scale-[1.02]'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-700 text-gray-800 dark:text-slate-200 border-gray-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-slate-600'
                           }`}
                         >
-                          <svg className={`w-5 h-5 mb-1 ${selectedJobChip === job ? 'text-blue-200' : 'text-blue-500 dark:text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className="text-sm font-bold tracking-wide">{job}</span>
+                          {job}
                         </button>
                       )) : (
-                        <p className="col-span-full text-sm text-gray-400 dark:text-slate-500 italic text-center py-2">No jobs match your search</p>
+                        <p className="w-full text-sm text-gray-400 dark:text-slate-500 italic text-center py-2">No jobs match your search</p>
                       )}
                     </div>
                   )}
@@ -2329,8 +2326,8 @@ export default function LaborTrackingPage() {
               </div>
             </div>
 
-            {/* Mobile Card View - Hidden: use desktop table on all devices */}
-            <div className="hidden overflow-hidden">
+            {/* Card View - shown on all screen sizes */}
+            <div className="block overflow-hidden">
               {isLoading ? (
                 <div className="p-4"><div className="space-y-3">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-12 w-full" />)}</div></div>
               ) : filteredEntries.length === 0 ? (
@@ -2348,23 +2345,28 @@ export default function LaborTrackingPage() {
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200 dark:divide-slate-700">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-3">
                   {paginatedEntries.map((entry) => {
                     const workCenter = entry.work_center || entry.description?.split(' - ')?.[0] || 'N/A';
                     const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || 'N/A';
                     const sequenceDisplay = entry.sequence_number ? `${entry.sequence_number}. ${workCenter}` : workCenter;
 
                     return (
-                      <div key={entry.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                      <div key={entry.id} className="p-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700 transition-all">
                         <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-1">
                               <DocumentTextIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                              <span className="font-bold text-gray-900 dark:text-slate-100">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
+                              <span className="font-bold text-gray-900 dark:text-slate-100 text-base">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
+                              {entry.work_order && (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+                                  WO {entry.work_order}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-400">
-                              <UserIcon className="w-4 h-4" />
-                              <span>{operatorName}</span>
+                              <UserIcon className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{operatorName}</span>
                             </div>
                           </div>
                           {user?.role === 'ADMIN' && (
@@ -2467,7 +2469,19 @@ export default function LaborTrackingPage() {
                               {entry.end_time ? new Date(entry.end_time).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '-'}
                             </p>
                           </div>
+                          <div>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Qty</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 mt-1">
+                              {entry.qty_completed ?? '-'}
+                            </p>
+                          </div>
                         </div>
+                        {entry.comment && (
+                          <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 rounded text-xs text-gray-700 dark:text-slate-300">
+                            <span className="font-semibold text-amber-700 dark:text-amber-300">Comment: </span>
+                            {entry.comment}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2475,8 +2489,8 @@ export default function LaborTrackingPage() {
               )}
             </div>
 
-            {/* Desktop Table View */}
-            <div className="block">
+            {/* Desktop Table View — hidden, replaced by card view above */}
+            <div className="hidden">
               <div>
               {isLoading ? (
                 <div className="p-4"><div className="space-y-3">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-12 w-full" />)}</div></div>
