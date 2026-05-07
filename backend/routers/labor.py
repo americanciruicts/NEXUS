@@ -1194,12 +1194,10 @@ async def get_labor_init(
             **get_pause_data(db, active_labor.id)
         }
 
-    # 2. My entries (same logic as /my-entries) — days=0 means no time filter
+    # 2. My entries (same logic as /my-entries) — always return all, no time limit
     base_query = db.query(LaborEntry)
     if current_user.role != UserRole.ADMIN:
         base_query = base_query.filter(LaborEntry.employee_id == current_user.id)
-    if days and days > 0:
-        base_query = base_query.filter(LaborEntry.created_at >= datetime.now() - timedelta(days=days))
     labor_entries = base_query.order_by(LaborEntry.created_at.desc()).all()
 
     employee_ids = list(set(e.employee_id for e in labor_entries if e.employee_id))
@@ -1270,12 +1268,10 @@ async def get_my_labor_entries(
     """Get labor entries - for ADMIN shows all entries, for others shows only their entries.
     days=0 (default) returns all entries with no time limit."""
 
-    # Admin can see all entries, others see only their own
+    # Admin can see all entries, others see only their own. Always all-time, no limit.
     base_query = db.query(LaborEntry)
     if current_user.role != UserRole.ADMIN:
         base_query = base_query.filter(LaborEntry.employee_id == current_user.id)
-    if days and days > 0:
-        base_query = base_query.filter(LaborEntry.created_at >= datetime.now() - timedelta(days=days))
     labor_entries = base_query.order_by(LaborEntry.created_at.desc()).all()
 
     # Batch-fetch all related users, travelers, and pause logs to avoid N+1 queries

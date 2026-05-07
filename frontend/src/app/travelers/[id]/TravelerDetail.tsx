@@ -321,6 +321,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [overallProgress, setOverallProgress] = useState({ total_steps: 0, completed_steps: 0, percent_complete: 0 });
   const [laborOverall, setLaborOverall] = useState<LaborOverall>({ total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 });
   const [categoryHours, setCategoryHours] = useState<Record<string, number>>({});
+  const [lastLoggedStep, setLastLoggedStep] = useState<{ work_center: string; employee_name: string; hours_worked: number; end_time: string } | null>(null);
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: number]: HTMLTableRowElement | null }>({});
@@ -532,6 +533,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           // Fetch department progress
           fetchDepartmentProgress(Number(data.id));
 
+          // Fetch last logged labor step (real entries, not the printable form rows)
+          fetchLastLoggedStep(Number(data.id));
+
           // Fetch shortage info for this job
           try {
             const shortageRes = await fetch(`${API_BASE_URL}/jobs/${encodeURIComponent(data.job_number)}/kitting-status`, {
@@ -593,6 +597,33 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         }
       } catch (error) {
         console.error('Error fetching department progress:', error);
+      }
+    };
+
+    const fetchLastLoggedStep = async (travelerDbId: number) => {
+      try {
+        const token = localStorage.getItem('nexus_token');
+        const response = await fetch(`${API_BASE_URL}/labor/traveler/${travelerDbId}`, {
+          headers: { 'Authorization': `Bearer ${token || ''}` }
+        });
+        if (!response.ok) return;
+        const entries: Array<{ work_center: string | null; employee_name: string; hours_worked: number; end_time: string | null }> = await response.json();
+        const completed = entries
+          .filter(e => e.end_time && e.work_center)
+          .sort((a, b) => new Date(b.end_time as string).getTime() - new Date(a.end_time as string).getTime());
+        const last = completed[0];
+        if (last) {
+          setLastLoggedStep({
+            work_center: last.work_center as string,
+            employee_name: last.employee_name || '',
+            hours_worked: last.hours_worked || 0,
+            end_time: last.end_time as string,
+          });
+        } else {
+          setLastLoggedStep(null);
+        }
+      } catch (error) {
+        console.error('Error fetching last logged step:', error);
       }
     };
 
@@ -2370,28 +2401,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </>
             ) : !isEditing ? (
               <>
-                    {(() => {
-                      const completed = (displayTraveler.laborEntries || [])
-                        .filter(e => e.endTime && e.workCenter)
-                        .sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
-                      const last = completed[0];
-                      if (!last) return null;
-                      return (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-sm no-print">
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Last step
-                          </span>
-                          <span className="text-sm font-bold text-gray-900 dark:text-white">{last.workCenter}</span>
-                          {last.operatorName && (
-                            <span className="text-xs text-gray-500 dark:text-slate-400">by {last.operatorName}</span>
-                          )}
-                          {last.totalHours && (
-                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{last.totalHours}h</span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {lastLoggedStep && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-sm no-print">
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Last step
+                        </span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">{lastLoggedStep.work_center}</span>
+                        {lastLoggedStep.employee_name && (
+                          <span className="text-xs text-gray-500 dark:text-slate-400">by {lastLoggedStep.employee_name}</span>
+                        )}
+                        {lastLoggedStep.hours_worked > 0 && (
+                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{lastLoggedStep.hours_worked.toFixed(2)}h</span>
+                        )}
+                      </div>
+                    )}
                     <button
                       onClick={handlePrint}
                       disabled={!isPrintReady || isPreparingPrint}
