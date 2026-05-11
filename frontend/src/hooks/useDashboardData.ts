@@ -47,6 +47,8 @@ export interface DashboardData {
     remaining_buffered: number;
     work_hours_available: number;
     min_headcount: number;
+    actual_operators: number;
+    active_operators: number;
     total_steps: number;
     completed_steps: number;
     percent_complete: number;
@@ -61,6 +63,7 @@ export interface DashboardData {
       buffered_total: number;
       actual_hours: number;
       operators_needed: number;
+      operators_actual: number;
     }>;
   }>;
   active_labor_entries: number;
