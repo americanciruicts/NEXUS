@@ -2988,14 +2988,9 @@ export default function LaborTrackingPage() {
           <input
             type="number"
             min="0"
-            max={travelerMaxQty || undefined}
             value={qtyCompleted}
             onChange={(e) => {
               const val = e.target.value;
-              if (val && travelerMaxQty != null && parseInt(val) > travelerMaxQty) {
-                toast.error(`Quantity cannot exceed traveler quantity (${travelerMaxQty})`);
-                return;
-              }
               // Reject pasted/scanned QR content. The qty modal auto-focuses
               // this input, so a habitual scan of the Work Center QR to
               // "confirm stop" fires keystrokes here — that landed a garbage
@@ -3008,7 +3003,7 @@ export default function LaborTrackingPage() {
               }
               setQtyCompleted(val);
             }}
-            placeholder={travelerMaxQty != null ? `Max: ${travelerMaxQty}` : 'Enter quantity completed'}
+            placeholder={travelerMaxQty != null ? `Traveler qty: ${travelerMaxQty}` : 'Enter quantity completed'}
             className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:bg-slate-700 dark:text-white"
             autoFocus
             onKeyDown={(e) => {
@@ -3021,13 +3016,9 @@ export default function LaborTrackingPage() {
               const trimmed = qtyCompleted.trim();
               if (!/^\d+$/.test(trimmed)) return;
               if (trimmed === '0' && !stopComment.trim()) return;
-              if (travelerMaxQty != null && parseInt(trimmed) > travelerMaxQty) return;
               confirmStopTimer();
             }}
           />
-          {qtyCompleted && travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty && (
-            <p className="text-xs text-red-600 font-medium">Quantity cannot exceed {travelerMaxQty}</p>
-          )}
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">
               {qtyCompleted === '0'
@@ -3069,7 +3060,6 @@ export default function LaborTrackingPage() {
                 isStopping
                 || qtyCompleted.trim() === ''
                 || !/^\d+$/.test(qtyCompleted.trim())
-                || !!(travelerMaxQty != null && parseInt(qtyCompleted) > travelerMaxQty)
                 || (qtyCompleted === '0' && !stopComment.trim())
               }
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
