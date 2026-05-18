@@ -466,7 +466,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
     },
     {
       value: 'MODIFICATION',
-      label: 'Modification RMA',
+      label: 'Modification and Rework',
       description: 'Board modification and rework',
       gradient: 'from-amber-500 to-amber-700',
       hoverGradient: 'from-amber-600 to-amber-800',

@@ -1144,7 +1144,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     { value: 'PURCHASING', label: 'Purchasing', description: 'Parts and components procurement', subtitle: 'Sourcing, Receiving, QC Inspection', gradient: 'from-orange-500 to-amber-700', borderColor: 'border-orange-400', iconBg: 'bg-white/20', bubbleColor: 'bg-orange-400/20', icon: ShoppingCartIcon },
     { value: 'RMA_SAME', label: 'RMA Router Same Job', description: 'RMA from same job or revision', subtitle: 'Inspection, Repair, Testing, Shipping', gradient: 'from-red-600 to-rose-700', borderColor: 'border-red-400', iconBg: 'bg-white/20', bubbleColor: 'bg-red-400/20', icon: ArrowPathIcon },
     { value: 'RMA_DIFF', label: 'RMA Router Diff Job', description: 'RMA from different jobs or revisions', subtitle: 'Multi-Job Tracking, Repair, Testing', gradient: 'from-pink-600 to-fuchsia-700', borderColor: 'border-pink-400', iconBg: 'bg-white/20', bubbleColor: 'bg-pink-400/20', icon: ArrowsRightLeftIcon },
-    { value: 'MODIFICATION', label: 'Modification RMA', description: 'Board modification and rework', subtitle: 'Modification, Testing, Inspection', gradient: 'from-amber-600 to-yellow-700', borderColor: 'border-amber-400', iconBg: 'bg-white/20', bubbleColor: 'bg-amber-400/20', icon: WrenchIcon },
+    { value: 'MODIFICATION', label: 'Modification and Rework', description: 'Board modification and rework', subtitle: 'Modification, Testing, Inspection', gradient: 'from-amber-600 to-yellow-700', borderColor: 'border-amber-400', iconBg: 'bg-white/20', bubbleColor: 'bg-amber-400/20', icon: WrenchIcon },
   ];
 
   const handleTypeSelect = (type: TravelerType) => {
