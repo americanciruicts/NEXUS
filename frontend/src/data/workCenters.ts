@@ -132,52 +132,37 @@ export const PURCHASING_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'INVENTORY', description: 'Add to inventory and track stock levels' },
 ];
 
-// RMA work centers (shared by RMA Same Job and RMA Diff Job types)
+// RMA work centers — Preet's 17 commonly-used steps (see docs/RMA_PROCESS.md).
+// Shared by RMA Same Job and RMA Diff Job types. Order matches the SOP flow.
 export const RMA_WORK_CENTERS: WorkCenterItem[] = [
-  { name: 'INCOMING INSPECTION', description: 'Inspect incoming RMA units, verify quantity and condition', department: 'Quality' },
-  { name: 'REPAIR', description: 'Repair defective units per customer complaint', department: 'Soldering' },
-  { name: 'COATING', description: 'Apply conformal coating if required', department: 'Coating' },
-  { name: 'TESTING', description: 'Test repaired units per original test procedures', department: 'Test' },
-  { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
-  { name: 'PURCHASING', description: 'Parts ordered and waiting to be received for repair', department: 'Purchasing' },
-  { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
-  { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
-  { name: 'STOCK', description: 'Check stock - do we have any PCBA or cable assemblies in stock?', department: 'Receiving' },
-  { name: 'SHIPPING', description: 'Ship repaired units back to customer', department: 'Shipping' },
-];
-
-// Modification RMA work centers (same as RMA but no STOCK step)
-export const MODIFICATION_WORK_CENTERS: WorkCenterItem[] = [
-  { name: 'INCOMING INSPECTION', description: 'Inspect incoming modification units, verify quantity and condition', department: 'Quality' },
-  { name: 'REPAIR', description: 'Perform required modifications per work order', department: 'Soldering' },
-  { name: 'COATING', description: 'Apply conformal coating if required', department: 'Coating' },
-  { name: 'TESTING', description: 'Test modified units per test procedures', department: 'Test' },
-  { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
-  { name: 'PURCHASING', description: 'Parts ordered and waiting to be received', department: 'Purchasing' },
-  { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
-  { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
-  { name: 'SHIPPING', description: 'Ship modified units back to customer', department: 'Shipping' },
-];
-
-// All commonly used RMA steps (superset for adding steps manually)
-export const ALL_RMA_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'CUSTOMER APPROVAL', description: 'Get customer approval before proceeding', department: 'Quality' },
   { name: 'DETAILED INSPEC', description: 'Detailed inspection - sample or 100% inspection', department: 'Quality' },
   { name: 'INCOMING INSPECTION', description: 'Inspect incoming RMA units, verify quantity and condition', department: 'Quality' },
   { name: 'TESTING', description: 'Test units per original test procedures', department: 'Test' },
   { name: 'PROGRAMMING', description: 'Program or reprogram units', department: 'Test' },
   { name: 'TROUBLESHOOTING', description: 'Diagnose and troubleshoot defective units', department: 'Test' },
-  { name: 'REPAIR', description: 'Repair defective units', department: 'Soldering' },
+  { name: 'REPAIR', description: 'Repair defective units per customer complaint', department: 'Soldering' },
   { name: 'INTERIM INSPEC', description: 'Interim inspection during repair process', department: 'Quality' },
   { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
-  { name: 'PURCHASING', description: 'Parts ordered and waiting to be received for repair', department: 'Purchasing' },
+  { name: 'PURCHASING', description: 'Parts ordered, waiting for receipt before repair', department: 'Purchasing' },
   { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
   { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
   { name: 'INVOICING', description: 'Credit on receive, charge on ship (Add-On/Chemring)', department: 'Other' },
   { name: 'QUALITY', description: 'Send boards with CofC (Chemring)', department: 'Quality' },
-  { name: 'STOCK', description: 'Check stock - PCBA or cable assemblies in stock?', department: 'Receiving' },
+  { name: 'STOCK', description: 'Check stock - any PCBA or cable assemblies on hand?', department: 'Receiving' },
   { name: 'LABELLING', description: 'Apply labels as required', department: 'Shipping' },
   { name: 'SHIPPING', description: 'Ship units back to customer', department: 'Shipping' },
+];
+
+// Modification RMA work centers (Preet's 17 minus STOCK, per existing convention)
+export const MODIFICATION_WORK_CENTERS: WorkCenterItem[] = RMA_WORK_CENTERS.filter(
+  wc => wc.name !== 'STOCK'
+);
+
+// All commonly used RMA steps (superset for adding steps manually).
+// Includes COATING which isn't in the default flow but is occasionally needed.
+export const ALL_RMA_WORK_CENTERS: WorkCenterItem[] = [
+  ...RMA_WORK_CENTERS,
   { name: 'COATING', description: 'Apply conformal coating if required', department: 'Coating' },
 ];
 

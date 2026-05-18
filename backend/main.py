@@ -151,59 +151,59 @@ async def lifespan(app: FastAPI):
         else:
             print(f"Work centers already exist ({db.query(WorkCenter).count()} found)")
 
-        # Seed RMA work centers if they don't exist yet
-        rma_exists = db.query(WorkCenter).filter(WorkCenter.traveler_type == 'RMA_SAME').count()
-        if rma_exists == 0:
-            print("Seeding RMA work centers...")
-            RMA_WC_DATA = {
-                "RMA_SAME": [
-                    ("INCOMING INSPECTION", "Inspect incoming RMA units, verify quantity and condition", "Quality"),
-                    ("REPAIR", "Repair defective units per customer complaint", "Soldering"),
-                    ("COATING", "Apply conformal coating if required", "Coating"),
-                    ("TESTING", "Test repaired units per original test procedures", "Test"),
-                    ("INVENTORY", "Check parts before buying", "Purchasing"),
-                    ("PURCHASING", "Parts ordered and waiting to be received for repair", "Purchasing"),
-                    ("MISC.", "Miscellaneous operations as needed", "ALL"),
-                    ("FINAL INSPEC", "Final inspection - sample or 100% inspection", "Quality"),
-                    ("STOCK", "Check stock - do we have any PCBA or cable assemblies in stock?", "Receiving"),
-                    ("SHIPPING", "Ship repaired units back to customer", "Shipping"),
-                ],
-                "RMA_DIFF": [
-                    ("INCOMING INSPECTION", "Inspect incoming RMA units, verify quantity and condition", "Quality"),
-                    ("REPAIR", "Repair defective units per customer complaint", "Soldering"),
-                    ("COATING", "Apply conformal coating if required", "Coating"),
-                    ("TESTING", "Test repaired units per original test procedures", "Test"),
-                    ("INVENTORY", "Check parts before buying", "Purchasing"),
-                    ("PURCHASING", "Parts ordered and waiting to be received for repair", "Purchasing"),
-                    ("MISC.", "Miscellaneous operations as needed", "ALL"),
-                    ("FINAL INSPEC", "Final inspection - sample or 100% inspection", "Quality"),
-                    ("STOCK", "Check stock - do we have any PCBA or cable assemblies in stock?", "Receiving"),
-                    ("SHIPPING", "Ship repaired units back to customer", "Shipping"),
-                ],
-                "MODIFICATION": [
-                    ("INCOMING INSPECTION", "Inspect incoming modification units, verify quantity and condition", "Quality"),
-                    ("REPAIR", "Perform required modifications per work order", "Soldering"),
-                    ("COATING", "Apply conformal coating if required", "Coating"),
-                    ("TESTING", "Test modified units per test procedures", "Test"),
-                    ("INVENTORY", "Check parts before buying", "Purchasing"),
-                    ("PURCHASING", "Parts ordered and waiting to be received", "Purchasing"),
-                    ("MISC.", "Miscellaneous operations as needed", "ALL"),
-                    ("FINAL INSPEC", "Final inspection - sample or 100% inspection", "Quality"),
-                    ("SHIPPING", "Ship modified units back to customer", "Shipping"),
-                ],
-            }
-            rma_count = 0
-            for wc_type, items in RMA_WC_DATA.items():
-                for idx, (name, desc, dept) in enumerate(items):
-                    type_prefix = {"RMA_SAME": "RMAS", "RMA_DIFF": "RMAD", "MODIFICATION": "MOD"}
-                    code = f"{type_prefix[wc_type]}_{name.replace(' ', '_').replace('.', '').upper()}"
-                    existing = db.query(WorkCenter).filter(WorkCenter.code == code).first()
-                    if not existing:
-                        wc = WorkCenter(name=name, code=code, description=desc, traveler_type=wc_type, department=dept, sort_order=idx + 1, is_active=True)
-                        db.add(wc)
-                        rma_count += 1
+        # Seed / backfill RMA work centers to match Preet's 17 commonly-used steps.
+        # Source of truth: docs/RMA_PROCESS.md (Preet's SOP). This runs every startup
+        # so existing DBs pick up new steps without losing customizations to
+        # description/department on already-seeded rows.
+        RMA_SAME_DIFF_STEPS = [
+            ("CUSTOMER APPROVAL",  "Get customer approval before proceeding",                "Quality"),
+            ("DETAILED INSPEC",    "Detailed inspection - sample or 100% inspection",        "Quality"),
+            ("INCOMING INSPECTION","Inspect incoming RMA units, verify quantity and condition","Quality"),
+            ("TESTING",            "Test units per original test procedures",                "Test"),
+            ("PROGRAMMING",        "Program or reprogram units",                             "Test"),
+            ("TROUBLESHOOTING",    "Diagnose and troubleshoot defective units",              "Test"),
+            ("REPAIR",             "Repair defective units per customer complaint",          "Soldering"),
+            ("INTERIM INSPEC",     "Interim inspection during repair process",               "Quality"),
+            ("INVENTORY",          "Check parts before buying",                              "Purchasing"),
+            ("PURCHASING",         "Parts ordered, waiting for receipt before repair",       "Purchasing"),
+            ("MISC.",              "Miscellaneous operations as needed",                     "ALL"),
+            ("FINAL INSPEC",       "Final inspection - sample or 100% inspection",           "Quality"),
+            ("INVOICING",          "Credit on receive, charge on ship (Add-On/Chemring)",    "Other"),
+            ("QUALITY",            "Send boards with CofC (Chemring)",                       "Quality"),
+            ("STOCK",              "Check stock - any PCBA or cable assemblies on hand?",    "Receiving"),
+            ("LABELLING",          "Apply labels as required",                               "Shipping"),
+            ("SHIPPING",           "Ship units back to customer",                            "Shipping"),
+        ]
+        # Modification RMAs skip STOCK (per existing convention)
+        MODIFICATION_STEPS = [s for s in RMA_SAME_DIFF_STEPS if s[0] != "STOCK"]
+
+        RMA_WC_DATA = {
+            "RMA_SAME": RMA_SAME_DIFF_STEPS,
+            "RMA_DIFF": RMA_SAME_DIFF_STEPS,
+            "MODIFICATION": MODIFICATION_STEPS,
+        }
+        type_prefix = {"RMA_SAME": "RMAS", "RMA_DIFF": "RMAD", "MODIFICATION": "MOD"}
+
+        added = 0
+        reordered = 0
+        for wc_type, items in RMA_WC_DATA.items():
+            for idx, (name, desc, dept) in enumerate(items):
+                code = f"{type_prefix[wc_type]}_{name.replace(' ', '_').replace('.', '').upper()}"
+                target_sort = idx + 1
+                existing = db.query(WorkCenter).filter(WorkCenter.code == code).first()
+                if not existing:
+                    db.add(WorkCenter(
+                        name=name, code=code, description=desc,
+                        traveler_type=wc_type, department=dept,
+                        sort_order=target_sort, is_active=True,
+                    ))
+                    added += 1
+                elif existing.sort_order != target_sort:
+                    existing.sort_order = target_sort
+                    reordered += 1
+        if added or reordered:
             db.commit()
-            print(f"Seeded {rma_count} RMA work centers")
+            print(f"RMA work centers: +{added} added, {reordered} reordered (Preet 17-step SOP)")
 
         db.close()
     except Exception as e:
