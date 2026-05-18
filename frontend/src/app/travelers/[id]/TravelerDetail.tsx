@@ -4292,9 +4292,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                   type="text"
                                   value={col.label}
                                   onChange={(e) => renameRmaTableColumn(col.key, e.target.value)}
-                                  onFocus={(e) => e.target.select()}
-                                  className="flex-1 min-w-0 bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 rounded px-1 py-0.5 font-bold text-sm text-black dark:text-white"
-                                  title="Rename this column"
+                                  className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-1.5 py-0.5 font-bold text-sm text-black dark:text-white print:border-none print:bg-transparent print:px-0 print:py-0"
+                                  placeholder="Column name"
+                                  title="Click to rename this column"
                                 />
                               ) : (
                                 <span>{col.label}</span>
