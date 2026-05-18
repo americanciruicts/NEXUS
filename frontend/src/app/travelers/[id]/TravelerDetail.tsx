@@ -3236,7 +3236,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </td>
                     {/* Center: RMA ROUTING title */}
                     <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 text-center align-middle" style={{width: '25%'}}>
-                      <div className="text-2xl font-black text-black dark:text-white print:text-[30px] tracking-wider" style={{fontWeight: '900'}}>RMA</div>
+                      <div className="text-2xl font-black text-black dark:text-white print:text-[30px] tracking-wider" style={{fontWeight: '900'}}>{displayTraveler.travelerType === 'MODIFICATION' ? (displayTraveler.woTypeLabel || 'MODIFICATION').toUpperCase() : 'RMA'}</div>
                       <div className="text-lg font-bold text-black dark:text-white print:text-[18px] tracking-widest">ROUTING</div>
                     </td>
                     {/* Right: To Stock / From Stock / Ship VIA */}
