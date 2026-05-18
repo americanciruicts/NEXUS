@@ -82,6 +82,8 @@ class RmaUnitTrackingBase(BaseModel):
     customer_revision_received: Optional[str] = None
     original_built_quantity: Optional[int] = None
     units_shipped: Optional[int] = None
+    # JSON-encoded dict of values for user-added custom columns
+    custom_values: Optional[str] = None
 
 class RmaUnitTrackingCreate(RmaUnitTrackingBase):
     pass
@@ -136,6 +138,7 @@ class TravelerBase(BaseModel):
     customer_revision_received: Optional[str] = Field(None, max_length=50)
     rma_notes: Optional[str] = None
     wo_type_label: Optional[str] = Field(None, max_length=50)
+    rma_table_columns: Optional[str] = None
 
 class TravelerCreate(TravelerBase):
     status: Optional[TravelerStatus] = None
@@ -186,6 +189,7 @@ class TravelerUpdate(BaseModel):
     customer_revision_received: Optional[str] = Field(None, max_length=50)
     rma_notes: Optional[str] = None
     wo_type_label: Optional[str] = Field(None, max_length=50)
+    rma_table_columns: Optional[str] = None
 
 class TravelerGroupMember(BaseModel):
     id: int

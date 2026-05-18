@@ -93,7 +93,14 @@ interface RmaUnit {
   customer_revision_received?: string;
   original_built_quantity?: number;
   units_shipped?: number;
+  custom_values?: Record<string, string>;
 }
+
+type RmaTableColumn = {
+  key: string;
+  label: string;
+  type: 'standard' | 'custom';
+};
 
 interface Traveler {
   id: string;
@@ -140,6 +147,7 @@ interface Traveler {
   customerRevisionReceived?: string;
   rmaNotes?: string;
   woTypeLabel?: string;
+  rmaTableColumns?: RmaTableColumn[];
   rmaUnits?: RmaUnit[];
   // Group linking fields
   groupId?: number | null;
@@ -162,6 +170,20 @@ interface Traveler {
     }>;
   } | null;
 }
+
+// Default columns for the Unit Serial Number Tracking table. Standard columns
+// map to fields on RmaUnit; custom columns store their value in custom_values.
+const DEFAULT_RMA_TABLE_COLUMNS: RmaTableColumn[] = [
+  { key: 'serial_number',             label: 'Unit Serial Number',              type: 'standard' },
+  { key: 'customer_complaint',        label: 'Customer Complaint',              type: 'standard' },
+  { key: 'incoming_inspection_notes', label: 'Incoming Inspection Result/Note', type: 'standard' },
+  { key: 'disposition',               label: 'Disposition of Unit',             type: 'standard' },
+  { key: 'troubleshooting_notes',     label: 'Troubleshooting/Testing Notes',   type: 'standard' },
+  { key: 'repairing_notes',           label: 'Repairing Notes',                 type: 'standard' },
+  { key: 'final_inspection_notes',    label: 'Final Inspection Notes',          type: 'standard' },
+];
+
+const STANDARD_RMA_KEYS = new Set(DEFAULT_RMA_TABLE_COLUMNS.map(c => c.key));
 
 // Sortable table row wrapper for drag-and-drop in desktop view
 function SortableTableRow({ id, children }: { id: string; children: (props: { dragHandleProps: Record<string, unknown>; style: React.CSSProperties; ref: (node: HTMLElement | null) => void }) => React.ReactNode }) {
@@ -495,12 +517,25 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             customerRevisionReceived: String(data.customer_revision_received || ''),
             rmaNotes: String(data.rma_notes || ''),
             woTypeLabel: String(data.wo_type_label || ''),
+            rmaTableColumns: (() => {
+              try {
+                return data.rma_table_columns ? JSON.parse(data.rma_table_columns as string) as RmaTableColumn[] : undefined;
+              } catch { return undefined; }
+            })(),
             rmaUnits: (data.rma_units || []).length > 0
-              ? (data.rma_units as RmaUnit[])
+              ? ((data.rma_units as Record<string, unknown>[]).map(u => ({
+                  ...(u as unknown as RmaUnit),
+                  custom_values: (() => {
+                    try {
+                      return u.custom_values ? JSON.parse(u.custom_values as string) as Record<string, string> : {};
+                    } catch { return {}; }
+                  })(),
+                })))
               : Array.from({ length: 5 }, (_, i) => ({
                   unit_number: i + 1, serial_number: '', customer_complaint: '',
                   incoming_inspection_notes: '', disposition: '',
                   troubleshooting_notes: '', repairing_notes: '', final_inspection_notes: '',
+                  custom_values: {},
                 })),
             // Group linking fields
             groupId: data.group_id || null,
@@ -895,6 +930,25 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         })),
         manual_steps: [],
         wo_type_label: editedTraveler.travelerType === 'MODIFICATION' ? (editedTraveler.woTypeLabel || 'Modification') : null,
+        rma_table_columns: editedTraveler.rmaTableColumns ? JSON.stringify(editedTraveler.rmaTableColumns) : null,
+        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint || (u.custom_values && Object.values(u.custom_values).some(v => v))).map(u => ({
+          unit_number: u.unit_number,
+          serial_number: u.serial_number || '',
+          customer_complaint: u.customer_complaint || '',
+          incoming_inspection_notes: u.incoming_inspection_notes || '',
+          disposition: u.disposition || '',
+          troubleshooting_notes: u.troubleshooting_notes || '',
+          repairing_notes: u.repairing_notes || '',
+          final_inspection_notes: u.final_inspection_notes || '',
+          customer_ncr: u.customer_ncr || '',
+          original_po_number: u.original_po_number || '',
+          original_wo_number: u.original_wo_number || '',
+          customer_revision_sent: u.customer_revision_sent || '',
+          customer_revision_received: u.customer_revision_received || '',
+          original_built_quantity: u.original_built_quantity || null,
+          units_shipped: u.units_shipped || null,
+          custom_values: u.custom_values && Object.keys(u.custom_values).length > 0 ? JSON.stringify(u.custom_values) : null,
+        })),
       };
 
       console.log('Sending update payload:', JSON.stringify(payload, null, 2));
@@ -1068,6 +1122,51 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     setEditedTraveler({ ...editedTraveler, rmaUnits: renumbered });
   };
 
+  // Update the value of a custom column for one unit.
+  const updateRmaUnitCustom = (index: number, columnKey: string, value: string) => {
+    if (!editedTraveler || !editedTraveler.rmaUnits) return;
+    const newUnits = [...editedTraveler.rmaUnits];
+    const current = newUnits[index].custom_values || {};
+    newUnits[index] = { ...newUnits[index], custom_values: { ...current, [columnKey]: value } };
+    setEditedTraveler({ ...editedTraveler, rmaUnits: newUnits });
+  };
+
+  const addRmaTableColumn = () => {
+    if (!editedTraveler) return;
+    const label = window.prompt('New column label:', 'New Column');
+    if (!label || !label.trim()) return;
+    const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
+    // Generate a unique custom key
+    const existingKeys = new Set(current.map(c => c.key));
+    let i = 1;
+    while (existingKeys.has(`custom_${i}`)) i++;
+    const newCol: RmaTableColumn = { key: `custom_${i}`, label: label.trim(), type: 'custom' };
+    setEditedTraveler({ ...editedTraveler, rmaTableColumns: [...current, newCol] });
+  };
+
+  const removeRmaTableColumn = (key: string) => {
+    if (!editedTraveler) return;
+    const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
+    if (current.length <= 1) {
+      window.alert('At least one column must remain.');
+      return;
+    }
+    const col = current.find(c => c.key === key);
+    if (!col) return;
+    if (!window.confirm(`Delete column "${col.label}" and all of its data?`)) return;
+    const remaining = current.filter(c => c.key !== key);
+    // Wipe the column's data on every unit so no orphan values are persisted.
+    const newUnits = (editedTraveler.rmaUnits || []).map(u => {
+      if (col.type === 'custom') {
+        const { [key]: _removed, ...rest } = u.custom_values || {};
+        void _removed;
+        return { ...u, custom_values: rest };
+      }
+      return { ...u, [key]: '' };
+    });
+    setEditedTraveler({ ...editedTraveler, rmaTableColumns: remaining, rmaUnits: newUnits });
+  };
+
   const addSpecification = () => {
     if (!editedTraveler) return;
     const newSpec: Specification = {
@@ -1222,6 +1321,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customerRevisionReceived: '',
         rmaNotes: '',
         woTypeLabel: type === 'MODIFICATION' ? 'Modification' : '',
+        rmaTableColumns: undefined,
         rmaUnits: Array.from({ length: 5 }, (_, i) => ({
           unit_number: i + 1,
           serial_number: '',
@@ -1348,7 +1448,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customer_revision_received: editedTraveler.customerRevisionReceived || '',
         rma_notes: editedTraveler.rmaNotes || '',
         wo_type_label: editedTraveler.travelerType === 'MODIFICATION' ? (editedTraveler.woTypeLabel || 'Modification') : null,
-        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint).map(u => ({
+        rma_table_columns: editedTraveler.rmaTableColumns ? JSON.stringify(editedTraveler.rmaTableColumns) : null,
+        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint || (u.custom_values && Object.values(u.custom_values).some(v => v))).map(u => ({
           unit_number: u.unit_number,
           serial_number: u.serial_number || '',
           customer_complaint: u.customer_complaint || '',
@@ -1357,6 +1458,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           troubleshooting_notes: u.troubleshooting_notes || '',
           repairing_notes: u.repairing_notes || '',
           final_inspection_notes: u.final_inspection_notes || '',
+          custom_values: u.custom_values && Object.keys(u.custom_values).length > 0 ? JSON.stringify(u.custom_values) : null,
           ...(selectedType === 'RMA_DIFF' ? {
             customer_ncr: u.customer_ncr || '',
             original_po_number: u.original_po_number || '',
@@ -1529,7 +1631,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customer_revision_received: editedTraveler.customerRevisionReceived || '',
         rma_notes: editedTraveler.rmaNotes || '',
         wo_type_label: editedTraveler.travelerType === 'MODIFICATION' ? (editedTraveler.woTypeLabel || 'Modification') : null,
-        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint).map(u => ({
+        rma_table_columns: editedTraveler.rmaTableColumns ? JSON.stringify(editedTraveler.rmaTableColumns) : null,
+        rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint || (u.custom_values && Object.values(u.custom_values).some(v => v))).map(u => ({
           unit_number: u.unit_number,
           serial_number: u.serial_number || '',
           customer_complaint: u.customer_complaint || '',
@@ -1538,6 +1641,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           troubleshooting_notes: u.troubleshooting_notes || '',
           repairing_notes: u.repairing_notes || '',
           final_inspection_notes: u.final_inspection_notes || '',
+          custom_values: u.custom_values && Object.keys(u.custom_values).length > 0 ? JSON.stringify(u.custom_values) : null,
         })),
       } : {}),
     };
@@ -4137,13 +4241,36 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             )}
 
             {/* Unit Serial Number Tracking Table (all RMA types) */}
+            {(() => {
+              const tableColumns: RmaTableColumn[] = (editedTraveler?.rmaTableColumns || displayTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS);
+              const cellValue = (unit: RmaUnit, col: RmaTableColumn): string => {
+                if (col.type === 'standard') {
+                  return ((unit as unknown as Record<string, unknown>)[col.key] as string) || '';
+                }
+                return (unit.custom_values && unit.custom_values[col.key]) || '';
+              };
+              const onCellChange = (idx: number, col: RmaTableColumn, value: string) => {
+                if (col.type === 'standard') {
+                  updateRmaUnit(idx, col.key as keyof RmaUnit, value);
+                } else {
+                  updateRmaUnitCustom(idx, col.key, value);
+                }
+              };
+              return (
             <div className="border-b-2 border-black dark:border-slate-600">
-              <div className="bg-red-200 dark:bg-red-900/50 print:!bg-red-200 border-b border-black dark:border-slate-600 px-3 py-2 flex justify-between items-center">
+              <div className="bg-red-200 dark:bg-red-900/50 print:!bg-red-200 border-b border-black dark:border-slate-600 px-3 py-2 flex justify-between items-center gap-2 flex-wrap">
                 <h2 className="font-bold text-sm text-red-900 dark:text-red-200 print:!text-black print:text-[10px]">UNIT SERIAL NUMBER TRACKING</h2>
-                {isEditing && displayTraveler.travelerType !== 'RMA_DIFF' && (
-                  <button onClick={addRmaUnit} className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm no-print">
-                    <PlusIcon className="h-4 w-4" /><span>Add Unit</span>
-                  </button>
+                {isEditing && (
+                  <div className="flex items-center gap-2 no-print">
+                    <button onClick={addRmaTableColumn} className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm" title="Add a new column to this table">
+                      <PlusIcon className="h-4 w-4" /><span>Add Column</span>
+                    </button>
+                    {displayTraveler.travelerType !== 'RMA_DIFF' && (
+                      <button onClick={addRmaUnit} className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm">
+                        <PlusIcon className="h-4 w-4" /><span>Add Unit</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="overflow-x-auto">
@@ -4151,13 +4278,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <thead>
                     <tr className="bg-red-100 dark:bg-red-900/30 border-b-2 border-black dark:border-slate-600">
                       <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold w-10">No.</th>
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '110px'}}>Unit Serial Number</th>
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '130px'}}>Customer Complaint</th>
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '140px'}}>Incoming Inspection Result/Note</th>
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '120px'}}>Disposition of Unit</th>
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '140px'}}>Troubleshooting/Testing Notes</th>
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-left font-bold" style={{minWidth: '120px'}}>Repairing Notes</th>
-                      <th className="px-2 py-2 text-left font-bold" style={{minWidth: '110px'}}>Final Inspection Notes</th>
+                      {tableColumns.map((col, ci) => {
+                        const isLast = ci === tableColumns.length - 1;
+                        return (
+                          <th key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top`} style={{minWidth: '120px'}}>
+                            <div className="flex items-start justify-between gap-1">
+                              <span>{col.label}</span>
+                              {isEditing && (
+                                <button onClick={() => removeRmaTableColumn(col.key)} className="text-red-600 hover:text-red-800 no-print shrink-0" title={`Delete column "${col.label}"`}>
+                                  <TrashIcon className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </th>
+                        );
+                      })}
                       {isEditing && <th className="px-2 py-2 w-10 no-print"></th>}
                     </tr>
                   </thead>
@@ -4165,13 +4300,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     {(displayTraveler.rmaUnits || []).map((unit, idx) => (
                       <tr key={idx} className="border-b border-gray-300 dark:border-slate-600" style={{height: '44px'}}>
                         <td className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold">{unit.unit_number}</td>
-                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.serial_number} onChange={(e) => updateRmaUnit(idx, 'serial_number', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.serial_number || '')}</td>
-                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.customer_complaint} onChange={(e) => updateRmaUnit(idx, 'customer_complaint', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.customer_complaint || '')}</td>
-                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.incoming_inspection_notes} onChange={(e) => updateRmaUnit(idx, 'incoming_inspection_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.incoming_inspection_notes || '')}</td>
-                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.disposition} onChange={(e) => updateRmaUnit(idx, 'disposition', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.disposition || '')}</td>
-                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.troubleshooting_notes} onChange={(e) => updateRmaUnit(idx, 'troubleshooting_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.troubleshooting_notes || '')}</td>
-                        <td className="border-r border-black dark:border-slate-600 px-2 py-2">{isEditing ? <input type="text" value={unit.repairing_notes} onChange={(e) => updateRmaUnit(idx, 'repairing_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.repairing_notes || '')}</td>
-                        <td className="px-2 py-2">{isEditing ? <input type="text" value={unit.final_inspection_notes} onChange={(e) => updateRmaUnit(idx, 'final_inspection_notes', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : (unit.final_inspection_notes || '')}</td>
+                        {tableColumns.map((col, ci) => {
+                          const isLast = ci === tableColumns.length - 1;
+                          const value = cellValue(unit, col);
+                          return (
+                            <td key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2`}>
+                              {isEditing ? (
+                                <input type="text" value={value} onChange={(e) => onCellChange(idx, col, e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" />
+                              ) : (value || '')}
+                            </td>
+                          );
+                        })}
                         {isEditing && (
                           <td className="px-2 py-2 no-print">
                             <button onClick={() => removeRmaUnit(idx)} className="text-red-500 hover:text-red-700"><TrashIcon className="h-4 w-4" /></button>
@@ -4183,6 +4322,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 </table>
               </div>
             </div>
+              );
+            })()}
           </div>
           )}
 

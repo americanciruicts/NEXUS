@@ -445,6 +445,7 @@ async def lifespan(app: FastAPI):
                 'customer_revision_received': 'VARCHAR(50)',
                 'rma_notes': 'TEXT',
                 'wo_type_label': 'VARCHAR(50)',
+                'rma_table_columns': 'TEXT',
             }
             import re as _re_ident
             _ident_re = _re_ident.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -486,6 +487,13 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("CREATE INDEX ix_rma_unit_tracking_traveler_id ON rma_unit_tracking(traveler_id)"))
                 conn.commit()
                 print("Created 'rma_unit_tracking' table")
+
+            # Add custom_values column to rma_unit_tracking if missing
+            unit_cols = [c['name'] for c in insp.get_columns('rma_unit_tracking')] if 'rma_unit_tracking' in insp.get_table_names() else []
+            if unit_cols and 'custom_values' not in unit_cols:
+                conn.execute(text("ALTER TABLE rma_unit_tracking ADD COLUMN custom_values TEXT"))
+                conn.commit()
+                print("Added 'custom_values' column to rma_unit_tracking table")
     except Exception as e:
         print(f"Warning: Could not auto-migrate RMA columns/table: {e}")
 

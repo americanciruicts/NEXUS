@@ -329,6 +329,7 @@ async def create_traveler(
             customer_revision_received=traveler_data.customer_revision_received,
             rma_notes=traveler_data.rma_notes,
             wo_type_label=traveler_data.wo_type_label,
+            rma_table_columns=traveler_data.rma_table_columns,
         )
 
         db.add(db_traveler)
@@ -404,6 +405,7 @@ async def create_traveler(
                 customer_revision_received=rma_unit_data.customer_revision_received,
                 original_built_quantity=rma_unit_data.original_built_quantity,
                 units_shipped=rma_unit_data.units_shipped,
+                custom_values=rma_unit_data.custom_values,
             )
             db.add(db_rma_unit)
 
@@ -1446,6 +1448,33 @@ async def update_traveler(
     # Persist the operator-selected WO type label (RMA / Modification / Rework / …)
     if traveler_data.wo_type_label is not None:
         traveler.wo_type_label = traveler_data.wo_type_label
+    # Persist the user-customized column layout for the Unit Serial Number table
+    if traveler_data.rma_table_columns is not None:
+        traveler.rma_table_columns = traveler_data.rma_table_columns
+
+    # Replace rma_units in bulk (units have no labor entries, so safe to delete/recreate).
+    # Lets edits, additions, deletions, and per-unit custom_values all persist.
+    db.query(RmaUnitTracking).filter(RmaUnitTracking.traveler_id == traveler.id).delete(synchronize_session=False)
+    for rma_unit_data in traveler_data.rma_units:
+        db.add(RmaUnitTracking(
+            traveler_id=traveler.id,
+            unit_number=rma_unit_data.unit_number,
+            serial_number=rma_unit_data.serial_number,
+            customer_complaint=rma_unit_data.customer_complaint,
+            incoming_inspection_notes=rma_unit_data.incoming_inspection_notes,
+            disposition=rma_unit_data.disposition,
+            troubleshooting_notes=rma_unit_data.troubleshooting_notes,
+            repairing_notes=rma_unit_data.repairing_notes,
+            final_inspection_notes=rma_unit_data.final_inspection_notes,
+            customer_ncr=rma_unit_data.customer_ncr,
+            original_po_number=rma_unit_data.original_po_number,
+            original_wo_number=rma_unit_data.original_wo_number,
+            customer_revision_sent=rma_unit_data.customer_revision_sent,
+            customer_revision_received=rma_unit_data.customer_revision_received,
+            original_built_quantity=rma_unit_data.original_built_quantity,
+            units_shipped=rma_unit_data.units_shipped,
+            custom_values=rma_unit_data.custom_values,
+        ))
 
     # ── SAFE step update: preserve labor entries ──
     # Build a map of existing steps by (step_number, operation) for matching

@@ -195,6 +195,11 @@ class Traveler(Base):
     # Display label shown before the work-order number on RMA routing headers
     # ("RMA", "Modification", "Rework", etc.). Operator-selectable per traveler.
     wo_type_label = Column(String(50))
+    # JSON array of column definitions for the Unit Serial Number Tracking table.
+    # Null means use the default 7-column layout. Each entry: {key, label, type}
+    # where type is "standard" (backed by a RmaUnitTracking field) or "custom"
+    # (stored in RmaUnitTracking.custom_values JSON).
+    rma_table_columns = Column(Text)
 
     # Group linking fields
     group_id = Column(Integer, ForeignKey("traveler_groups.id"), nullable=True)
@@ -292,6 +297,8 @@ class RmaUnitTracking(Base):
     customer_revision_received = Column(String(50))  # Customer Revision Received (per unit)
     original_built_quantity = Column(Integer)  # Original Built Quantity (per unit)
     units_shipped = Column(Integer)  # Number of units shipped (per unit)
+    # JSON dict of values for user-added custom columns: {custom_key: value}
+    custom_values = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
