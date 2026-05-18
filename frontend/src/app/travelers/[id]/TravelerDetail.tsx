@@ -3198,7 +3198,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           )}
 
           {/* RMA Header - Word Document Layout */}
-          {isRmaType(displayTraveler.travelerType) && (
+          {isRmaType(displayTraveler.travelerType) && (() => {
+            const rmaLabel = displayTraveler.travelerType === 'MODIFICATION'
+              ? (displayTraveler.woTypeLabel || 'Modification')
+              : 'RMA';
+            return (
           <div className="border-b-2 border-black dark:border-slate-600 print:break-inside-avoid">
             {/* Top banner: RMA Job No. + Barcode | RMA ROUTING | To Stock / From Stock / Ship VIA */}
             <div className="bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600">
@@ -3210,7 +3214,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       <div className="flex items-center gap-3 flex-wrap">
                         <div>
                           <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px]">
-                            {displayTraveler.travelerType === 'MODIFICATION' ? 'Modification' : 'RMA'} Job No.
+                            {rmaLabel} Job No.
                           </div>
                           <div className="text-xl font-black text-black dark:text-white print:text-[26px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
                             {isEditing ? (
@@ -3236,7 +3240,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </td>
                     {/* Center: RMA ROUTING title */}
                     <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 text-center align-middle" style={{width: '25%'}}>
-                      <div className="text-2xl font-black text-black dark:text-white print:text-[30px] tracking-wider" style={{fontWeight: '900'}}>{displayTraveler.travelerType === 'MODIFICATION' ? (displayTraveler.woTypeLabel || 'MODIFICATION').toUpperCase() : 'RMA'}</div>
+                      <div className="text-2xl font-black text-black dark:text-white print:text-[30px] tracking-wider" style={{fontWeight: '900'}}>{rmaLabel.toUpperCase()}</div>
                       <div className="text-lg font-bold text-black dark:text-white print:text-[18px] tracking-widest">ROUTING</div>
                     </td>
                     {/* Right: To Stock / From Stock / Ship VIA */}
@@ -3308,21 +3312,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     ) : (
                       <span className="font-bold text-red-700 dark:text-red-400 mr-1">RMA</span>
                     )}{isEditing ? (<span className="inline-flex items-center gap-1"><input type="text" value={workOrderPrefix} onFocus={(e) => e.target.select()} onKeyDown={(e) => { const input = e.target as HTMLInputElement; const hasSelection = input.selectionStart !== input.selectionEnd; if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) { e.preventDefault(); const newSuffix = e.key + workOrderSuffix; setWorkOrderSuffix(newSuffix); updateField('workOrder' as keyof Traveler, workOrderPrefix + '-' + newSuffix); focusSuffixInput(1); } }} onChange={(e) => { const val = e.target.value.slice(0, 5); setWorkOrderPrefix(val); const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val; updateField('workOrder' as keyof Traveler, wo); }} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm font-mono text-black dark:text-white" /><span className="text-gray-400">-</span><input ref={suffixInputRef} type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix; updateField('workOrder' as keyof Traveler, wo); }} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" placeholder="Suffix" /><button type="button" onClick={() => generateWorkOrder()} disabled={isGeneratingWO} title="Generate next sequential work order number" className="flex-shrink-0 ml-1 px-3 py-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded border-2 border-blue-700 disabled:cursor-not-allowed shadow no-print">{isGeneratingWO ? '…' : 'Generate'}</button></span>) : (displayTraveler.workOrder || '-')}</td>
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{displayTraveler.travelerType === 'RMA_SAME' ? 'Number of units shipped:' : 'Quantity RMA issued for:'}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{displayTraveler.travelerType === 'RMA_SAME' ? 'Number of units shipped:' : `Quantity ${rmaLabel} issued for:`}</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{displayTraveler.travelerType === 'RMA_SAME' ? (isEditing ? <input type="number" value={editData.unitsShipped || ''} onChange={(e) => updateField('unitsShipped', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.unitsShipped || '-')) : (isEditing ? <input type="number" value={editData.quantityRmaIssued || ''} onChange={(e) => updateField('quantityRmaIssued', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.quantityRmaIssued || '-'))}</td>
                   </tr>
                   {displayTraveler.travelerType === 'RMA_SAME' && (
                   <tr className="border-b border-gray-300 dark:border-slate-600">
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Original PO Number:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.originalPoNumber || ''} onChange={(e) => updateField('originalPoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalPoNumber || '-')}</td>
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Quantity RMA issued for:</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Quantity {rmaLabel} issued for:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="number" value={editData.quantityRmaIssued || ''} onChange={(e) => updateField('quantityRmaIssued', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.quantityRmaIssued || '-')}</td>
                   </tr>
                   )}
                   <tr className="border-b border-gray-300 dark:border-slate-600">
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA Traveler Issued on:</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{rmaLabel} Traveler Issued on:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <><input type="date" value={editData.createdAt} onChange={(e) => updateField('createdAt', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm screen-only text-black dark:text-white" /><span className="print-only">{formatDateDisplay(editData.createdAt)}</span></> : (formatDateDisplay(displayTraveler.createdAt) || '-')}</td>
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA Traveler Due Date:</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{rmaLabel} Traveler Due Date:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <><input type="date" value={editData.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm screen-only text-black dark:text-white" /><span className="print-only">{formatDateDisplay(editData.dueDate) || 'NA'}</span></> : (formatDateDisplay(displayTraveler.dueDate) || 'NA')}</td>
                   </tr>
                   <tr className="border-b border-gray-300 dark:border-slate-600">
@@ -3332,9 +3336,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="number" value={editData.unitsReceived || ''} onChange={(e) => updateField('unitsReceived', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.unitsReceived || '-')}</td>
                   </tr>
                   <tr className="border-b border-gray-300 dark:border-slate-600">
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA PO Number:</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{rmaLabel} PO Number:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.rmaPoNumber || ''} onChange={(e) => updateField('rmaPoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.rmaPoNumber || '-')}</td>
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">RMA Priority:</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{rmaLabel} Priority:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <select value={editData.priority || 'NORMAL'} onChange={(e) => updateField('priority', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white bg-white dark:bg-slate-700"><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select> : <span className={`font-bold ${displayTraveler.priority === 'URGENT' ? 'text-red-700' : displayTraveler.priority === 'HIGH' ? 'text-orange-700' : ''}`}>{displayTraveler.priority === 'HIGH' ? 'High' : displayTraveler.priority === 'URGENT' ? 'Urgent' : 'Normal'}</span>}</td>
                   </tr>
                   <tr className="border-b border-gray-300 dark:border-slate-600">
@@ -3353,7 +3357,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </table>
             </div>
           </div>
-          )}
+          );
+          })()}
 
           {/* Specifications Section */}
           <div className="border-b border-black dark:border-slate-600 print:break-inside-avoid">
