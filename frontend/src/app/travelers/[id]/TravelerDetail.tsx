@@ -1133,15 +1133,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
   const addRmaTableColumn = () => {
     if (!editedTraveler) return;
-    const label = window.prompt('New column label:', 'New Column');
-    if (!label || !label.trim()) return;
     const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
-    // Generate a unique custom key
     const existingKeys = new Set(current.map(c => c.key));
     let i = 1;
     while (existingKeys.has(`custom_${i}`)) i++;
-    const newCol: RmaTableColumn = { key: `custom_${i}`, label: label.trim(), type: 'custom' };
+    const newCol: RmaTableColumn = { key: `custom_${i}`, label: 'New Column', type: 'custom' };
     setEditedTraveler({ ...editedTraveler, rmaTableColumns: [...current, newCol] });
+  };
+
+  const renameRmaTableColumn = (key: string, label: string) => {
+    if (!editedTraveler) return;
+    const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
+    const next = current.map(c => c.key === key ? { ...c, label } : c);
+    setEditedTraveler({ ...editedTraveler, rmaTableColumns: next });
   };
 
   const removeRmaTableColumn = (key: string) => {
@@ -4283,9 +4287,20 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         return (
                           <th key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top`} style={{minWidth: '120px'}}>
                             <div className="flex items-start justify-between gap-1">
-                              <span>{col.label}</span>
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={col.label}
+                                  onChange={(e) => renameRmaTableColumn(col.key, e.target.value)}
+                                  onFocus={(e) => e.target.select()}
+                                  className="flex-1 min-w-0 bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-800 rounded px-1 py-0.5 font-bold text-sm text-black dark:text-white"
+                                  title="Rename this column"
+                                />
+                              ) : (
+                                <span>{col.label}</span>
+                              )}
                               {isEditing && (
-                                <button onClick={() => removeRmaTableColumn(col.key)} className="text-red-600 hover:text-red-800 no-print shrink-0" title={`Delete column "${col.label}"`}>
+                                <button onClick={() => removeRmaTableColumn(col.key)} className="text-red-600 hover:text-red-800 no-print shrink-0 mt-0.5" title={`Delete column "${col.label}"`}>
                                   <TrashIcon className="h-3.5 w-3.5" />
                                 </button>
                               )}
