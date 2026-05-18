@@ -135,6 +135,7 @@ class TravelerBase(BaseModel):
     customer_revision_sent: Optional[str] = Field(None, max_length=50)
     customer_revision_received: Optional[str] = Field(None, max_length=50)
     rma_notes: Optional[str] = None
+    wo_type_label: Optional[str] = Field(None, max_length=50)
 
 class TravelerCreate(TravelerBase):
     status: Optional[TravelerStatus] = None
@@ -184,6 +185,7 @@ class TravelerUpdate(BaseModel):
     customer_revision_sent: Optional[str] = Field(None, max_length=50)
     customer_revision_received: Optional[str] = Field(None, max_length=50)
     rma_notes: Optional[str] = None
+    wo_type_label: Optional[str] = Field(None, max_length=50)
 
 class TravelerGroupMember(BaseModel):
     id: int

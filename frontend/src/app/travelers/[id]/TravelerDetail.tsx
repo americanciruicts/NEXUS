@@ -139,6 +139,7 @@ interface Traveler {
   customerRevisionSent?: string;
   customerRevisionReceived?: string;
   rmaNotes?: string;
+  woTypeLabel?: string;
   rmaUnits?: RmaUnit[];
   // Group linking fields
   groupId?: number | null;
@@ -493,6 +494,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             customerRevisionSent: String(data.customer_revision_sent || ''),
             customerRevisionReceived: String(data.customer_revision_received || ''),
             rmaNotes: String(data.rma_notes || ''),
+            woTypeLabel: String(data.wo_type_label || ''),
             rmaUnits: (data.rma_units || []).length > 0
               ? (data.rma_units as RmaUnit[])
               : Array.from({ length: 5 }, (_, i) => ({
@@ -891,7 +893,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           completed_date: step.completedDate || null,
           sub_steps: []
         })),
-        manual_steps: []
+        manual_steps: [],
+        wo_type_label: editedTraveler.travelerType === 'MODIFICATION' ? (editedTraveler.woTypeLabel || 'Modification') : null,
       };
 
       console.log('Sending update payload:', JSON.stringify(payload, null, 2));
@@ -1218,6 +1221,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customerRevisionSent: '',
         customerRevisionReceived: '',
         rmaNotes: '',
+        woTypeLabel: type === 'MODIFICATION' ? 'Modification' : '',
         rmaUnits: Array.from({ length: 5 }, (_, i) => ({
           unit_number: i + 1,
           serial_number: '',
@@ -1343,6 +1347,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customer_revision_sent: editedTraveler.customerRevisionSent || '',
         customer_revision_received: editedTraveler.customerRevisionReceived || '',
         rma_notes: editedTraveler.rmaNotes || '',
+        wo_type_label: editedTraveler.travelerType === 'MODIFICATION' ? (editedTraveler.woTypeLabel || 'Modification') : null,
         rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint).map(u => ({
           unit_number: u.unit_number,
           serial_number: u.serial_number || '',
@@ -1523,6 +1528,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         customer_revision_sent: editedTraveler.customerRevisionSent || '',
         customer_revision_received: editedTraveler.customerRevisionReceived || '',
         rma_notes: editedTraveler.rmaNotes || '',
+        wo_type_label: editedTraveler.travelerType === 'MODIFICATION' ? (editedTraveler.woTypeLabel || 'Modification') : null,
         rma_units: (editedTraveler.rmaUnits || []).filter(u => u.serial_number || u.customer_complaint).map(u => ({
           unit_number: u.unit_number,
           serial_number: u.serial_number || '',
@@ -3286,7 +3292,22 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                   <tr className="border-b border-gray-300 dark:border-slate-600">
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Work Order Number:</td>
-                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white"><span className="font-bold text-red-700 dark:text-red-400 mr-1">RMA</span>{isEditing ? (<span className="inline-flex items-center gap-1"><input type="text" value={workOrderPrefix} onFocus={(e) => e.target.select()} onKeyDown={(e) => { const input = e.target as HTMLInputElement; const hasSelection = input.selectionStart !== input.selectionEnd; if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) { e.preventDefault(); const newSuffix = e.key + workOrderSuffix; setWorkOrderSuffix(newSuffix); updateField('workOrder' as keyof Traveler, workOrderPrefix + '-' + newSuffix); focusSuffixInput(1); } }} onChange={(e) => { const val = e.target.value.slice(0, 5); setWorkOrderPrefix(val); const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val; updateField('workOrder' as keyof Traveler, wo); }} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm font-mono text-black dark:text-white" /><span className="text-gray-400">-</span><input ref={suffixInputRef} type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix; updateField('workOrder' as keyof Traveler, wo); }} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" placeholder="Suffix" /><button type="button" onClick={() => generateWorkOrder()} disabled={isGeneratingWO} title="Generate next sequential work order number" className="flex-shrink-0 ml-1 px-3 py-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded border-2 border-blue-700 disabled:cursor-not-allowed shadow no-print">{isGeneratingWO ? '…' : 'Generate'}</button></span>) : (displayTraveler.workOrder || '-')}</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{displayTraveler.travelerType === 'MODIFICATION' ? (
+                      isEditing ? (
+                        <select
+                          value={editedTraveler?.woTypeLabel || 'Modification'}
+                          onChange={(e) => updateField('woTypeLabel', e.target.value)}
+                          className="font-bold text-red-700 dark:text-red-400 mr-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm bg-white dark:bg-slate-800"
+                        >
+                          <option value="Modification">Modification</option>
+                          <option value="Rework">Rework</option>
+                        </select>
+                      ) : (
+                        <span className="font-bold text-red-700 dark:text-red-400 mr-1">{displayTraveler.woTypeLabel || 'Modification'}</span>
+                      )
+                    ) : (
+                      <span className="font-bold text-red-700 dark:text-red-400 mr-1">RMA</span>
+                    )}{isEditing ? (<span className="inline-flex items-center gap-1"><input type="text" value={workOrderPrefix} onFocus={(e) => e.target.select()} onKeyDown={(e) => { const input = e.target as HTMLInputElement; const hasSelection = input.selectionStart !== input.selectionEnd; if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && workOrderPrefix.length >= 5 && !hasSelection && input.selectionStart === workOrderPrefix.length) { e.preventDefault(); const newSuffix = e.key + workOrderSuffix; setWorkOrderSuffix(newSuffix); updateField('workOrder' as keyof Traveler, workOrderPrefix + '-' + newSuffix); focusSuffixInput(1); } }} onChange={(e) => { const val = e.target.value.slice(0, 5); setWorkOrderPrefix(val); const wo = val && workOrderSuffix ? val + '-' + workOrderSuffix : val; updateField('workOrder' as keyof Traveler, wo); }} className="w-20 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm font-mono text-black dark:text-white" /><span className="text-gray-400">-</span><input ref={suffixInputRef} type="text" value={workOrderSuffix} onChange={(e) => { setWorkOrderSuffix(e.target.value); const wo = workOrderPrefix && e.target.value ? workOrderPrefix + '-' + e.target.value : workOrderPrefix; updateField('workOrder' as keyof Traveler, wo); }} className="w-16 border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" placeholder="Suffix" /><button type="button" onClick={() => generateWorkOrder()} disabled={isGeneratingWO} title="Generate next sequential work order number" className="flex-shrink-0 ml-1 px-3 py-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded border-2 border-blue-700 disabled:cursor-not-allowed shadow no-print">{isGeneratingWO ? '…' : 'Generate'}</button></span>) : (displayTraveler.workOrder || '-')}</td>
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">{displayTraveler.travelerType === 'RMA_SAME' ? 'Number of units shipped:' : 'Quantity RMA issued for:'}</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{displayTraveler.travelerType === 'RMA_SAME' ? (isEditing ? <input type="number" value={editData.unitsShipped || ''} onChange={(e) => updateField('unitsShipped', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.unitsShipped || '-')) : (isEditing ? <input type="number" value={editData.quantityRmaIssued || ''} onChange={(e) => updateField('quantityRmaIssued', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.quantityRmaIssued || '-'))}</td>
                   </tr>

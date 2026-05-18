@@ -192,6 +192,9 @@ class Traveler(Base):
     customer_revision_sent = Column(String(50))  # Customer Revision sent
     customer_revision_received = Column(String(50))  # Customer Revision Received
     rma_notes = Column(Text)  # Notes/Comments section for RMA
+    # Display label shown before the work-order number on RMA routing headers
+    # ("RMA", "Modification", "Rework", etc.). Operator-selectable per traveler.
+    wo_type_label = Column(String(50))
 
     # Group linking fields
     group_id = Column(Integer, ForeignKey("traveler_groups.id"), nullable=True)

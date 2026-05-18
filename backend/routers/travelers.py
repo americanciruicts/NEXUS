@@ -328,6 +328,7 @@ async def create_traveler(
             customer_revision_sent=traveler_data.customer_revision_sent,
             customer_revision_received=traveler_data.customer_revision_received,
             rma_notes=traveler_data.rma_notes,
+            wo_type_label=traveler_data.wo_type_label,
         )
 
         db.add(db_traveler)
@@ -1442,6 +1443,9 @@ async def update_traveler(
         traveler.status = traveler_data.status
     if traveler_data.is_active is not None:
         traveler.is_active = traveler_data.is_active
+    # Persist the operator-selected WO type label (RMA / Modification / Rework / …)
+    if traveler_data.wo_type_label is not None:
+        traveler.wo_type_label = traveler_data.wo_type_label
 
     # ── SAFE step update: preserve labor entries ──
     # Build a map of existing steps by (step_number, operation) for matching

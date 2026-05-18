@@ -444,6 +444,7 @@ async def lifespan(app: FastAPI):
                 'customer_revision_sent': 'VARCHAR(50)',
                 'customer_revision_received': 'VARCHAR(50)',
                 'rma_notes': 'TEXT',
+                'wo_type_label': 'VARCHAR(50)',
             }
             import re as _re_ident
             _ident_re = _re_ident.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
