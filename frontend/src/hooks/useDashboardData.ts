@@ -84,9 +84,34 @@ const LABOR_TTL = 30_000;      // 30s for labor (more real-time)
 // Polling interval: 5 minutes instead of 60 seconds
 const POLL_INTERVAL = 5 * 60 * 1000;
 
+// Persist the last successful dashboard payload so a fresh page load can paint
+// the full dashboard instantly from localStorage, then revalidate in the
+// background. Biggest perceived-speed win that doesn't depend on the network.
+const CACHE_KEY = 'nexus_dashboard_cache_v1';
+
+function readDashboardCache(): DashboardData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as DashboardData) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDashboardCache(data: DashboardData) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch {
+    /* quota / serialization — ignore */
+  }
+}
+
 export function useDashboardData(startDate: Date, endDate: Date) {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(readDashboardCache);
+  // If we already have cached data to show, don't block the UI with a spinner.
+  const [loading, setLoading] = useState<boolean>(() => readDashboardCache() === null);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
@@ -138,6 +163,7 @@ export function useDashboardData(startDate: Date, endDate: Date) {
       merged.labor_entries = labor as Record<string, unknown>[] | null ?? undefined;
 
       setData({ ...merged });
+      writeDashboardCache(merged);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       if (mountedRef.current) {
@@ -149,7 +175,8 @@ export function useDashboardData(startDate: Date, endDate: Date) {
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchDashboardData();
+    // If we painted cached data already, revalidate silently (no skeleton flash).
+    fetchDashboardData(readDashboardCache() !== null);
 
     // Poll every 5 minutes instead of 60 seconds
     const interval = setInterval(() => fetchDashboardData(true), POLL_INTERVAL);

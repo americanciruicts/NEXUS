@@ -615,6 +615,12 @@ class TrailingSlashMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(TrailingSlashMiddleware)
 
+# Gzip compression — JSON responses compress ~5-10x, which is the single biggest
+# win for transfer time over the office uplink / tunnel (the slow network leg).
+# Only kicks in for responses >= 500 bytes and clients that send Accept-Encoding.
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
