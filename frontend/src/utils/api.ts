@@ -5,17 +5,67 @@
 
 import { API_BASE_URL } from '@/config/api';
 
-const DEFAULT_TIMEOUT = 30000; // 30 seconds
+// Shorter default so a slow/unreachable backend fails fast and retries,
+// instead of hanging the UI for 30s. Callers can override per request.
+const DEFAULT_TIMEOUT = 12000; // 12 seconds
+
+// Status codes that indicate a transient backend/tunnel hiccup worth retrying.
+const TRANSIENT_STATUS = new Set([502, 503, 504]);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface ApiRequestOptions extends RequestInit {
   timeout?: number;
   requireAuth?: boolean;
+  /** Number of automatic retries on transient failures. Defaults to 2 for
+   *  idempotent methods (GET/HEAD) and 0 for everything else (to avoid
+   *  double-submitting POST/PUT/PATCH/DELETE). Set explicitly to override. */
+  retries?: number;
 }
 
 /**
- * Enhanced fetch with timeout and authentication support
+ * Enhanced fetch with timeout, authentication, and automatic retry of
+ * transient failures (network errors, timeouts, 502/503/504). Retries use
+ * exponential backoff and only apply to idempotent requests unless overridden.
  */
 export async function apiFetch<T = unknown>(
+  url: string,
+  options: ApiRequestOptions = {}
+): Promise<T> {
+  const {
+    timeout = DEFAULT_TIMEOUT,
+    requireAuth = true,
+    headers = {},
+    retries,
+    ...fetchOptions
+  } = options;
+
+  const method = (fetchOptions.method || 'GET').toUpperCase();
+  const isIdempotent = method === 'GET' || method === 'HEAD';
+  const maxRetries = retries ?? (isIdempotent ? 2 : 0);
+
+  let lastError: Error = new Error('Unknown error occurred');
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await attemptFetch<T>(url, { timeout, requireAuth, headers, ...fetchOptions });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown error occurred');
+      const transient =
+        lastError.name === 'AbortError' ||
+        /Request timeout|Failed to fetch|NetworkError|Load failed/i.test(lastError.message) ||
+        [...TRANSIENT_STATUS].some((s) => lastError.message.includes(`(${s})`));
+
+      if (attempt < maxRetries && transient) {
+        await sleep(400 * Math.pow(2, attempt)); // 400ms, 800ms, ...
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError;
+}
+
+async function attemptFetch<T>(
   url: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {

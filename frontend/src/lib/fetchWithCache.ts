@@ -48,15 +48,26 @@ export async function fetchWithCache<T = unknown>(
   }
 
   const promise = (async () => {
-    const res = await fetch(url, fetchOpts);
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const data = await res.json();
+    try {
+      const res = await fetch(url, fetchOpts);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const data = await res.json();
 
-    if (method === 'GET' && !skipCache) {
-      cache.set(cacheKey, { data, timestamp: Date.now() });
+      if (method === 'GET' && !skipCache) {
+        cache.set(cacheKey, { data, timestamp: Date.now() });
+      }
+
+      return data as T;
+    } catch (err) {
+      // Serve-stale-on-error: if a GET refetch fails but we have a previously
+      // cached value, return the stale data instead of throwing. Keeps the UI
+      // populated through transient backend/tunnel blips instead of crashing.
+      if (method === 'GET' && !skipCache) {
+        const stale = cache.get(cacheKey);
+        if (stale) return stale.data as T;
+      }
+      throw err;
     }
-
-    return data as T;
   })();
 
   if (method === 'GET' && !skipCache) {
