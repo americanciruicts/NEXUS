@@ -861,8 +861,8 @@ function TravelersPage() {
           ) : (
             <>
 
-            {/* Desktop Table View - hidden on mobile, shown on lg+ */}
-            <div className="hidden md:block w-full relative overflow-x-auto">
+            {/* Desktop Table View — hidden, replaced by card grid below */}
+            <div className="hidden w-full relative overflow-x-auto">
               <div className="absolute top-0 left-0 right-0 h-14 overflow-hidden pointer-events-none z-20">
                 <div className="absolute top-0 right-8 w-20 h-20 bg-white/10 rounded-full -translate-y-1/2" />
                 <div className="absolute top-2 left-12 w-12 h-12 bg-white/10 rounded-full" />
@@ -1149,9 +1149,9 @@ function TravelersPage() {
               </table>
             </div>
 
-            {/* Mobile/Tablet Card View - shown below lg */}
-            <div className="block md:hidden w-full">
-              <div className="p-3 space-y-4">
+            {/* Card View - shown on all screen sizes (responsive grid) */}
+            <div className="block w-full">
+              <div className="p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {paginatedTravelers.map((traveler) => (
                   <div key={traveler.dbId} className={`border-2 rounded-lg shadow-sm transition-colors ${
                     selectedTravelers.includes(traveler.dbId)
@@ -1227,15 +1227,59 @@ function TravelersPage() {
                         <div className="text-xs text-gray-700 dark:text-slate-300 truncate">{traveler.description || 'N/A'}</div>
                       </div>
 
-                      {/* Customer & Dates */}
+                      {/* Revisions */}
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                         <div>
-                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Customer</div>
-                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">{traveler.customerName || traveler.customerCode || 'N/A'}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">BOM Rev</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100">{traveler.revision || 'N/A'}</div>
                         </div>
                         <div>
-                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Due Date</div>
-                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Cust Rev</div>
+                          <div className="text-xs font-semibold text-blue-700 dark:text-blue-400">{traveler.customerRevision || 'N/A'}</div>
+                        </div>
+                      </div>
+
+                      {/* Customer */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Cust Code</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">{traveler.customerCode || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Cust Name</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.customerName}>{traveler.customerName || 'N/A'}</div>
+                        </div>
+                      </div>
+
+                      {/* Dates */}
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Start</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100">{traveler.createdAt ? formatDateDisplay(traveler.createdAt.split('T')[0]) : 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Due</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 underline">{traveler.dueDate ? formatDateDisplay(traveler.dueDate) : 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Ship</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100">{traveler.shipDate ? formatDateDisplay(traveler.shipDate) : 'N/A'}</div>
+                        </div>
+                      </div>
+
+                      {/* Shipping */}
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Via</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.shipVia}>{traveler.shipVia || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">From</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.fromStock}>{traveler.fromStock || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">To</div>
+                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.toStock}>{traveler.toStock || 'N/A'}</div>
                         </div>
                       </div>
 

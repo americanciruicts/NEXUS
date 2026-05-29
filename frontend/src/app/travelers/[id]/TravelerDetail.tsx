@@ -3135,6 +3135,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.partNumber || '-'}</span>
                   )}
                 </div>
+                <div className="flex items-baseline gap-1 print:gap-0.5 w-full min-w-0">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight flex-shrink-0 text-black dark:text-white">Invoice No:</span>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editData.invoiceNumber || ''}
+                      onChange={(e) => updateField('invoiceNumber', e.target.value)}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-sm text-left max-w-full text-black dark:text-white"
+                    />
+                  ) : (
+                    <span className="flex-1 text-left text-base print:text-[8px] print:leading-tight text-black dark:text-white">{displayTraveler.invoiceNumber || <span className="inline-block min-w-[120px] print:min-w-[80px] border-b border-black dark:border-slate-400 align-bottom">&nbsp;</span>}</span>
+                  )}
+                </div>
               </div>
 
               {/* Center - Barcode with Details */}
@@ -3450,14 +3463,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <select value={editData.priority || 'NORMAL'} onChange={(e) => updateField('priority', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white bg-white dark:bg-slate-700"><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select> : <span className={`font-bold ${displayTraveler.priority === 'URGENT' ? 'text-red-700' : displayTraveler.priority === 'HIGH' ? 'text-orange-700' : ''}`}>{displayTraveler.priority === 'HIGH' ? 'High' : displayTraveler.priority === 'URGENT' ? 'Urgent' : 'Normal'}</span>}</td>
                   </tr>
                   <tr className="border-b border-gray-300 dark:border-slate-600">
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Invoice Number:</td>
-                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.invoiceNumber || ''} onChange={(e) => updateField('invoiceNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.invoiceNumber || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer NCR#:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerNcr || ''} onChange={(e) => updateField('customerNcr', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerNcr || '-')}</td>
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Revision sent:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerRevisionSent || ''} onChange={(e) => updateField('customerRevisionSent', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerRevisionSent || '-')}</td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer NCR#:</td>
-                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerNcr || ''} onChange={(e) => updateField('customerNcr', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerNcr || '-')}</td>
+                    <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Invoice Number:</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.invoiceNumber || ''} onChange={(e) => updateField('invoiceNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.invoiceNumber || <span className="inline-block min-w-[140px] border-b border-black dark:border-slate-400 align-bottom">&nbsp;</span>)}</td>
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Customer Revision Received:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="text" value={editData.customerRevisionReceived || ''} onChange={(e) => updateField('customerRevisionReceived', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.customerRevisionReceived || '-')}</td>
                   </tr>
