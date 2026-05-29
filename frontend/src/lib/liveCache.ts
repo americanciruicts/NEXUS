@@ -1,16 +1,13 @@
 'use client';
 
-import { toast } from 'sonner';
-
 /**
  * Helpers for "instant-load + live refresh" on multi-user data pages.
  *
  * - readLiveCache / writeLiveCache persist the last successful payload to
  *   localStorage so a page can paint its last-known data instantly on load,
  *   then revalidate in the background (no blank/skeleton wait).
- * - notifyDataUpdated shows a brief, non-alarming toast when a background poll
- *   detects that another user changed the data, so the in-place update isn't
- *   silent. Throttled so concurrent page updates don't stack toasts.
+ * - notifyDataUpdated is intentionally silent: background polls update the page
+ *   in place with no toast/notification (per product decision).
  */
 
 export function readLiveCache<T>(key: string): T | null {
@@ -32,17 +29,10 @@ export function writeLiveCache(key: string, data: unknown): void {
   }
 }
 
-let lastNotify = 0;
-export function notifyDataUpdated(message = 'Updated with latest changes'): void {
-  if (typeof window === 'undefined') return;
-  const now = Date.now();
-  if (now - lastNotify < 4000) return; // throttle stacked toasts
-  lastNotify = now;
-  try {
-    toast.info(message, { duration: 3000 });
-  } catch {
-    /* sonner not mounted — ignore */
-  }
+// No-op: the page still refreshes silently in place every 30s; we just don't
+// surface any toast/notification when remote data changes.
+export function notifyDataUpdated(_message?: string): void {
+  /* intentionally silent */
 }
 
 /** Background auto-refresh interval for live data pages. */

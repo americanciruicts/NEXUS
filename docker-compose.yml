@@ -6,6 +6,10 @@ services:
       dockerfile: Dockerfile
     container_name: nexus_backend
     restart: always
+    # Production: run multiple workers (no --reload). A slow/cold request no
+    # longer blocks every other page — the other workers keep serving.
+    # Overrides the Dockerfile CMD (which uses --reload, single worker).
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
     env_file:
       - ./backend/.env
     environment:

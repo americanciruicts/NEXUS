@@ -10,8 +10,16 @@ from models import (
 )
 from routers.auth import get_current_user
 from schemas.dashboard_schemas import DashboardStats
+import time as _time
 
 router = APIRouter()
+
+# Short in-process response cache for the expensive dashboard endpoints. These
+# return global (non-user-specific) data and are polled every ~30s by every
+# open dashboard, so caching means one computation serves all users/polls in
+# the window instead of each request recomputing (and blocking the worker).
+_stats_cache: dict = {}
+_STATS_TTL = 30  # seconds
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -40,6 +48,12 @@ async def get_dashboard_stats(
     # Date range strings for due_date/ship_date filtering (stored as strings YYYY-MM-DD)
     start_date_str = start_dt.strftime("%Y-%m-%d")
     end_date_str = end_dt.strftime("%Y-%m-%d")
+
+    # Serve a recent cached result if available (global data, polled frequently).
+    _cache_key = (start_date_str, end_date_str)
+    _cached = _stats_cache.get(_cache_key)
+    if _cached and _time.time() - _cached[0] < _STATS_TTL:
+        return _cached[1]
 
     # Filter for travelers whose due_date or ship_date falls in the range (or have no dates set)
     date_range_filter = or_(
@@ -361,6 +375,17 @@ async def get_dashboard_stats(
 
     # Forecast: in-progress travelers with due dates, step-level estimates, buffer, headcount
     forecast = []
+    # One shared KOSH connection for the whole loop (previously opened once PER
+    # traveler — the dominant dashboard latency cause). Reused across all jobs.
+    kosh_conn = None
+    kosh_cur = None
+    try:
+        from routers.jobs import get_kosh_connection
+        kosh_conn = get_kosh_connection()
+        kosh_cur = kosh_conn.cursor()
+    except Exception:
+        kosh_conn = None
+        kosh_cur = None
 
     # Approximate hours per operation type (PCB assembly industry averages)
     OPERATION_ESTIMATES = {
@@ -523,9 +548,8 @@ async def get_dashboard_stats(
             shortage_lines = 0
             kosh_job_status = None
             try:
-                from routers.jobs import get_kosh_connection
-                kosh_conn = get_kosh_connection()
-                kosh_cur = kosh_conn.cursor()
+                if kosh_cur is None:
+                    raise RuntimeError("KOSH unavailable")
                 # Strip L/M suffixes to get base job number for KOSH lookup
                 base_job = t.job_number.rstrip('LM') if t.job_number else t.job_number
 
@@ -569,8 +593,6 @@ async def get_dashboard_stats(
                             shortage_lines += 1
 
                     inventory_ready = shortage_lines == 0 and total_bom_lines > 0
-
-                kosh_conn.close()
             except Exception:
                 pass  # KOSH unavailable — skip inventory check
 
@@ -632,13 +654,19 @@ async def get_dashboard_stats(
         import traceback
         traceback.print_exc()
         print(f"Warning: Could not compute forecast: {e}")
+    finally:
+        if kosh_conn is not None:
+            try:
+                kosh_conn.close()
+            except Exception:
+                pass
 
     # Real-time Operations
     active_labor_entries = db.query(func.count(LaborEntry.id)).filter(
         LaborEntry.is_completed == False
     ).scalar() or 0
 
-    return DashboardStats(
+    _result = DashboardStats(
         start_date=start_dt,
         end_date=end_dt,
         status_distribution=status_distribution,
@@ -659,6 +687,8 @@ async def get_dashboard_stats(
         forecast=forecast,
         active_labor_entries=active_labor_entries
     )
+    _stats_cache[_cache_key] = (_time.time(), _result)
+    return _result
 
 
 @router.get("/insights")
@@ -671,6 +701,10 @@ async def get_dashboard_insights(
     bottlenecks, due date heatmap, overdue aging, throughput/labor/cycle trends."""
     import math
     from collections import defaultdict
+
+    _cached = _stats_cache.get("__insights__")
+    if _cached and _time.time() - _cached[0] < _STATS_TTL:
+        return _cached[1]
 
     now = datetime.now(timezone.utc)
     today = now.date()
@@ -972,7 +1006,7 @@ async def get_dashboard_insights(
     except Exception as e:
         print(f"Labor hours trend error: {e}")
 
-    return {
+    _result = {
         "operator_efficiency": operator_efficiency,
         "busiest_work_centers": busiest_wc,
         "jobs_waiting_on_parts": jobs_waiting_on_parts,
@@ -984,3 +1018,5 @@ async def get_dashboard_insights(
         "throughput_trend": throughput_trend,
         "labor_hours_trend": labor_hours_trend,
     }
+    _stats_cache["__insights__"] = (_time.time(), _result)
+    return _result

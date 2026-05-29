@@ -11,8 +11,13 @@ from models import (
     TravelerStatus, TravelerTrackingLog, PauseLog, UserRole
 )
 from routers.auth import get_current_user
+import time as _time
 
 router = APIRouter()
+
+# Short in-process cache: this is global, expensive, and polled every ~30s.
+_analytics_cache: dict = {}
+_ANALYTICS_TTL = 30  # seconds
 
 # Operation time estimates (hours) for est vs actual
 OPERATION_ESTIMATES = {
@@ -48,6 +53,10 @@ async def get_analytics(
 ):
     """All analytics data in one call: anomalies, due date heatmap, est vs actual,
     yield, daily summary, bottlenecks, operator scorecards."""
+
+    _cached = _analytics_cache.get("all")
+    if _cached and _time.time() - _cached[0] < _ANALYTICS_TTL:
+        return _cached[1]
 
     now = datetime.now(timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -829,7 +838,7 @@ async def get_analytics(
     except Exception as kit_err:
         print(f"Kitting analytics error: {kit_err}")
 
-    return {
+    _result = {
         "anomalies": anomalies,
         "due_date_heatmap": due_date_data,
         "est_vs_actual": est_vs_actual,
@@ -840,3 +849,5 @@ async def get_analytics(
         "operator_scorecards": scorecards,
         "kitting_analytics": kitting_analytics,
     }
+    _analytics_cache["all"] = (_time.time(), _result)
+    return _result
