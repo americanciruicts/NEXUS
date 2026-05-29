@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/layout/Layout';
@@ -24,6 +24,9 @@ import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/config/api';
 import { DEPARTMENT_BAR_COLORS } from '@/data/workCenters';
 import { PageHeaderSkeleton, TableSkeleton } from '@/components/ui/LoadingSkeleton';
+import { readLiveCache, writeLiveCache, notifyDataUpdated, LIVE_REFRESH_MS } from '@/lib/liveCache';
+
+const TRAVELERS_CACHE_KEY = 'nexus_travelers_v1';
 
 // Toast notification component
 interface ToastProps {
@@ -195,8 +198,10 @@ function TravelersPage() {
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All Statuses');
   const [viewFilter, setViewFilter] = useState<'active' | 'drafts' | 'all'>((searchParams.get('view') as 'active' | 'drafts' | 'all') || 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [travelers, setTravelers] = useState<TravelerItem[]>([]);
-  const [travelersLoading, setTravelersLoading] = useState(true);
+  const [travelers, setTravelers] = useState<TravelerItem[]>(() => readLiveCache<TravelerItem[]>(TRAVELERS_CACHE_KEY) ?? []);
+  // Don't block on a skeleton if we already have last-known data to show.
+  const [travelersLoading, setTravelersLoading] = useState(() => (readLiveCache<TravelerItem[]>(TRAVELERS_CACHE_KEY) ?? []).length === 0);
+  const lastTravelersJsonRef = useRef<string>('');
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -301,14 +306,14 @@ function TravelersPage() {
 
   useEffect(() => {
     fetchTravelers();
-    // Auto-refresh every 3 minutes — reduced from 60s to cut API load
+    // Live auto-refresh so changes other users make show up within ~30s.
     const interval = setInterval(() => {
-      fetchTravelers();
-    }, 180000);
+      fetchTravelers(0, true);
+    }, LIVE_REFRESH_MS);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchTravelers = async (retryCount = 0) => {
+  const fetchTravelers = async (retryCount = 0, isPoll = false) => {
     try {
       const response = await fetch(`${API_BASE_URL}/travelers/?limit=200`, {
         headers: {
@@ -351,19 +356,24 @@ function TravelersPage() {
           isActive: Boolean(t.is_active !== false),
           includeLaborHours: Boolean(t.include_labor_hours)
         }));
+        const json = JSON.stringify(formattedTravelers);
+        const changed = lastTravelersJsonRef.current !== '' && lastTravelersJsonRef.current !== json;
+        lastTravelersJsonRef.current = json;
         setTravelers(formattedTravelers);
+        writeLiveCache(TRAVELERS_CACHE_KEY, formattedTravelers);
         setTravelersLoading(false);
+        if (isPoll && changed) notifyDataUpdated();
       } else {
         // Non-OK response — retry once without auth header (fallback)
         console.error('Travelers fetch failed:', response.status, response.statusText);
         if (retryCount < 1) {
-          fetchTravelers(retryCount + 1);
+          fetchTravelers(retryCount + 1, isPoll);
         }
       }
     } catch (error) {
       console.error('Error fetching travelers:', error);
       if (retryCount < 1) {
-        setTimeout(() => fetchTravelers(retryCount + 1), 1000);
+        setTimeout(() => fetchTravelers(retryCount + 1, isPoll), 1000);
       } else {
         setTravelersLoading(false);
       }

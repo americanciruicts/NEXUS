@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithCache, getAuthHeaders } from '@/lib/fetchWithCache';
+import { notifyDataUpdated, LIVE_REFRESH_MS } from '@/lib/liveCache';
 
 export interface DashboardData {
   start_date: string;
@@ -81,8 +82,8 @@ const ANALYTICS_TTL = 120_000; // 2 min for analytics (heavy)
 const TRAVELERS_TTL = 45_000;  // 45s for traveler list
 const LABOR_TTL = 30_000;      // 30s for labor (more real-time)
 
-// Polling interval: 5 minutes instead of 60 seconds
-const POLL_INTERVAL = 5 * 60 * 1000;
+// Live auto-refresh so changes other users make surface within ~30s.
+const POLL_INTERVAL = LIVE_REFRESH_MS;
 
 // Persist the last successful dashboard payload so a fresh page load can paint
 // the full dashboard instantly from localStorage, then revalidate in the
@@ -114,6 +115,7 @@ export function useDashboardData(startDate: Date, endDate: Date) {
   const [loading, setLoading] = useState<boolean>(() => readDashboardCache() === null);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const lastJsonRef = useRef<string>('');
 
   const fetchDashboardData = useCallback(async (silent = false) => {
     try {
@@ -162,8 +164,13 @@ export function useDashboardData(startDate: Date, endDate: Date) {
       merged.travelers_list = travelers as Record<string, unknown>[] | null ?? undefined;
       merged.labor_entries = labor as Record<string, unknown>[] | null ?? undefined;
 
+      const json = JSON.stringify(merged);
+      // Empty ref = first load this session, so never toast on initial paint.
+      const changed = lastJsonRef.current !== '' && lastJsonRef.current !== json;
+      lastJsonRef.current = json;
       setData({ ...merged });
       writeDashboardCache(merged);
+      if (changed) notifyDataUpdated();
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       if (mountedRef.current) {

@@ -5,7 +5,6 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ToastProvider from "@/components/providers/ToastProvider";
 import LazyOfflineIndicator from "@/components/LazyOfflineIndicator";
-import LazyBackendStatus from "@/components/LazyBackendStatus";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -59,7 +58,6 @@ window.addEventListener('unhandledrejection',function(e){if(e.reason&&e.reason.n
         </ErrorBoundary>
         <ToastProvider />
         <LazyOfflineIndicator />
-        <LazyBackendStatus />
       </body>
     </html>
   );

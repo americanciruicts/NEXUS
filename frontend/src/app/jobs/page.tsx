@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -22,6 +22,10 @@ import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/config/api';
 import Layout from '@/components/layout/Layout';
 import { toast } from 'sonner';
+import { readLiveCache, writeLiveCache, notifyDataUpdated, LIVE_REFRESH_MS } from '@/lib/liveCache';
+
+const JOBS_CACHE_KEY = 'nexus_jobs_v1';
+type JobsCache = { jobs: EnrichedJob[]; total: number };
 
 interface EnrichedJob {
   id: number;
@@ -65,9 +69,10 @@ export default function JobsPage() {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
 
-  const [jobs, setJobs] = useState<EnrichedJob[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState<EnrichedJob[]>(() => readLiveCache<JobsCache>(JOBS_CACHE_KEY)?.jobs ?? []);
+  const [total, setTotal] = useState(() => readLiveCache<JobsCache>(JOBS_CACHE_KEY)?.total ?? 0);
+  const [loading, setLoading] = useState(() => !readLiveCache<JobsCache>(JOBS_CACHE_KEY));
+  const lastJobsJsonRef = useRef<string>('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [healthFilter, setHealthFilter] = useState('');
@@ -80,8 +85,9 @@ export default function JobsPage() {
     else if (user?.role !== 'ADMIN') router.push('/dashboard');
   }, [isAuthenticated, user, router]);
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
+  const fetchJobs = useCallback(async (isPoll = false) => {
+    // Background polls update in place — never flash a skeleton.
+    if (!isPoll) setLoading(true);
     try {
       const token = localStorage.getItem('nexus_token');
       const params = new URLSearchParams();
@@ -95,12 +101,20 @@ export default function JobsPage() {
       });
       if (!res.ok) throw new Error('Failed to fetch jobs');
       const data = await res.json();
+      const json = JSON.stringify(data.jobs);
+      const changed = lastJobsJsonRef.current !== '' && lastJobsJsonRef.current !== json;
+      lastJobsJsonRef.current = json;
       setJobs(data.jobs);
       setTotal(data.total);
+      // Only cache the canonical (unfiltered, first-page) view for instant load.
+      if (!search && !statusFilter && page === 0) {
+        writeLiveCache(JOBS_CACHE_KEY, { jobs: data.jobs, total: data.total });
+      }
+      if (isPoll && changed) notifyDataUpdated();
     } catch (err) {
       console.error('Error fetching jobs:', err);
     } finally {
-      setLoading(false);
+      if (!isPoll) setLoading(false);
     }
   }, [search, statusFilter, page]);
 
@@ -110,7 +124,7 @@ export default function JobsPage() {
 
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
-    const poll = setInterval(() => fetchJobs(), 120000);
+    const poll = setInterval(() => fetchJobs(true), LIVE_REFRESH_MS);
     return () => clearInterval(poll);
   }, [fetchJobs, user]);
 
@@ -183,7 +197,7 @@ export default function JobsPage() {
                 </div>
               </div>
               <button
-                onClick={fetchJobs}
+                onClick={() => fetchJobs()}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg border border-white/30 transition-colors"
               >
                 <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />

@@ -10,6 +10,9 @@ import Autocomplete, { AutocompleteHandle } from '@/components/ui/Autocomplete';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
 import { offlineFetch } from '@/lib/offlineSync';
+import { readLiveCache, writeLiveCache, notifyDataUpdated, LIVE_REFRESH_MS } from '@/lib/liveCache';
+
+const LABOR_CACHE_KEY = 'nexus_labor_entries_v1';
 
 interface LaborEntry {
   id: number;
@@ -83,9 +86,10 @@ function SortableTh({
 
 export default function LaborTrackingPage() {
   const { user } = useAuth();
-  const [laborEntries, setLaborEntries] = useState<LaborEntry[]>([]);
+  const [laborEntries, setLaborEntries] = useState<LaborEntry[]>(() => readLiveCache<LaborEntry[]>(LABOR_CACHE_KEY) ?? []);
+  const lastLaborJsonRef = useRef<string>('');
   const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => (readLiveCache<LaborEntry[]>(LABOR_CACHE_KEY) ?? []).length === 0);
   const [filter, setFilter] = useState({
     jobNumber: '',
     workCenter: '',
@@ -301,7 +305,12 @@ export default function LaborTrackingPage() {
         const data = await res.json();
         // Set entries
         const validEntries = (data.entries || []).filter((entry: LaborEntry) => entry.hours_worked >= 0);
+        const json = JSON.stringify(validEntries);
+        const changed = lastLaborJsonRef.current !== '' && lastLaborJsonRef.current !== json;
+        lastLaborJsonRef.current = json;
         setLaborEntries(validEntries);
+        writeLiveCache(LABOR_CACHE_KEY, validEntries);
+        if (silent && changed) notifyDataUpdated();
         // Set active entry — restore full timer state so the circular
         // display and pause/resume buttons work correctly on page load.
         if (data.active_entry) {
@@ -339,10 +348,10 @@ export default function LaborTrackingPage() {
   useEffect(() => {
     fetchLaborInit();
 
-    // Auto-refresh every 60 seconds (silent) — reduced from 15s to cut API load
+    // Live auto-refresh (silent) so other users' changes surface within ~30s.
     const pollInterval = setInterval(() => {
       fetchLaborInit(true);
-    }, 60000);
+    }, LIVE_REFRESH_MS);
     return () => clearInterval(pollInterval);
   }, []);
 
