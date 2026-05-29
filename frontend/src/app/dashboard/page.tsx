@@ -390,8 +390,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Loading State */}
-        {loading && (
+        {/* Loading State — only on a genuine first load with no cached data */}
+        {loading && !dashboardData && (
           <div className="flex flex-col items-center justify-center py-16">
             <ArrowPathIcon className="w-10 h-10 text-blue-500 animate-spin mb-3" />
             <p className="text-sm text-gray-500 dark:text-slate-400 font-medium">Loading dashboard data...</p>
@@ -416,7 +416,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {!loading && !error && dashboardData && (
+        {!error && dashboardData && (
           <>
             {/* Metrics Row */}
             <MetricsGrid data={dashboardData} />

@@ -163,7 +163,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Loading State */}
-        {loading && (
+        {loading && !dashboardData && (
           <div className="flex flex-col items-center justify-center py-16">
             <ArrowPathIcon className="w-10 h-10 text-indigo-500 animate-spin mb-3" />
             <p className="text-sm text-gray-500 dark:text-slate-400 font-medium">Loading analytics data...</p>
@@ -182,7 +182,7 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        {!loading && !error && dashboardData && (
+        {!error && dashboardData && (
           <>
             {/* Kitting Status card — always visible on Insights, Trends, Forecast */}
             {(activeTab === 'insights' || activeTab === 'trends' || activeTab === 'forecast') && (() => {
