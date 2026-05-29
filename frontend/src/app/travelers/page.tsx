@@ -121,6 +121,7 @@ type TravelerItem = {
   jobNumber: string;
   workOrder: string;
   poNumber: string;
+  invoiceNumber: string;
   partNumber: string;
   description: string;
   revision: string;  // Traveler Revision
@@ -323,6 +324,7 @@ function TravelersPage() {
           jobNumber: String(t.job_number),
           workOrder: String(t.work_order_number || ''),
           poNumber: String(t.po_number || ''),
+          invoiceNumber: String(t.invoice_number || ''),
           partNumber: String(t.part_number),
           description: String(t.part_description),
           revision: String(t.revision || ''),
@@ -1171,6 +1173,7 @@ function TravelersPage() {
                           <div className="text-sm font-bold">Job# {traveler.jobNumber}</div>
                           <div className="text-xs text-blue-100">WO# {traveler.workOrder || 'N/A'}</div>
                           <div className="text-xs text-blue-100">PO# {traveler.poNumber || 'N/A'}</div>
+                          <div className="text-xs text-blue-100">Invoice# {traveler.invoiceNumber || 'N/A'}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
