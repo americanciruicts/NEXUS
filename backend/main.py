@@ -528,6 +528,58 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not check/add FINAL INSPECTION: {e}")
 
+    # Auto-migrate: drop the obsolete uq_traveler_job_revision unique constraint.
+    # Multiple travelers may legitimately share a job_number+revision as long as
+    # they have different Work Order / PO numbers (a normal workflow). The old
+    # constraint contradicted that and caused opaque 500s on commit. WO
+    # uniqueness is still enforced by uq_traveler_work_order_number.
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE travelers DROP CONSTRAINT IF EXISTS uq_traveler_job_revision"))
+            conn.commit()
+            print("Dropped obsolete uq_traveler_job_revision constraint (if it existed)")
+    except Exception as e:
+        print(f"Warning: Could not drop uq_traveler_job_revision: {e}")
+
+    # Auto-migrate: enforce "one open labor entry per employee" and "one open
+    # kitting session per traveler" at the DB level so concurrent start/resume
+    # requests can't create duplicate open rows. If pre-existing duplicates
+    # block index creation, we log and continue (the app-level checks still
+    # apply); the data should be cleaned up before the guard takes effect.
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_one_open_labor_entry_per_employee "
+                "ON labor_entries (employee_id) "
+                "WHERE end_time IS NULL AND is_completed = false"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_one_open_kitting_session_per_traveler "
+                "ON kitting_timer_sessions (traveler_id) "
+                "WHERE end_time IS NULL"
+            ))
+            conn.commit()
+            print("Ensured single-open-row unique indexes (labor + kitting)")
+    except Exception as e:
+        print(f"Warning: Could not create open-row unique indexes (likely pre-existing duplicates): {e}")
+
+    # Auto-migrate: make approver authority data-driven. Historically the
+    # approval endpoints fell back to hardcoded usernames ("Kris"/"Adam"); now
+    # they rely solely on the is_approver flag, so backfill it for those users
+    # once. After this, renaming a user keeps their approver status.
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text(
+                "UPDATE users SET is_approver = true WHERE username IN ('Kris', 'Adam')"
+            ))
+            conn.commit()
+            print("Backfilled is_approver for Kris/Adam")
+    except Exception as e:
+        print(f"Warning: Could not backfill is_approver: {e}")
+
     # Start background long-wait sweep (runs every 30 min)
     import asyncio
     async def sweep_long_waits_loop():
@@ -614,6 +666,23 @@ class TrailingSlashMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(TrailingSlashMiddleware)
+
+# Convert DB uniqueness/constraint violations into a clean 409 instead of a
+# generic 500. This catches races that slip past app-level pre-checks — e.g.
+# two concurrent DRAFT→CREATED transitions allocating the same work-order
+# number, or duplicate open labor/kitting rows.
+from sqlalchemy.exc import IntegrityError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": "This change conflicts with an existing record "
+                      "(duplicate or constraint violation). Please refresh and try again."
+        },
+    )
 
 # Gzip compression — JSON responses compress ~5-10x, which is the single biggest
 # win for transfer time over the office uplink / tunnel (the slow network leg).

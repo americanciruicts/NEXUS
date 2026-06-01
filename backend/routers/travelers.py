@@ -14,7 +14,7 @@ from schemas.traveler_schemas import (
     LinkTravelersRequest, TravelerGroupInfo, TravelerGroupMember
 )
 from schemas.tracking_schemas import TrackingScanRequest, TrackingScanResponse, TrackingLogResponse
-from routers.auth import get_current_user
+from routers.auth import get_current_user, get_password_hash
 from services.email_service import send_approval_notification
 from services.notification_service import create_notification_for_admins
 
@@ -991,7 +991,7 @@ async def get_dashboard_summary(
 ):
     """Get active travelers with progress/step data for the dashboard, filtered by due_date/ship_date range."""
     from sqlalchemy.orm import joinedload
-    from sqlalchemy import func, or_
+    from sqlalchemy import func, or_, and_
 
     query = db.query(Traveler).options(
         joinedload(Traveler.process_steps)
@@ -1670,8 +1670,20 @@ async def patch_traveler(
                 detail=f"Work order number '{prospective_wo}' is already assigned to another traveler."
             )
 
+    # System-managed / immutable fields can never be set via PATCH — otherwise a
+    # client could rewrite ownership and audit timestamps or move a traveler
+    # between groups by sending arbitrary keys. completed_at is derived from
+    # status transitions, not patched directly.
+    PROTECTED_FIELDS = {
+        'id', 'created_by', 'created_at', 'updated_at', 'completed_at',
+        'group_id', 'group_sequence', 'previous_status',
+    }
+
     # Update only the provided fields
     for key, value in updates.items():
+        if key in PROTECTED_FIELDS:
+            print(f"Ignoring protected field in PATCH: {key}")
+            continue
         if hasattr(traveler, key):
             print(f"Setting {key} = {value} (was {getattr(traveler, key)})")
             # Convert status string to enum
@@ -1723,17 +1735,22 @@ async def delete_traveler(
     job_number = traveler.job_number
     part_description = traveler.part_description
 
-    # Get user for notification
+    # Get user for notification. The "system" placeholder must never be a
+    # loginable account, so it is created inactive with a random, unusable
+    # password (previously it used a hardcoded bcrypt hash and was a loginable
+    # OPERATOR).
     default_user = db.query(User).filter(User.username == "system").first()
     if not default_user:
+        import secrets
         default_user = User(
             username="system",
             email="system@nexus.local",
             first_name="System",
             last_name="User",
-            hashed_password="$2b$12$vow0SBalxeDTuwKLWt8d9ed4bEUY6hDLY7OIz/opm3kbQQtM.4GtC",
+            hashed_password=get_password_hash(secrets.token_urlsafe(48)),
             role=UserRole.OPERATOR,
-            is_approver=False
+            is_approver=False,
+            is_active=False,
         )
         db.add(default_user)
         db.commit()

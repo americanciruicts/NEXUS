@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
@@ -38,7 +38,7 @@ def notify_forge_login(username: str, full_name: str):
     }
     for url in FORGE_WEBHOOK_URLS:
         try:
-            with httpx.Client(timeout=5.0) as client:
+            with httpx.Client(timeout=2.0) as client:
                 resp = client.post(url, json=payload)
                 if resp.status_code == 200:
                     return
@@ -97,7 +97,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return user
 
 @router.post("/login")
-async def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db)):
+async def login(user_data: UserLogin, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == user_data.username).first()
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
@@ -131,11 +131,9 @@ async def login(user_data: UserLogin, request: Request, db: Session = Depends(ge
         db.rollback()
         print(f"Failed to create login notification: {str(e)}")
 
-    # Notify FORGE about this Nexus login (non-blocking)
-    try:
-        notify_forge_login(username=user.username, full_name=user.first_name)
-    except Exception:
-        pass
+    # Notify FORGE about this Nexus login. Runs AFTER the response is sent so a
+    # slow/unreachable FORGE webhook never adds latency to the login itself.
+    background_tasks.add_task(notify_forge_login, username=user.username, full_name=user.first_name)
 
     return {
         "access_token": access_token,
@@ -282,7 +280,21 @@ async def sso_callback(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password")
-async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)):
+async def reset_password(
+    reset_data: PasswordReset,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Requires authentication. A user may only change their own password unless
+    # they are an admin. Previously this endpoint had no session requirement, so
+    # anyone who knew a username + its current password could change it.
+    is_admin = current_user.role == UserRole.ADMIN
+    if not is_admin and current_user.username != reset_data.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only change your own password"
+        )
+
     # Find user by username
     user = db.query(User).filter(User.username == reset_data.username).first()
     if not user:

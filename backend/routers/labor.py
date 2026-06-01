@@ -72,15 +72,20 @@ def update_step_and_traveler_progress(db: Session, labor_entry: LaborEntry):
     if traveler.status in (TravelerStatus.CREATED, TravelerStatus.DRAFT):
         traveler.status = TravelerStatus.IN_PROGRESS
 
-    # Shipping is the terminal step — completing it means the traveler is done,
-    # even if upstream optional steps weren't checked off.
+    # Shipping is the terminal step, but completing it must NOT mark the
+    # traveler done while REQUIRED upstream steps are still unchecked (e.g. an
+    # operator closing shipping out of order). Optional steps may remain
+    # unchecked. For non-shipping steps, the traveler completes only when every
+    # step is checked off.
     is_shipping_step = (step.operation or "").strip().upper() == "SHIPPING"
+    all_steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).all()
 
     if is_shipping_step:
-        traveler.status = TravelerStatus.COMPLETED
-        traveler.completed_at = datetime.now()
+        required_done = all(s.is_completed for s in all_steps if s.is_required)
+        if required_done:
+            traveler.status = TravelerStatus.COMPLETED
+            traveler.completed_at = datetime.now()
     else:
-        all_steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == traveler.id).all()
         if all_steps and all(s.is_completed for s in all_steps):
             traveler.status = TravelerStatus.COMPLETED
             traveler.completed_at = datetime.now()

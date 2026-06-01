@@ -330,6 +330,10 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
   }, [selectedType]);
 
   const [isGeneratingWO, setIsGeneratingWO] = useState(false);
+  // Guards against double-submit (double-click / slow tunnel) creating
+  // duplicate travelers. Disables the Create/Update and Save-as-Draft buttons
+  // while a save request is in flight.
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fetchNextWorkOrderNumber = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
     try {
@@ -684,6 +688,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return; // prevent double-submit creating duplicate travelers
     // Clones intentionally save without a WO — the WO is allocated when the
     // traveler later transitions Draft → Awaiting Start. Don't block the
     // save just because the WO field is empty in clone mode.
@@ -773,6 +778,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
 
     console.log('Submitting traveler data:', JSON.stringify(travelerData, null, 2));
 
+    setIsSubmitting(true);
     try {
       // Call API to create or update traveler
       // Use draftId if available (from auto-save), otherwise use existing ID for edit mode
@@ -831,10 +837,12 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
       console.error('Error saving traveler:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast.error(`Error ${mode === 'edit' ? 'Updating' : 'Creating'} Traveler: ${errorMessage}`);
+      setIsSubmitting(false); // re-enable on failure; on success we redirect
     }
   };
 
   const handleSaveDraft = async () => {
+    if (isSubmitting) return; // prevent double-submit creating duplicate drafts
     if (!formData.jobNumber) {
       toast.warning('Job Number Required: Please enter a Job Number to save as draft.');
       return;
@@ -911,6 +919,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
       }))
     };
 
+    setIsSubmitting(true);
     try {
       const token = localStorage.getItem('nexus_token');
       // Use existing draft ID if available (from auto-save), otherwise create new or edit existing
@@ -959,6 +968,7 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
       console.error('Error saving draft:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast.error(`Error Saving Draft: ${errorMessage}`);
+      setIsSubmitting(false); // re-enable on failure; on success we redirect
     }
   };
 
@@ -1372,16 +1382,18 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6 no-print">
           <button
             onClick={handleSaveDraft}
-            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            disabled={isSubmitting}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span>💾 Save as Draft</span>
           </button>
 
           <button
             onClick={handleSubmit}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+            disabled={isSubmitting}
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
+            <span>{isSubmitting ? 'Saving…' : (mode === 'create' ? 'Create Traveler' : 'Update Traveler')}</span>
           </button>
         </div>
 
@@ -2021,16 +2033,18 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t-2 border-gray-200 dark:border-slate-700 no-print">
           <button
             onClick={handleSaveDraft}
-            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            disabled={isSubmitting}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span>💾 Save as Draft</span>
           </button>
 
           <button
             onClick={handleSubmit}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg"
+            disabled={isSubmitting}
+            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <span>{mode === 'create' ? 'Create Traveler' : 'Update Traveler'}</span>
+            <span>{isSubmitting ? 'Saving…' : (mode === 'create' ? 'Create Traveler' : 'Update Traveler')}</span>
           </button>
         </div>
       </div>

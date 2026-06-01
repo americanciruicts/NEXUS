@@ -69,7 +69,7 @@ async def get_pending_approvals(
     current_user: User = Depends(get_current_user)
 ):
     """Get pending approvals (for approvers only)"""
-    if not current_user.is_approver and current_user.username not in ["Kris", "Adam"]:
+    if not current_user.is_approver:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only approvers can view pending approvals"
@@ -85,7 +85,7 @@ async def approve_request(
     current_user: User = Depends(get_current_user)
 ):
     """Approve a request (Kris/Adam only)"""
-    if not current_user.is_approver and current_user.username not in ["Kris", "Adam"]:
+    if not current_user.is_approver:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Kris and Adam can approve requests"
@@ -133,7 +133,7 @@ async def reject_request(
     current_user: User = Depends(get_current_user)
 ):
     """Reject a request (Kris/Adam only)"""
-    if not current_user.is_approver and current_user.username not in ["Kris", "Adam"]:
+    if not current_user.is_approver:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Kris and Adam can reject requests"

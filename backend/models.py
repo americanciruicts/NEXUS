@@ -131,7 +131,13 @@ class TravelerGroup(Base):
 class Traveler(Base):
     __tablename__ = "travelers"
     __table_args__ = (
-        UniqueConstraint('job_number', 'revision', name='uq_traveler_job_revision'),
+        # NOTE: there is intentionally NO unique constraint on (job_number,
+        # revision). Multiple travelers may share the same job/rev as long as
+        # they carry different Work Order / PO numbers — this is a normal
+        # workflow (see create_traveler's duplicate check, which is NULL-aware
+        # on work_order_number/po_number). A hard uq_traveler_job_revision
+        # constraint contradicted that workflow and surfaced as opaque 500s on
+        # commit; it is dropped at startup (see main.py auto-migration).
         # Partial unique index: two travelers can't share a WO number, but many
         # rows may still carry NULL/empty WO (Draft status hasn't generated one
         # yet). Enforced DB-side so a race between auto-gen and manual entry
@@ -307,6 +313,21 @@ class RmaUnitTracking(Base):
 
 class LaborEntry(Base):
     __tablename__ = "labor_entries"
+    __table_args__ = (
+        # An employee may have at most one OPEN labor entry (a running timer:
+        # end_time IS NULL and not completed). Enforced DB-side so a race
+        # between two concurrent start requests (double-tap / two tabs) cannot
+        # create two open timers. The app-level pre-check in start_labor_entry
+        # still gives a friendly message in the common case; this index is the
+        # backstop. Created at startup (see main.py auto-migration).
+        Index(
+            'uq_one_open_labor_entry_per_employee',
+            'employee_id',
+            unique=True,
+            postgresql_where=text("end_time IS NULL AND is_completed = false"),
+            sqlite_where=text("end_time IS NULL AND is_completed = 0"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     traveler_id = Column(Integer, ForeignKey("travelers.id"), nullable=False)
@@ -356,6 +377,20 @@ class PauseLog(Base):
 
 class KittingTimerSession(Base):
     __tablename__ = "kitting_timer_sessions"
+    __table_args__ = (
+        # At most one OPEN session (end_time IS NULL) per traveler. The state
+        # machine closes the current session before opening the next within a
+        # single transaction, so normal start/pause/resume transitions never
+        # violate this. It blocks the race where two concurrent start/resume
+        # calls both open a session. Created at startup (see main.py).
+        Index(
+            'uq_one_open_kitting_session_per_traveler',
+            'traveler_id',
+            unique=True,
+            postgresql_where=text("end_time IS NULL"),
+            sqlite_where=text("end_time IS NULL"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     traveler_id = Column(Integer, ForeignKey("travelers.id", ondelete="CASCADE"), nullable=False, index=True)

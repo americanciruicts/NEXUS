@@ -211,13 +211,29 @@ def list_jobs_enriched(
         .all()
     ) if job_numbers else []
 
-    # Group travelers by job_number
+    # Group travelers by job_number.
+    # A traveler's job_number may carry compliance suffixes appended in the UI:
+    # 'L' (lead-free) and/or 'M' (ITAR) — e.g. job "8414" -> traveler "8414L".
+    # We must NOT use a bare startswith(): that collides prefixes (job "8414"
+    # would swallow traveler "8414L" when both jobs are on the page, and job
+    # "100" would grab traveler "1000"). Match exactly first, then allow only a
+    # trailing run of compliance letters.
+    def _job_matches(traveler_jn: str, jn: str) -> bool:
+        tj, j = traveler_jn.upper(), jn.upper()
+        if tj == j:
+            return True
+        if tj.startswith(j):
+            remainder = tj[len(j):]
+            return remainder != "" and all(c in ("L", "M") for c in remainder)
+        return False
+
     travelers_by_job = defaultdict(list)
     for t in all_travelers:
-        for jn in job_numbers:
-            if t.job_number.upper().startswith(jn.upper()):
-                travelers_by_job[jn].append(t)
-                break
+        # Prefer an exact match; fall back to a compliance-suffix match.
+        exact = next((jn for jn in job_numbers if t.job_number.upper() == jn.upper()), None)
+        target = exact or next((jn for jn in job_numbers if _job_matches(t.job_number, jn)), None)
+        if target is not None:
+            travelers_by_job[target].append(t)
 
     # Batch-fetch labor hours
     all_traveler_ids = [t.id for t in all_travelers]
