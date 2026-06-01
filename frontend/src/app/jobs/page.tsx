@@ -20,6 +20,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/config/api';
+import { apiFetch } from '@/utils/api';
 import Layout from '@/components/layout/Layout';
 import { toast } from 'sonner';
 import { readLiveCache, writeLiveCache, notifyDataUpdated, LIVE_REFRESH_MS } from '@/lib/liveCache';
@@ -78,6 +79,7 @@ export default function JobsPage() {
   const [healthFilter, setHealthFilter] = useState('');
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const limit = 25;
 
   useEffect(() => {
@@ -89,23 +91,23 @@ export default function JobsPage() {
     // Background polls update in place — never flash a skeleton.
     if (!isPoll) setLoading(true);
     try {
-      const token = localStorage.getItem('nexus_token');
       const params = new URLSearchParams();
       if (search) params.set('q', search);
       if (statusFilter) params.set('status', statusFilter);
       params.set('limit', String(limit));
       params.set('offset', String(page * limit));
 
-      const res = await fetch(`${API_BASE_URL}/jobs/list-enriched?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to fetch jobs');
-      const data = await res.json();
+      // apiFetch adds auth, a 12s timeout, and retries transient 502/503/504 +
+      // network blips — far more resilient over the office tunnel than raw fetch.
+      const data = await apiFetch<{ jobs: EnrichedJob[]; total: number }>(
+        `${API_BASE_URL}/jobs/list-enriched?${params}`
+      );
       const json = JSON.stringify(data.jobs);
       const changed = lastJobsJsonRef.current !== '' && lastJobsJsonRef.current !== json;
       lastJobsJsonRef.current = json;
       setJobs(data.jobs);
       setTotal(data.total);
+      setError(null);
       // Only cache the canonical (unfiltered, first-page) view for instant load.
       if (!search && !statusFilter && page === 0) {
         writeLiveCache(JOBS_CACHE_KEY, { jobs: data.jobs, total: data.total });
@@ -113,6 +115,9 @@ export default function JobsPage() {
       if (isPoll && changed) notifyDataUpdated();
     } catch (err) {
       console.error('Error fetching jobs:', err);
+      // Don't blow away on-screen data on a background poll hiccup; only surface
+      // a blocking error on a foreground load (so the page can't silently hang).
+      if (!isPoll) setError(err instanceof Error ? err.message : 'Failed to load jobs');
     } finally {
       if (!isPoll) setLoading(false);
     }
@@ -198,6 +203,7 @@ export default function JobsPage() {
               </div>
               <button
                 onClick={() => fetchJobs()}
+                aria-label="Refresh jobs"
                 className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg border border-white/30 transition-colors"
               >
                 <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -262,9 +268,28 @@ export default function JobsPage() {
 
         {/* Table */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+          {error && !loading && displayJobs.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/40 text-sm text-red-700 dark:text-red-300">
+              <ExclamationTriangleIcon className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1">Showing cached jobs — refresh failed.</span>
+              <button onClick={() => fetchJobs()} className="font-semibold underline hover:no-underline">Retry</button>
+            </div>
+          )}
           {loading ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-20" aria-busy="true" aria-label="Loading jobs">
               <div className="animate-spin h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full" />
+            </div>
+          ) : error && displayJobs.length === 0 ? (
+            <div className="text-center py-20">
+              <ExclamationTriangleIcon className="h-14 w-14 mx-auto mb-3 text-red-400" />
+              <p className="text-lg font-bold text-gray-700 dark:text-slate-300">Couldn&apos;t load jobs</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1 max-w-md mx-auto break-words">{error}</p>
+              <button
+                onClick={() => fetchJobs()}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+              >
+                <ArrowPathIcon className="h-4 w-4" /> Retry
+              </button>
             </div>
           ) : displayJobs.length === 0 ? (
             <div className="text-center py-20">
@@ -290,17 +315,17 @@ export default function JobsPage() {
                 </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-800">
-                    <th className="px-2 py-3 text-left text-xs font-extrabold text-white uppercase">Job #</th>
-                    <th className="px-2 py-3 text-left text-xs font-extrabold text-white uppercase">Customer</th>
-                    <th className="px-2 py-3 text-left text-xs font-extrabold text-white uppercase hidden lg:table-cell">Description</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">QTY</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Status</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Health</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Travelers</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Progress</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase hidden md:table-cell">Labor</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">BOM Rev</th>
-                    <th className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase"></th>
+                    <th scope="col" className="px-2 py-3 text-left text-xs font-extrabold text-white uppercase">Job #</th>
+                    <th scope="col" className="px-2 py-3 text-left text-xs font-extrabold text-white uppercase">Customer</th>
+                    <th scope="col" className="px-2 py-3 text-left text-xs font-extrabold text-white uppercase hidden lg:table-cell">Description</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">QTY</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Status</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Health</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Travelers</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">Progress</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase hidden md:table-cell">Labor</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase">BOM Rev</th>
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-extrabold text-white uppercase"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -359,7 +384,14 @@ export default function JobsPage() {
                         <td className="px-2 py-2.5 text-center">
                           {job.traveler_count > 0 ? (
                             <div className="flex flex-col items-center gap-0.5">
-                              <div className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="w-full bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden"
+                                role="progressbar"
+                                aria-valuenow={Math.round(job.progress_percent)}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label={`Progress ${job.progress_percent}%`}
+                              >
                                 <div
                                   className="h-1.5 rounded-full transition-all"
                                   style={{ width: `${Math.min(job.progress_percent, 100)}%`, backgroundColor: getProgressColor(job.progress_percent) }}
@@ -388,6 +420,7 @@ export default function JobsPage() {
                               disabled={creating === job.job_number}
                               className="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 transition-colors disabled:opacity-50"
                               title="Auto-create traveler"
+                              aria-label={`Auto-create traveler for job ${job.job_number}`}
                             >
                               {creating === job.job_number ? (
                                 <div className="animate-spin h-3.5 w-3.5 border-2 border-emerald-500 border-t-transparent rounded-full" />

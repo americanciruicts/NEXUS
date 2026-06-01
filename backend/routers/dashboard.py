@@ -594,7 +594,15 @@ async def get_dashboard_stats(
 
                     inventory_ready = shortage_lines == 0 and total_bom_lines > 0
             except Exception:
-                pass  # KOSH unavailable — skip inventory check
+                # A failed KOSH query aborts the transaction on the shared
+                # connection; without a rollback every subsequent traveler in
+                # this loop would silently fail too. Roll back so the next
+                # iteration starts clean.
+                if kosh_conn is not None:
+                    try:
+                        kosh_conn.rollback()
+                    except Exception:
+                        pass
 
             # On-track: combine due date + inventory readiness
             if percent_complete >= 100:
@@ -810,20 +818,29 @@ async def get_dashboard_insights(
             job_num, order_qty_raw, customer, desc, status, total_parts = kj
             order_qty = int(order_qty_raw or 1)
 
-            kosh_cur.execute("""
-                WITH bom_items AS (
-                    SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty, b."DESC"
-                    FROM pcb_inventory."tblBOM" b WHERE b.job = %s
-                    ORDER BY b.aci_pn, b.line
-                )
-                SELECT bi.aci_pn, bi."DESC",
-                    CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
-                    COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
-                FROM bom_items bi
-                LEFT JOIN pcb_inventory."tblWhse_Inventory" w ON bi.aci_pn = w.item OR bi.mpn = w.mpn
-                GROUP BY bi.aci_pn, bi."DESC", bi.qty
-            """, (job_num,))
-            parts = kosh_cur.fetchall()
+            try:
+                kosh_cur.execute("""
+                    WITH bom_items AS (
+                        SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty, b."DESC"
+                        FROM pcb_inventory."tblBOM" b WHERE b.job = %s
+                        ORDER BY b.aci_pn, b.line
+                    )
+                    SELECT bi.aci_pn, bi."DESC",
+                        CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
+                        COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
+                    FROM bom_items bi
+                    LEFT JOIN pcb_inventory."tblWhse_Inventory" w ON bi.aci_pn = w.item OR bi.mpn = w.mpn
+                    GROUP BY bi.aci_pn, bi."DESC", bi.qty
+                """, (job_num,))
+                parts = kosh_cur.fetchall()
+            except Exception:
+                # Don't let one bad job abort the shared transaction and wipe
+                # out shortage insights for every remaining job.
+                try:
+                    kosh_conn.rollback()
+                except Exception:
+                    pass
+                continue
             short_count = 0
             for p in parts:
                 req = int(p[2] or 0) * order_qty

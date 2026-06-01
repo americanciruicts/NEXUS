@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from typing import List
+from datetime import datetime, timezone
 
 from database import get_db
-from models import User, Approval, Traveler, AuditLog
+from models import User, Approval, Traveler, AuditLog, TravelerStatus, ApprovalStatus
 from schemas.traveler_schemas import ApprovalCreate, Approval as ApprovalSchema
 from routers.auth import get_current_user
 from services.email_service import send_approval_notification
@@ -75,7 +76,7 @@ async def get_pending_approvals(
             detail="Only approvers can view pending approvals"
         )
 
-    approvals = db.query(Approval).filter(Approval.status == "PENDING").all()
+    approvals = db.query(Approval).filter(Approval.status == ApprovalStatus.PENDING).all()
     return approvals
 
 @router.post("/{approval_id}/approve")
@@ -98,16 +99,31 @@ async def approve_request(
             detail="Approval request not found"
         )
 
-    if approval.status != "PENDING":
+    if approval.status != ApprovalStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Approval request already processed"
         )
 
     # Update approval
-    approval.status = "APPROVED"
+    approval.status = ApprovalStatus.APPROVED
     approval.approved_by = current_user.id
-    approval.approved_at = func.now()
+    approval.approved_at = datetime.now(timezone.utc)
+
+    # Auto-apply the approved action to the traveler. COMPLETE -> COMPLETED,
+    # CANCEL -> CANCELLED. EDIT requests carry no stored payload, so they
+    # remain a sign-off only (the requester applies the edit afterward).
+    req_type = (approval.request_type or "").upper()
+    applied = None
+    traveler = db.query(Traveler).filter(Traveler.id == approval.traveler_id).first()
+    if traveler:
+        if "COMPLETE" in req_type:
+            traveler.status = TravelerStatus.COMPLETED
+            traveler.completed_at = datetime.now(timezone.utc)
+            applied = "COMPLETED"
+        elif "CANCEL" in req_type:
+            traveler.status = TravelerStatus.CANCELLED
+            applied = "CANCELLED"
 
     db.commit()
 
@@ -116,14 +132,17 @@ async def approve_request(
         traveler_id=approval.traveler_id,
         user_id=current_user.id,
         action="APPROVED",
-        new_value=f"Approved {approval.request_type} request",
+        new_value=(
+            f"Approved {approval.request_type} request"
+            + (f"; traveler set to {applied}" if applied else "")
+        ),
         ip_address="127.0.0.1",
         user_agent="NEXUS-Frontend"
     )
     db.add(audit_log)
     db.commit()
 
-    return {"message": "Request approved successfully"}
+    return {"message": "Request approved successfully", "traveler_status": applied}
 
 @router.post("/{approval_id}/reject")
 async def reject_request(
@@ -146,16 +165,16 @@ async def reject_request(
             detail="Approval request not found"
         )
 
-    if approval.status != "PENDING":
+    if approval.status != ApprovalStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Approval request already processed"
         )
 
     # Update approval
-    approval.status = "REJECTED"
+    approval.status = ApprovalStatus.REJECTED
     approval.rejected_by = current_user.id
-    approval.rejected_at = func.now()
+    approval.rejected_at = datetime.now(timezone.utc)
     approval.rejection_reason = rejection_reason
 
     db.commit()

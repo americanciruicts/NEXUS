@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from database import get_db
 from models import User, Traveler, StepScanEvent
@@ -586,8 +586,15 @@ async def scan_step(
         ).order_by(desc(StepScanEvent.scanned_at)).first()
 
         if last_scan_in:
-            time_diff = datetime.utcnow() - last_scan_in.scanned_at
-            duration_minutes = time_diff.total_seconds() / 60
+            # scanned_at is a tz-aware column (DateTime(timezone=True)); compare
+            # against an aware "now" and normalize any legacy naive value, so we
+            # never subtract naive from aware (which raises TypeError and 500s).
+            scanned_at = last_scan_in.scanned_at
+            if scanned_at is not None and scanned_at.tzinfo is None:
+                scanned_at = scanned_at.replace(tzinfo=timezone.utc)
+            if scanned_at is not None:
+                time_diff = datetime.now(timezone.utc) - scanned_at
+                duration_minutes = time_diff.total_seconds() / 60
 
     # Create scan event
     scan_event = StepScanEvent(

@@ -332,8 +332,12 @@ async def create_traveler(
             rma_table_columns=traveler_data.rma_table_columns,
         )
 
+        # Build the entire traveler graph in ONE transaction. We flush (not
+        # commit) to assign primary keys for FKs; the single commit at the end
+        # makes creation atomic, so a failure on any step can't leave an
+        # orphaned half-built traveler behind.
         db.add(db_traveler)
-        db.commit()
+        db.flush()
         db.refresh(db_traveler)
 
         # Create process steps
@@ -348,7 +352,7 @@ async def create_traveler(
                     is_active=True
                 )
                 db.add(work_center)
-                db.commit()
+                db.flush()
 
             db_step = ProcessStep(
                 traveler_id=db_traveler.id,
@@ -365,7 +369,7 @@ async def create_traveler(
                 completed_date=step_data.completed_date
             )
             db.add(db_step)
-            db.commit()
+            db.flush()
             db.refresh(db_step)
 
             # Create sub-steps

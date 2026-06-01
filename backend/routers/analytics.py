@@ -657,50 +657,59 @@ async def get_analytics(
             kosh_cur = kosh_conn.cursor()
             unique_jobs = list({t.job_number for _, t in active_kit_steps if t.job_number})
             for jn in unique_jobs:
-                base = jn.rstrip('LM') if jn else jn
-                kosh_job = None
-                kosh_jn = jn
-                for try_jn in (jn, base) if base != jn else (jn,):
+                try:
+                    base = jn.rstrip('LM') if jn else jn
+                    kosh_job = None
+                    kosh_jn = jn
+                    for try_jn in (jn, base) if base != jn else (jn,):
+                        kosh_cur.execute(
+                            'SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s',
+                            (try_jn,),
+                        )
+                        row = kosh_cur.fetchone()
+                        if row:
+                            kosh_job = row
+                            kosh_jn = try_jn
+                            break
+                    if not kosh_job:
+                        continue
+                    order_qty = int(kosh_job[0] or 1)
+                    kosh_status_map[jn] = kosh_job[1]
                     kosh_cur.execute(
-                        'SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s',
-                        (try_jn,),
+                        """
+                        WITH bom_items AS (
+                            SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
+                            FROM pcb_inventory."tblBOM" b
+                            WHERE b.job = %s
+                            ORDER BY b.aci_pn, b.line
+                        )
+                        SELECT
+                            CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
+                            COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
+                        FROM bom_items bi
+                        LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                            ON bi.aci_pn = w.item OR bi.mpn = w.mpn
+                        GROUP BY bi.aci_pn, bi.qty
+                        """,
+                        (kosh_jn,),
                     )
-                    row = kosh_cur.fetchone()
-                    if row:
-                        kosh_job = row
-                        kosh_jn = try_jn
-                        break
-                if not kosh_job:
+                    bom_rows = kosh_cur.fetchall()
+                    total = len(bom_rows)
+                    short = 0
+                    for r in bom_rows:
+                        req = int(r[0] or 0) * order_qty
+                        oh = int(r[1] or 0)
+                        if oh < req:
+                            short += 1
+                    kosh_shortage_map[jn] = {"total": total, "short": short}
+                except Exception:
+                    # One bad job shouldn't abort the shared transaction and
+                    # wipe kitting shortage data for every other job.
+                    try:
+                        kosh_conn.rollback()
+                    except Exception:
+                        pass
                     continue
-                order_qty = int(kosh_job[0] or 1)
-                kosh_status_map[jn] = kosh_job[1]
-                kosh_cur.execute(
-                    """
-                    WITH bom_items AS (
-                        SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
-                        FROM pcb_inventory."tblBOM" b
-                        WHERE b.job = %s
-                        ORDER BY b.aci_pn, b.line
-                    )
-                    SELECT
-                        CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
-                        COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
-                    FROM bom_items bi
-                    LEFT JOIN pcb_inventory."tblWhse_Inventory" w
-                        ON bi.aci_pn = w.item OR bi.mpn = w.mpn
-                    GROUP BY bi.aci_pn, bi.qty
-                    """,
-                    (kosh_jn,),
-                )
-                bom_rows = kosh_cur.fetchall()
-                total = len(bom_rows)
-                short = 0
-                for r in bom_rows:
-                    req = int(r[0] or 0) * order_qty
-                    oh = int(r[1] or 0)
-                    if oh < req:
-                        short += 1
-                kosh_shortage_map[jn] = {"total": total, "short": short}
             kosh_conn.close()
         except Exception as kosh_err:
             print(f"Kitting KOSH lookup error: {kosh_err}")

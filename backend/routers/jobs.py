@@ -203,13 +203,21 @@ def list_jobs_enriched(
     finally:
         conn.close()
 
-    # Batch-fetch traveler data for all job numbers
+    # Batch-fetch traveler data for all job numbers.
+    # Travelers carry compliance suffixes (job "8414" -> traveler "8414L"/"8414M"),
+    # so an exact IN(job_numbers) would UNDERCOUNT lead-free/ITAR jobs. Match on
+    # the base number (trailing L/M stripped) on both sides so those variants are
+    # included; the Python grouping below then assigns each to the right job.
+    from sqlalchemy import func as _sa_func
     job_numbers = [j["job_number"] for j in jobs]
+    base_jobs = list({jn.upper().rstrip('LM') for jn in job_numbers}) if job_numbers else []
     all_travelers = (
         db.query(Traveler)
-        .filter(Traveler.job_number.in_(job_numbers))
+        .filter(
+            _sa_func.regexp_replace(_sa_func.upper(Traveler.job_number), '[LM]+$', '').in_(base_jobs)
+        )
         .all()
-    ) if job_numbers else []
+    ) if base_jobs else []
 
     # Group travelers by job_number.
     # A traveler's job_number may carry compliance suffixes appended in the UI:
@@ -235,13 +243,22 @@ def list_jobs_enriched(
         if target is not None:
             travelers_by_job[target].append(t)
 
-    # Batch-fetch labor hours
+    # Batch-fetch labor hours — aggregate in SQL (one grouped query) instead of
+    # pulling every labor row into Python and summing in a loop.
     all_traveler_ids = [t.id for t in all_travelers]
     labor_by_traveler = defaultdict(float)
     if all_traveler_ids:
-        labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id.in_(all_traveler_ids)).all()
-        for le in labor_entries:
-            labor_by_traveler[le.traveler_id] += (le.hours_worked or 0)
+        labor_rows = (
+            db.query(
+                LaborEntry.traveler_id,
+                _sa_func.coalesce(_sa_func.sum(LaborEntry.hours_worked), 0),
+            )
+            .filter(LaborEntry.traveler_id.in_(all_traveler_ids))
+            .group_by(LaborEntry.traveler_id)
+            .all()
+        )
+        for tid, hrs in labor_rows:
+            labor_by_traveler[tid] = float(hrs or 0)
 
     result = []
     for j in jobs:
