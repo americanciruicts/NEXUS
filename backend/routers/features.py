@@ -18,20 +18,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import (
     Shift, LaborRate, JobDocument, QualityCheckItem, CommunicationLog,
-    User, Traveler, ProcessStep, KittingTimerSession, KittingEventLog, UserRole,
+    User, Traveler, ProcessStep, KittingTimerSession, KittingEventLog,
 )
 from routers.auth import get_current_user
 
 router = APIRouter()
-
-
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Gate administrative/financial config (shifts, labor rates) to admins.
-    Operator-facing CRUD (quality check pass/fail, comms, documents) stays on
-    plain get_current_user so the shop floor isn't blocked."""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
 
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "uploads", "documents")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -56,13 +47,13 @@ def list_shifts(db: Session = Depends(get_db), current_user: User = Depends(get_
     return db.query(Shift).filter(Shift.is_active == True).order_by(Shift.start_hour).all()
 
 @router.post("/shifts", response_model=ShiftOut)
-def create_shift(body: ShiftCreate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def create_shift(body: ShiftCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     s = Shift(name=body.name, start_hour=body.start_hour, end_hour=body.end_hour)
     db.add(s); db.commit(); db.refresh(s)
     return s
 
 @router.delete("/shifts/{shift_id}")
-def delete_shift(shift_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_shift(shift_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     s = db.query(Shift).filter(Shift.id == shift_id).first()
     if not s: raise HTTPException(404, "Shift not found")
     s.is_active = False; db.commit()
@@ -89,7 +80,7 @@ def list_labor_rates(db: Session = Depends(get_db), current_user: User = Depends
     return db.query(LaborRate).filter(LaborRate.is_active == True).order_by(LaborRate.is_default.desc(), LaborRate.name).all()
 
 @router.post("/labor-rates", response_model=LaborRateOut)
-def create_labor_rate(body: LaborRateCreate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def create_labor_rate(body: LaborRateCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if body.is_default:
         db.query(LaborRate).filter(LaborRate.is_default == True).update({"is_default": False})
     r = LaborRate(name=body.name, rate_per_hour=body.rate_per_hour, department=body.department, is_default=body.is_default)
@@ -97,7 +88,7 @@ def create_labor_rate(body: LaborRateCreate, db: Session = Depends(get_db), curr
     return r
 
 @router.put("/labor-rates/{rate_id}", response_model=LaborRateOut)
-def update_labor_rate(rate_id: int, body: LaborRateCreate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def update_labor_rate(rate_id: int, body: LaborRateCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     r = db.query(LaborRate).filter(LaborRate.id == rate_id).first()
     if not r: raise HTTPException(404, "Rate not found")
     if body.is_default:
@@ -107,7 +98,7 @@ def update_labor_rate(rate_id: int, body: LaborRateCreate, db: Session = Depends
     return r
 
 @router.delete("/labor-rates/{rate_id}")
-def delete_labor_rate(rate_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_labor_rate(rate_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     r = db.query(LaborRate).filter(LaborRate.id == rate_id).first()
     if not r: raise HTTPException(404, "Rate not found")
     r.is_active = False; db.commit()
