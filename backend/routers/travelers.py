@@ -366,7 +366,8 @@ async def create_traveler(
                 accepted=step_data.accepted,
                 rejected=step_data.rejected,
                 sign=step_data.sign,
-                completed_date=step_data.completed_date
+                completed_date=step_data.completed_date,
+                completed_time=step_data.completed_time
             )
             db.add(db_step)
             db.flush()
@@ -628,6 +629,7 @@ async def get_latest_revision_traveler(
                 "rejected": step.rejected,
                 "sign": step.sign,
                 "completed_date": step.completed_date,
+                "completed_time": step.completed_time,
                 "estimated_time": step.estimated_time,
                 "is_required": step.is_required,
                 "is_completed": step.is_completed,
@@ -895,6 +897,7 @@ async def get_all_work_orders_for_job(
                     "rejected": step.rejected,
                     "sign": step.sign,
                     "completed_date": step.completed_date,
+                    "completed_time": step.completed_time,
                     "estimated_time": step.estimated_time,
                     "is_required": step.is_required,
                     "is_completed": step.is_completed,
@@ -976,6 +979,7 @@ async def get_traveler_by_job_number(
                 "rejected": step.rejected,
                 "sign": step.sign,
                 "completed_date": step.completed_date,
+                "completed_time": step.completed_time,
                 "estimated_time": step.estimated_time,
                 "is_required": step.is_required,
                 "is_completed": step.is_completed,
@@ -1508,6 +1512,7 @@ async def update_traveler(
             existing.rejected = step_data.rejected
             existing.sign = step_data.sign
             existing.completed_date = step_data.completed_date
+            existing.completed_time = step_data.completed_time
             kept_step_ids.add(existing.id)
             new_step_order.append(existing)
         else:
@@ -1535,7 +1540,8 @@ async def update_traveler(
                 accepted=step_data.accepted,
                 rejected=step_data.rejected,
                 sign=step_data.sign,
-                completed_date=step_data.completed_date
+                completed_date=step_data.completed_date,
+                completed_time=step_data.completed_time
             )
             db.add(db_step)
             db.flush()

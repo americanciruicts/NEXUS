@@ -240,6 +240,7 @@ class ProcessStep(Base):
     rejected = Column(Integer)  # Rejected quantity
     sign = Column(String(50))  # Signature/initials
     completed_date = Column(String(20))  # Completion date
+    completed_time = Column(String(20))  # Manually-entered time/hours for this step
     estimated_time = Column(Integer)  # in minutes
     is_required = Column(Boolean, default=True)
     is_completed = Column(Boolean, default=False)

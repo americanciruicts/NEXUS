@@ -490,6 +490,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               rejected: step.rejected || '',
               sign: String(step.sign || ''),
               completedDate: String(step.completed_date || ''),
+              completedTime: String(step.completed_time || ''),
               status: step.is_completed ? 'COMPLETED' : 'PENDING',
               assignee: ''
             })).sort((a: ProcessStep, b: ProcessStep) => Number(a.seq) - Number(b.seq)),
@@ -926,6 +927,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           rejected: step.rejected ? Number(step.rejected) : null,
           sign: step.sign || null,
           completed_date: step.completedDate || null,
+          completed_time: step.completedTime || null,
           sub_steps: []
         })),
         manual_steps: [],
@@ -1432,6 +1434,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         rejected: step.rejected ? Number(step.rejected) : null,
         sign: step.sign || null,
         completed_date: step.completedDate || null,
+        completed_time: step.completedTime || null,
         sub_steps: []
       })),
       manual_steps: [],
@@ -1615,6 +1618,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         rejected: step.rejected ? Number(step.rejected) : null,
         sign: step.sign || null,
         completed_date: step.completedDate || null,
+        completed_time: step.completedTime || null,
         sub_steps: []
       })),
       manual_steps: [],

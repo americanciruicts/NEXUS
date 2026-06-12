@@ -34,6 +34,7 @@ class ProcessStepBase(BaseModel):
     rejected: Optional[int] = Field(None, ge=0)
     sign: Optional[str] = Field(None, max_length=50)
     completed_date: Optional[str] = Field(None, max_length=20)
+    completed_time: Optional[str] = Field(None, max_length=20)
 
 class ProcessStepCreate(ProcessStepBase):
     sub_steps: List[SubStepCreate] = []
