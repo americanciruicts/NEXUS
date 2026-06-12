@@ -1399,20 +1399,45 @@ export default function LaborTrackingPage() {
     try {
       const token = localStorage.getItem('nexus_token');
 
-      // Find traveler by job number
-      const travelersResponse = await fetch(`${API_BASE_URL}/travelers/`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Resolve the traveler via the by-job-number endpoint. GET /travelers/
+      // is paginated to the 50 newest rows, so older jobs silently fell out of
+      // the lookup and manual entry failed with "Job number not found" even
+      // though the traveler existed. The timer path already uses this endpoint
+      // for exactly this reason.
+      const travelersResponse = await fetch(
+        `${API_BASE_URL}/travelers/by-job-number/${encodeURIComponent(manualEntryData.job_number)}/all-work-orders`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
 
       if (!travelersResponse.ok) {
         toast.error('Failed to fetch travelers');
         return;
       }
 
-      const travelers = await travelersResponse.json();
-      const traveler = travelers.find((t: { job_number: string; id: number }) =>
-        String(t.job_number).toLowerCase() === manualEntryData.job_number.toLowerCase()
-      );
+      const matchesByJob = await travelersResponse.json();
+
+      // A job_number can have multiple WO breakouts. The selected Work Center
+      // pins the exact traveler (its step_id belongs to one traveler), so use
+      // it to disambiguate; with a single WO, just take it.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let traveler: any = null;
+      if (matchesByJob.length === 1) {
+        traveler = matchesByJob[0];
+      } else if (matchesByJob.length > 1) {
+        if (manualEntryData.step_id) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          traveler = matchesByJob.find((t: any) =>
+            (t.process_steps || []).some((s: any) => s.id === manualEntryData.step_id)
+          ) ?? null;
+        }
+        if (!traveler) {
+          toast.error(
+            `Job ${manualEntryData.job_number} has ${matchesByJob.length} work orders (different WOs). ` +
+            `Select the Work Center for the correct WO before saving.`
+          );
+          return;
+        }
+      }
 
       if (!traveler) {
         toast.error(`Job number ${manualEntryData.job_number} not found`);
