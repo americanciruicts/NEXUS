@@ -13,3 +13,9 @@ frontend/out/
 # Env files
 .env
 .env.local
+node_modules/
+.venv/
+venv/
+.next/
+.pytest_cache/
+*.egg-info/
