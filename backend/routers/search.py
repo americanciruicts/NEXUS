@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, not_, func, distinct
 from typing import List, Optional
 from database import get_db
-from models import Traveler, User, WorkOrder, LaborEntry, ProcessStep, WorkCenter, UserRole
+from models import Traveler, User, WorkOrder, LaborEntry, ProcessStep, WorkCenter, UserRole, TravelerType
 from routers.auth import get_current_user
 
 router = APIRouter(tags=["Search"])
@@ -241,12 +241,19 @@ async def autocomplete_job_numbers(
     # correct breakout when a single job_number maps to multiple travelers.
     # Without this, `value` (the job_number) and the visible row look identical
     # for every WO and the picker silently lands on the first match.
+    rma_types = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
     out = []
     for t in travelers:
         wo = (t.work_order_number or "").strip()
         desc = t.part_description or ""
         desc_short = f"{desc[:50]}{'...' if len(desc) > 50 else ''}"
-        label = f"{t.job_number}"
+        # RMA travelers combine RMA number + job number into the displayed label,
+        # matching the format used outside NEXUS ("1234 RMA JOB NO 12345-6").
+        # value/job_number stay the real job number so lookups still resolve.
+        rma = (t.rma_number or "").strip()
+        is_rma = t.traveler_type in rma_types
+        job_display = f"{rma} RMA JOB NO {t.job_number}" if (rma and is_rma) else t.job_number
+        label = f"{job_display}"
         if wo:
             label += f" / WO {wo}"
         if desc_short:
@@ -255,6 +262,9 @@ async def autocomplete_job_numbers(
             "id": t.id,
             "traveler_id": t.id,
             "job_number": t.job_number,
+            "rma_number": rma or None,
+            "traveler_type": t.traveler_type.value if hasattr(t.traveler_type, 'value') else str(t.traveler_type),
+            "job_display": job_display,
             "work_order_number": wo or None,
             "part_description": t.part_description,
             "customer_name": t.customer_name,

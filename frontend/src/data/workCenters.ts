@@ -143,20 +143,20 @@ export const RMA_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'TROUBLESHOOTING', description: 'Diagnose and troubleshoot defective units', department: 'Test' },
   { name: 'REPAIR', description: 'Repair defective units per customer complaint', department: 'Soldering' },
   { name: 'INTERIM INSPEC', description: 'Interim inspection during repair process', department: 'Quality' },
-  { name: 'INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
+  { name: 'PARTS INVENTORY', description: 'Check parts before buying', department: 'Purchasing' },
   { name: 'PURCHASING', description: 'Parts ordered, waiting for receipt before repair', department: 'Purchasing' },
   { name: 'MISC.', description: 'Miscellaneous operations as needed', department: 'ALL' },
   { name: 'FINAL INSPEC', description: 'Final inspection - sample or 100% inspection', department: 'Quality' },
   { name: 'INVOICING', description: 'Credit on receive, charge on ship (Add-On/Chemring)', department: 'Other' },
   { name: 'QUALITY', description: 'Send boards with CofC (Chemring)', department: 'Quality' },
-  { name: 'STOCK', description: 'Check stock - any PCBA or cable assemblies on hand?', department: 'Receiving' },
+  { name: 'PCBA STOCK', description: 'Check stock - any PCBA or cable assemblies on hand?', department: 'Receiving' },
   { name: 'LABELLING', description: 'Apply labels as required', department: 'Shipping' },
   { name: 'SHIPPING', description: 'Ship units back to customer', department: 'Shipping' },
 ];
 
 // Modification RMA work centers (Preet's 17 minus STOCK, per existing convention)
 export const MODIFICATION_WORK_CENTERS: WorkCenterItem[] = RMA_WORK_CENTERS.filter(
-  wc => wc.name !== 'STOCK'
+  wc => wc.name !== 'PCBA STOCK'
 );
 
 // All commonly used RMA steps (superset for adding steps manually).

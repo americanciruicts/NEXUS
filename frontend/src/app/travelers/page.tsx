@@ -441,7 +441,8 @@ function TravelersPage() {
 
     const matchesType = typeFilter === 'all' || t.travelerType === typeFilter ||
       (typeFilter === 'PCB_ASSEMBLY' && (t.travelerType === 'PCB_ASSEMBLY' || t.travelerType === 'ASSY')) ||
-      (typeFilter === 'CABLE' && (t.travelerType === 'CABLE' || t.travelerType === 'CABLES'));
+      (typeFilter === 'CABLE' && (t.travelerType === 'CABLE' || t.travelerType === 'CABLES')) ||
+      (typeFilter === 'RMA' && (t.travelerType === 'RMA_SAME' || t.travelerType === 'RMA_DIFF' || t.travelerType === 'MODIFICATION'));
 
     const matchesView =
       (viewFilter === 'active' && t.status !== 'DRAFT') ||
@@ -701,7 +702,8 @@ function TravelersPage() {
                 { value: 'PCB_ASSEMBLY', label: 'PCBA', color: 'from-blue-600 to-blue-700' },
                 { value: 'PCB', label: 'PCB', color: 'from-green-600 to-green-700' },
                 { value: 'CABLE', label: 'Cable', color: 'from-purple-600 to-purple-700' },
-                { value: 'PURCHASING', label: 'Purch', color: 'from-orange-600 to-orange-700' }
+                { value: 'PURCHASING', label: 'Purch', color: 'from-orange-600 to-orange-700' },
+                { value: 'RMA', label: 'RMA', color: 'from-red-600 to-red-700' }
               ]).map((type) => (
                 <button
                   key={type.value}

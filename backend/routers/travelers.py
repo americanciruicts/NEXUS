@@ -314,6 +314,7 @@ async def create_traveler(
             is_active=traveler_data.is_active,
             created_by=current_user.id,
             # RMA-specific fields
+            rma_number=traveler_data.rma_number,
             customer_contact=traveler_data.customer_contact,
             original_wo_number=traveler_data.original_wo_number,
             original_po_number=traveler_data.original_po_number,
@@ -1453,6 +1454,8 @@ async def update_traveler(
         traveler.status = traveler_data.status
     if traveler_data.is_active is not None:
         traveler.is_active = traveler_data.is_active
+    # Persist the RMA number (distinct from job number) on edit
+    traveler.rma_number = traveler_data.rma_number
     # Persist the operator-selected WO type label (RMA / Modification / Rework / …)
     if traveler_data.wo_type_label is not None:
         traveler.wo_type_label = traveler_data.wo_type_label

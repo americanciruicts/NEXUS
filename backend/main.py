@@ -164,18 +164,23 @@ async def lifespan(app: FastAPI):
             ("TROUBLESHOOTING",    "Diagnose and troubleshoot defective units",              "Test"),
             ("REPAIR",             "Repair defective units per customer complaint",          "Soldering"),
             ("INTERIM INSPEC",     "Interim inspection during repair process",               "Quality"),
-            ("INVENTORY",          "Check parts before buying",                              "Purchasing"),
+            ("PARTS INVENTORY",    "Check parts before buying",                              "Purchasing"),
             ("PURCHASING",         "Parts ordered, waiting for receipt before repair",       "Purchasing"),
             ("MISC.",              "Miscellaneous operations as needed",                     "ALL"),
             ("FINAL INSPEC",       "Final inspection - sample or 100% inspection",           "Quality"),
             ("INVOICING",          "Credit on receive, charge on ship (Add-On/Chemring)",    "Other"),
             ("QUALITY",            "Send boards with CofC (Chemring)",                       "Quality"),
-            ("STOCK",              "Check stock - any PCBA or cable assemblies on hand?",    "Receiving"),
+            ("PCBA STOCK",         "Check stock - any PCBA or cable assemblies on hand?",    "Receiving"),
             ("LABELLING",          "Apply labels as required",                               "Shipping"),
             ("SHIPPING",           "Ship units back to customer",                            "Shipping"),
         ]
-        # Modification RMAs skip STOCK (per existing convention)
-        MODIFICATION_STEPS = [s for s in RMA_SAME_DIFF_STEPS if s[0] != "STOCK"]
+        # Modification RMAs skip the stock-check step (per existing convention)
+        MODIFICATION_STEPS = [s for s in RMA_SAME_DIFF_STEPS if s[0] != "PCBA STOCK"]
+
+        # Work-center CODES are kept stable across the display-name rename so that
+        # existing process_steps (FK on work_center_code) keep resolving. The two
+        # renamed steps map back to their original code token.
+        CODE_TOKEN_OVERRIDE = {"PARTS INVENTORY": "INVENTORY", "PCBA STOCK": "STOCK"}
 
         RMA_WC_DATA = {
             "RMA_SAME": RMA_SAME_DIFF_STEPS,
@@ -186,9 +191,11 @@ async def lifespan(app: FastAPI):
 
         added = 0
         reordered = 0
+        renamed = 0
         for wc_type, items in RMA_WC_DATA.items():
             for idx, (name, desc, dept) in enumerate(items):
-                code = f"{type_prefix[wc_type]}_{name.replace(' ', '_').replace('.', '').upper()}"
+                token = CODE_TOKEN_OVERRIDE.get(name, name)
+                code = f"{type_prefix[wc_type]}_{token.replace(' ', '_').replace('.', '').upper()}"
                 target_sort = idx + 1
                 existing = db.query(WorkCenter).filter(WorkCenter.code == code).first()
                 if not existing:
@@ -198,12 +205,35 @@ async def lifespan(app: FastAPI):
                         sort_order=target_sort, is_active=True,
                     ))
                     added += 1
-                elif existing.sort_order != target_sort:
-                    existing.sort_order = target_sort
-                    reordered += 1
-        if added or reordered:
+                else:
+                    if existing.sort_order != target_sort:
+                        existing.sort_order = target_sort
+                        reordered += 1
+                    # Backfill the display-name rename onto already-seeded rows
+                    if existing.name != name:
+                        existing.name = name
+                        renamed += 1
+        if added or reordered or renamed:
             db.commit()
-            print(f"RMA work centers: +{added} added, {reordered} reordered (Preet 17-step SOP)")
+            print(f"RMA work centers: +{added} added, {reordered} reordered, {renamed} renamed (Preet 17-step SOP)")
+
+        # Backfill the renamed work-center labels onto existing RMA travelers'
+        # process steps (the routing table renders the stored operation string,
+        # not a live lookup). Scope strictly to RMA-type travelers so a non-RMA
+        # "INVENTORY" step (e.g. Purchasing) is never touched.
+        from sqlalchemy import text as _wc_text
+        _rma_subq = "SELECT id FROM travelers WHERE traveler_type IN ('RMA_SAME', 'RMA_DIFF', 'MODIFICATION')"
+        step_renames = db.execute(_wc_text(f"""
+            UPDATE process_steps SET operation = 'PARTS INVENTORY'
+            WHERE operation = 'INVENTORY' AND traveler_id IN ({_rma_subq})
+        """)).rowcount
+        step_renames += db.execute(_wc_text(f"""
+            UPDATE process_steps SET operation = 'PCBA STOCK'
+            WHERE operation = 'STOCK' AND traveler_id IN ({_rma_subq})
+        """)).rowcount
+        if step_renames:
+            db.commit()
+            print(f"RMA process steps: {step_renames} operation labels renamed (Parts Inventory / PCBA Stock)")
 
         db.close()
     except Exception as e:
@@ -430,6 +460,7 @@ async def lifespan(app: FastAPI):
             insp = sa_inspect_rma(engine)
             traveler_cols = [c['name'] for c in insp.get_columns('travelers')]
             rma_columns = {
+                'rma_number': 'VARCHAR(50)',
                 'customer_contact': 'VARCHAR(100)',
                 'original_wo_number': 'VARCHAR(50)',
                 'original_po_number': 'VARCHAR(255)',

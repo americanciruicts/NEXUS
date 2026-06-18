@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, model_validator
 
 from database import get_db
-from models import User, LaborEntry, Traveler, ProcessStep, ManualStep, NotificationType, WorkCenter, TravelerStatus, UserRole, PauseLog, AuditLog
+from models import User, LaborEntry, Traveler, ProcessStep, ManualStep, NotificationType, WorkCenter, TravelerStatus, TravelerType, UserRole, PauseLog, AuditLog
 from routers.auth import get_current_user
 from services.notification_service import create_notification_for_admins
 
@@ -184,6 +184,22 @@ class PauseLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
+_RMA_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
+
+
+def rma_job_display(traveler) -> Optional[str]:
+    """Job-number label for labor views. RMA travelers combine both the RMA
+    number and the job number into one field — "<rma> RMA JOB NO <job>" —
+    matching the format used outside NEXUS. Non-RMA travelers show the plain
+    job number. The stored job_number is unchanged (still the lookup key)."""
+    if traveler is None:
+        return None
+    rma = (getattr(traveler, "rma_number", None) or "").strip()
+    if rma and getattr(traveler, "traveler_type", None) in _RMA_TYPES:
+        return f"{rma} RMA JOB NO {traveler.job_number}"
+    return traveler.job_number
+
+
 class LaborEntryResponse(BaseModel):
     id: int
     traveler_id: int
@@ -191,6 +207,8 @@ class LaborEntryResponse(BaseModel):
     employee_id: Optional[int] = None
     employee_name: Optional[str] = None
     job_number: Optional[str] = None
+    # Display label combining RMA number + job number for RMA travelers
+    job_display: Optional[str] = None
     start_time: datetime
     pause_time: Optional[datetime] = None
     end_time: Optional[datetime]
@@ -300,6 +318,9 @@ async def scan_qr_lookup(
             "step_id": manual_step.id,
             "traveler_id": traveler.id,
             "job_number": traveler.job_number,
+            "rma_number": traveler.rma_number,
+            "traveler_type": traveler.traveler_type.value if hasattr(traveler.traveler_type, 'value') else str(traveler.traveler_type),
+            "job_display": rma_job_display(traveler),
             "work_order": traveler.work_order_number,
             "operation": manual_step.description,  # e.g. "Manual Insertion"
             "work_center_code": manual_step.description,
@@ -432,6 +453,9 @@ async def scan_qr_lookup(
         "step_id": step.id,
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "rma_number": traveler.rma_number,
+        "traveler_type": traveler.traveler_type.value if hasattr(traveler.traveler_type, 'value') else str(traveler.traveler_type),
+        "job_display": rma_job_display(traveler),
         "work_order": traveler.work_order_number,
         "operation": step.operation,  # e.g. "AOI", "FEEDER LOAD" — the display name
         "work_center_code": step.work_center_code,
@@ -910,6 +934,7 @@ async def update_labor_entry(
         "employee_id": labor_entry.employee_id,
         "employee_name": labor_entry.employee_name,
         "job_number": labor_entry.job_number,
+        "job_display": rma_job_display(traveler),
         "start_time": labor_entry.start_time,
         "pause_time": labor_entry.pause_time,
         "end_time": labor_entry.end_time,
@@ -1092,6 +1117,7 @@ async def get_all_labor_entries(
             "employee_id": entry.employee_id,
             "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
             "job_number": traveler.job_number if traveler else None,
+            "job_display": rma_job_display(traveler),
             "start_time": entry.start_time,
             "pause_time": entry.pause_time,
             "end_time": entry.end_time,
@@ -1142,6 +1168,7 @@ async def get_traveler_labor_entries(
             "employee_id": entry.employee_id,
             "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
             "job_number": traveler.job_number,
+            "job_display": rma_job_display(traveler),
             "start_time": entry.start_time,
             "pause_time": entry.pause_time,
             "end_time": entry.end_time,
@@ -1186,6 +1213,7 @@ async def get_labor_init(
             "step_id": active_labor.step_id, "employee_id": active_labor.employee_id,
             "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
             "job_number": traveler.job_number if traveler else None,
+            "job_display": rma_job_display(traveler),
             "start_time": str(active_labor.start_time), "pause_time": str(active_labor.pause_time) if active_labor.pause_time else None,
             "end_time": None, "hours_worked": active_labor.hours_worked or 0,
             "description": active_labor.description or "", "is_completed": False,
@@ -1221,6 +1249,7 @@ async def get_labor_init(
             "employee_id": entry.employee_id,
             "employee_name": f"{emp.first_name} {emp.last_name}" if emp else "Unknown",
             "job_number": trav.job_number if trav else None,
+            "job_display": rma_job_display(trav),
             "start_time": entry.start_time, "pause_time": entry.pause_time,
             "end_time": entry.end_time, "hours_worked": entry.hours_worked or 0,
             "description": entry.description or "", "is_completed": entry.is_completed,
@@ -1300,6 +1329,7 @@ async def get_my_labor_entries(
             "employee_id": entry.employee_id,
             "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
             "job_number": traveler.job_number if traveler else None,
+            "job_display": rma_job_display(traveler),
             "start_time": entry.start_time,
             "pause_time": entry.pause_time,
             "end_time": entry.end_time,
@@ -1346,6 +1376,7 @@ async def get_active_labor_entry(
 
     # Get the traveler's quantity for the qty modal
     traveler_qty = None
+    traveler = None
     if active_entry.traveler_id:
         traveler = db.query(Traveler).filter(Traveler.id == active_entry.traveler_id).first()
         if traveler:
@@ -1357,6 +1388,8 @@ async def get_active_labor_entry(
         "step_id": active_entry.step_id,
         "employee_id": active_entry.employee_id,
         "employee_name": f"{current_user.first_name} {current_user.last_name}",
+        "job_number": active_entry.job_number,
+        "job_display": rma_job_display(traveler) or active_entry.job_number,
         "start_time": active_entry.start_time,
         "pause_time": active_entry.pause_time,
         "end_time": active_entry.end_time,
@@ -1688,6 +1721,7 @@ async def get_labor_by_category(
             "employee_id": entry.employee_id,
             "employee_name": f"{employee.first_name} {employee.last_name}" if employee else "Unknown",
             "job_number": traveler.job_number if traveler else None,
+            "job_display": rma_job_display(traveler),
             "work_order": traveler.work_order_number if traveler else None,
             "po_number": traveler.po_number if traveler else None,
             "part_number": traveler.part_number if traveler else None,

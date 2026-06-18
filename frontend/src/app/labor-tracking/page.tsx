@@ -29,6 +29,8 @@ interface LaborEntry {
   created_at: string;
   // Additional fields for display
   job_number?: string;
+  // Combined "<rma> RMA JOB NO <job>" label for RMA travelers (else plain job number)
+  job_display?: string;
   work_order?: string;
   work_center?: string;
   sequence_number?: number;
@@ -101,6 +103,7 @@ export default function LaborTrackingPage() {
   });
   const [newEntry, setNewEntry] = useState({
     job_number: '',
+    job_display: '',
     work_center: '',
     step_id: undefined as number | undefined,
     operator_name: '',
@@ -334,6 +337,7 @@ export default function LaborTrackingPage() {
           setNewEntry(prev => ({
             ...prev,
             job_number: data.active_entry.job_number || '',
+            job_display: data.active_entry.job_display || data.active_entry.job_number || '',
             work_center: data.active_entry.work_center || '',
           }));
         }
@@ -383,6 +387,7 @@ export default function LaborTrackingPage() {
         setNewEntry(prev => ({
           ...prev,
           job_number: scanData.job_number || prev.job_number,
+          job_display: scanData.job_display || scanData.job_number || prev.job_display,
           work_center: scanData.operation,
           step_id: scanData.step_id,
         }));
@@ -537,7 +542,8 @@ export default function LaborTrackingPage() {
     // traveler_id — the operator may now mean a different traveler entirely.
     scannedTravelerIdRef.current = null;
     setScannedWorkOrder(null);
-    setNewEntry(prev => ({ ...prev, job_number: value }));
+    // Manual typing has no RMA context — display follows the typed job number.
+    setNewEntry(prev => ({ ...prev, job_number: value, job_display: '' }));
     if (!value) {
       setJobWorkCenterOptions([]);
     }
@@ -557,7 +563,7 @@ export default function LaborTrackingPage() {
       typeof option.id === 'number' ? option.id : null;
     scannedTravelerIdRef.current = pickedTravelerId;
     setScannedWorkOrder(option.work_order_number || null);
-    setNewEntry(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
+    setNewEntry(prev => ({ ...prev, job_number: jobNum, job_display: option.job_display || jobNum, work_center: '', step_id: undefined }));
     const steps = await fetchWorkCentersByJob(jobNum, '', pickedTravelerId);
     setJobWorkCenterOptions(steps);
     // After the job is scanned/selected, pull focus to the Work Center field
@@ -748,6 +754,7 @@ export default function LaborTrackingPage() {
             setWorkCenterConfirmed(true);
             setNewEntry({
               job_number: data.job_number || '',
+              job_display: data.job_display || data.job_number || '',
               work_center: workCenterName,
               step_id: data.step_id || undefined,
               operator_name: parts[1] || '',
@@ -1247,6 +1254,7 @@ export default function LaborTrackingPage() {
         const fullName = user ? (`${user.first_name || user.username}`.trim()) : '';
         setNewEntry({
           job_number: '',
+          job_display: '',
           work_center: '',
           step_id: undefined,
           operator_name: fullName,
@@ -1273,6 +1281,7 @@ export default function LaborTrackingPage() {
         const fullName = user ? (`${user.first_name || user.username}`.trim()) : '';
         setNewEntry({
           job_number: '',
+          job_display: '',
           work_center: '',
           step_id: undefined,
           operator_name: fullName,
@@ -1806,7 +1815,7 @@ export default function LaborTrackingPage() {
                         <DocumentTextIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 mt-0.5 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-gray-500 dark:text-slate-400">Job Number</p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{newEntry.job_number}</p>
+                          <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{newEntry.job_display || newEntry.job_number}</p>
                         </div>
                       </div>
                       <div className="flex items-start space-x-2">
@@ -2391,7 +2400,7 @@ export default function LaborTrackingPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-1">
                               <DocumentTextIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                              <span className="font-bold text-gray-900 dark:text-slate-100 text-base">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
+                              <span className="font-bold text-gray-900 dark:text-slate-100 text-base">{entry.job_display || entry.job_number || `Traveler #${entry.traveler_id}`}</span>
                               {entry.work_order && (
                                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
                                   WO {entry.work_order}
@@ -2648,7 +2657,7 @@ export default function LaborTrackingPage() {
                           <td className={`px-4 py-3 whitespace-nowrap ${hasComment ? 'pb-1' : ''}`}>
                             <div className="flex items-center space-x-2">
                               <DocumentTextIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                              <span className="font-semibold text-gray-900 dark:text-slate-100 text-sm">{entry.job_number || `Traveler #${entry.traveler_id}`}</span>
+                              <span className="font-semibold text-gray-900 dark:text-slate-100 text-sm">{entry.job_display || entry.job_number || `Traveler #${entry.traveler_id}`}</span>
                             </div>
                           </td>
                           <td className={`px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-slate-400 font-medium ${hasComment ? 'pb-1' : ''}`}>

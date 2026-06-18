@@ -184,6 +184,7 @@ class Traveler(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # RMA-specific fields
+    rma_number = Column(String(50))  # RMA number, distinct from job_number (e.g. "1234")
     customer_contact = Column(String(100))  # Customer contact person
     original_wo_number = Column(String(50))  # Original Work Order Number
     original_po_number = Column(String(255))  # Original PO Number

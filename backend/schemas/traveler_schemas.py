@@ -124,6 +124,7 @@ class TravelerBase(BaseModel):
     ship_date: Optional[str] = Field(None, max_length=20)
     include_labor_hours: bool = False
     # RMA-specific fields
+    rma_number: Optional[str] = Field(None, max_length=50)
     customer_contact: Optional[str] = Field(None, max_length=100)
     original_wo_number: Optional[str] = Field(None, max_length=50)
     original_po_number: Optional[str] = Field(None, max_length=255)
@@ -175,6 +176,7 @@ class TravelerUpdate(BaseModel):
     ship_date: Optional[str] = Field(None, max_length=20)
     include_labor_hours: Optional[bool] = None
     # RMA-specific fields
+    rma_number: Optional[str] = Field(None, max_length=50)
     customer_contact: Optional[str] = Field(None, max_length=100)
     original_wo_number: Optional[str] = Field(None, max_length=50)
     original_po_number: Optional[str] = Field(None, max_length=255)

@@ -132,6 +132,7 @@ interface Traveler {
   includeLaborHours: boolean;
   priority: string;
   // RMA-specific fields
+  rmaNumber?: string;
   customerContact?: string;
   originalWoNumber?: string;
   originalPoNumber?: string;
@@ -503,6 +504,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               totalHours: ''
             })),
             // RMA-specific fields
+            rmaNumber: String(data.rma_number || ''),
             customerContact: String(data.customer_contact || ''),
             originalWoNumber: String(data.original_wo_number || ''),
             originalPoNumber: String(data.original_po_number || ''),
@@ -890,6 +892,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     try {
       const payload = {
         job_number: editedTraveler.jobNumber,
+        rma_number: editedTraveler.rmaNumber || '',
         work_order_number: editedTraveler.workOrder,
         po_number: editedTraveler.poNumber || '',
         part_number: editedTraveler.partNumber,
@@ -1312,6 +1315,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       priority: 'NORMAL',
       // RMA-specific defaults
       ...(isRma ? {
+        rmaNumber: '',
         customerContact: '',
         originalWoNumber: '',
         originalPoNumber: '',
@@ -1440,6 +1444,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       manual_steps: [],
       // RMA-specific fields
       ...(isRmaType(selectedType || '') ? {
+        rma_number: editedTraveler.rmaNumber || '',
         customer_contact: editedTraveler.customerContact || '',
         original_wo_number: editedTraveler.originalWoNumber || '',
         original_po_number: editedTraveler.originalPoNumber || '',
@@ -1624,6 +1629,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       manual_steps: [],
       // RMA-specific fields for draft
       ...(isRmaType(selectedType || '') ? {
+        rma_number: editedTraveler.rmaNumber || '',
         customer_contact: editedTraveler.customerContact || '',
         original_wo_number: editedTraveler.originalWoNumber || '',
         original_po_number: editedTraveler.originalPoNumber || '',
@@ -3337,14 +3343,26 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     {/* Left: Job No + Barcode */}
                     <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 align-middle" style={{width: '40%'}}>
                       <div className="flex items-center gap-3 flex-wrap">
-                        <div>
-                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px]">
-                            {rmaLabel} Job No.
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px]">
+                              RMA Number
+                            </div>
+                            <div className="text-lg font-black text-black dark:text-white print:text-[22px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
+                              {isEditing ? (
+                                <input type="text" value={editData.rmaNumber || ''} onChange={(e) => updateField('rmaNumber', e.target.value)} className="w-40 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-lg font-black text-black dark:text-white" placeholder="RMA #" />
+                              ) : (displayTraveler.rmaNumber || '-')}
+                            </div>
                           </div>
-                          <div className="text-xl font-black text-black dark:text-white print:text-[26px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
-                            {isEditing ? (
-                              <input type="text" value={editData.jobNumber} onChange={(e) => updateField('jobNumber', e.target.value)} className="w-40 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-xl font-black text-black dark:text-white" />
-                            ) : (displayTraveler.jobNumber)}
+                          <div>
+                            <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px]">
+                              Job No.
+                            </div>
+                            <div className="text-xl font-black text-black dark:text-white print:text-[26px]" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
+                              {isEditing ? (
+                                <input type="text" value={editData.jobNumber} onChange={(e) => updateField('jobNumber', e.target.value)} className="w-40 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-xl font-black text-black dark:text-white" />
+                              ) : (displayTraveler.jobNumber)}
+                            </div>
                           </div>
                         </div>
                         <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
