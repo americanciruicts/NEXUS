@@ -118,10 +118,22 @@ type LaborProgress = {
   percent: number;
 };
 
+// RMA travelers display their job number combined with the RMA number as
+// "<rma> RMA JOB NO <job>" (e.g. "1234 RMA JOB NO 12345-6"), matching the
+// format used outside NEXUS. Non-RMA travelers show the plain job number.
+const RMA_TRAVELER_TYPES = ['RMA_SAME', 'RMA_DIFF', 'MODIFICATION'];
+function formatJobDisplay(travelerType: string, rmaNumber: string, jobNumber: string): string {
+  return rmaNumber && RMA_TRAVELER_TYPES.includes(travelerType)
+    ? `${rmaNumber} RMA JOB NO ${jobNumber}`
+    : jobNumber;
+}
+
 type TravelerItem = {
   id: string;
   dbId: number;
   jobNumber: string;
+  rmaNumber: string;
+  jobDisplay: string;
   workOrder: string;
   poNumber: string;
   invoiceNumber: string;
@@ -327,6 +339,8 @@ function TravelersPage() {
           id: String(t.job_number),
           dbId: Number(t.id),
           jobNumber: String(t.job_number),
+          rmaNumber: String(t.rma_number || ''),
+          jobDisplay: formatJobDisplay(String(t.traveler_type || ''), String(t.rma_number || ''), String(t.job_number)),
           workOrder: String(t.work_order_number || ''),
           poNumber: String(t.po_number || ''),
           invoiceNumber: String(t.invoice_number || ''),
@@ -433,6 +447,8 @@ function TravelersPage() {
 
   const filteredTravelers = travelers.filter(t => {
     const matchesSearch = t.jobNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (t.rmaNumber && t.rmaNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          t.jobDisplay.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.customerName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1065,7 +1081,7 @@ function TravelersPage() {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">Job# <span className="underline">{traveler.jobNumber}</span></div>
+                          <div className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">Job# <span className="underline">{traveler.jobDisplay}</span></div>
                           <div className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 truncate">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
                           <div className="text-xs font-semibold text-purple-700 dark:text-purple-400 truncate">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
                         </div>
@@ -1182,7 +1198,7 @@ function TravelersPage() {
                           className="h-5 w-5 text-blue-600 rounded cursor-pointer"
                         />
                         <div>
-                          <div className="text-sm font-bold">Job# {traveler.jobNumber}</div>
+                          <div className="text-sm font-bold">Job# {traveler.jobDisplay}</div>
                           <div className="text-xs text-blue-100">WO# {traveler.workOrder || 'N/A'}</div>
                           <div className="text-xs text-blue-100">PO# {traveler.poNumber || 'N/A'}</div>
                           <div className="text-xs text-blue-100">Invoice# {traveler.invoiceNumber || 'N/A'}</div>

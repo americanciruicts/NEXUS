@@ -6,11 +6,25 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from database import get_db
-from models import User, Traveler, StepScanEvent
+from models import User, Traveler, StepScanEvent, TravelerType
 from routers.auth import get_current_user
 from services.barcode_service import BarcodeService
 
 router = APIRouter()
+
+_RMA_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
+
+
+def rma_job_display(traveler):
+    """Combined "<rma> RMA JOB NO <job>" label for RMA travelers (matching the
+    format used outside NEXUS); plain job number for everything else. So a
+    scanned RMA label resolves to the same combined form shown everywhere."""
+    if traveler is None:
+        return None
+    rma = (getattr(traveler, "rma_number", None) or "").strip()
+    if rma and getattr(traveler, "traveler_type", None) in _RMA_TYPES:
+        return f"{rma} RMA JOB NO {traveler.job_number}"
+    return traveler.job_number
 
 class BarcodeData(BaseModel):
     barcode: str
@@ -68,6 +82,7 @@ async def get_traveler_barcode(
         "qr_code_image": qr_code_image,
         "unique_id": unique_id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "part_number": traveler.part_number,
         "part_description": traveler.part_description
     }
@@ -107,6 +122,7 @@ async def scan_barcode(
     return {
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "work_order_number": traveler.work_order_number,
         "part_number": traveler.part_number,
         "part_description": traveler.part_description,
@@ -158,6 +174,7 @@ async def scan_qr_code(
     return {
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "work_order_number": traveler.work_order_number,
         "part_number": traveler.part_number,
         "part_description": traveler.part_description,
@@ -192,6 +209,7 @@ async def generate_traveler_label(
     traveler_data = {
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "part_number": traveler.part_number,
         "part_description": traveler.part_description,
         "revision": traveler.revision,
@@ -255,6 +273,7 @@ async def get_step_qr_code(
         "step_id": step.id,
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "work_center": step.work_center_code,
         "operation": step.operation,
         "step_number": step.step_number,
@@ -340,6 +359,7 @@ async def get_all_step_qr_codes(
     return {
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "total_process_steps": len(step_qr_codes),
         "total_manual_steps": len(manual_qr_codes),
         "process_steps": step_qr_codes,
@@ -411,6 +431,7 @@ async def scan_step_qr_code(
         "type": "step",
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "work_order_number": traveler.work_order_number,
         "part_number": traveler.part_number,
         "part_description": traveler.part_description,
@@ -445,6 +466,7 @@ async def search_by_barcode_or_qr(
                     "traveler": {
                         "id": traveler.id,
                         "job_number": traveler.job_number,
+                        "job_display": rma_job_display(traveler),
                         "part_number": traveler.part_number,
                         "part_description": traveler.part_description,
                         "status": traveler.status.value
@@ -464,6 +486,7 @@ async def search_by_barcode_or_qr(
                 "traveler": {
                     "id": traveler.id,
                     "job_number": traveler.job_number,
+                    "job_display": rma_job_display(traveler),
                     "part_number": traveler.part_number,
                     "part_description": traveler.part_description,
                     "status": traveler.status.value
@@ -487,6 +510,7 @@ async def search_by_barcode_or_qr(
             "traveler": {
                 "id": traveler.id,
                 "job_number": traveler.job_number,
+                "job_display": rma_job_display(traveler),
                 "part_number": traveler.part_number,
                 "part_description": traveler.part_description,
                 "status": traveler.status.value
@@ -618,6 +642,7 @@ async def scan_step(
         "scan_id": scan_event.id,
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "step_id": step_id,
         "step_type": step_type,
         "work_center": parsed_data["work_center"],
@@ -737,6 +762,7 @@ async def get_traveler_time_summary(
     return {
         "traveler_id": traveler.id,
         "job_number": traveler.job_number,
+        "job_display": rma_job_display(traveler),
         "total_time_minutes": round(total_time_minutes, 2),
         "total_time_hours": round(total_time_minutes / 60, 2),
         "steps": step_summaries
