@@ -69,13 +69,12 @@ async def get_traveler_barcode(
             detail="Traveler not found"
         )
 
-    # RMA travelers encode the combined "<rma> RMA JOB NO <job>" string so a
-    # scanned RMA label reads in the same format shown everywhere else.
-    barcode_value = rma_job_display(traveler)
-
-    # Generate barcode with work order
+    # Encode the plain job number in the bars: short, prints cleanly, and scans
+    # reliably. The combined "<rma> RMA JOB NO <job>" string is too long/wide for
+    # the label box. Scan responses still return the combined form (job_display),
+    # so a scanned RMA label resolves and displays in that format.
     barcode_image = BarcodeService.generate_traveler_barcode(
-        traveler.id, barcode_value, traveler.work_order_number or ""
+        traveler.id, traveler.job_number, traveler.work_order_number or ""
     )
 
     # Generate QR code
@@ -86,8 +85,8 @@ async def get_traveler_barcode(
     # Generate unique ID
     unique_id = BarcodeService.generate_unique_traveler_id()
 
-    # Build barcode data string (combined form for RMA, plain job number otherwise)
-    barcode_data = barcode_value
+    # Build barcode data string - job number only
+    barcode_data = traveler.job_number
 
     return {
         "traveler_id": traveler.id,

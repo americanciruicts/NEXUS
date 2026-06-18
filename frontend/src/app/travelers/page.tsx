@@ -1081,7 +1081,7 @@ function TravelersPage() {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">Job# <span className="underline">{traveler.jobDisplay}</span></div>
+                          <div className="text-xs font-bold text-gray-900 dark:text-slate-100 truncate">{traveler.jobDisplay !== traveler.jobNumber ? <span className="underline">{traveler.jobDisplay}</span> : <>Job# <span className="underline">{traveler.jobDisplay}</span></>}</div>
                           <div className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 truncate">WO# <span className="underline">{traveler.workOrder || 'N/A'}</span></div>
                           <div className="text-xs font-semibold text-purple-700 dark:text-purple-400 truncate">PO# <span className="underline">{traveler.poNumber || 'N/A'}</span></div>
                         </div>
@@ -1198,7 +1198,7 @@ function TravelersPage() {
                           className="h-5 w-5 text-blue-600 rounded cursor-pointer"
                         />
                         <div>
-                          <div className="text-sm font-bold">Job# {traveler.jobDisplay}</div>
+                          <div className="text-sm font-bold">{traveler.jobDisplay !== traveler.jobNumber ? traveler.jobDisplay : `Job# ${traveler.jobDisplay}`}</div>
                           <div className="text-xs text-blue-100">WO# {traveler.workOrder || 'N/A'}</div>
                           <div className="text-xs text-blue-100">PO# {traveler.poNumber || 'N/A'}</div>
                           <div className="text-xs text-blue-100">Invoice# {traveler.invoiceNumber || 'N/A'}</div>

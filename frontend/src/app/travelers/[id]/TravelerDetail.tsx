@@ -3342,9 +3342,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <tr>
                     {/* Left: Job No + Barcode */}
                     <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 align-middle" style={{width: '40%'}}>
-                      <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex flex-col gap-2">
                         <div>
-                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px]">
+                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px] whitespace-nowrap">
                             {rmaLabel} Job No.
                           </div>
                           {isEditing ? (
@@ -3359,20 +3359,22 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             </div>
                           )}
                         </div>
-                        <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
-                          {headerBarcode ? (
-                            <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} data-print-img="header-barcode" onLoad={handleHeaderBarcodeLoad} />
-                          ) : (
-                            <div className="flex items-center justify-center h-14 print:h-28" style={{width: '160px'}}>
-                              <span className="text-[10px] text-gray-400">{createMode ? 'Barcode after save' : 'Loading...'}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="border-2 border-black dark:border-slate-600 bg-white rounded" style={{padding: '2px 4px'}}>
+                            {headerBarcode ? (
+                              <img src={`data:image/png;base64,${headerBarcode}`} alt={`Barcode`} className="h-14" style={{ width: 'auto', maxWidth: '100%', imageRendering: 'pixelated' }} data-print-img="header-barcode" onLoad={handleHeaderBarcodeLoad} />
+                            ) : (
+                              <div className="flex items-center justify-center h-14 print:h-28" style={{width: '160px'}}>
+                                <span className="text-[10px] text-gray-400">{createMode ? 'Barcode after save' : 'Loading...'}</span>
+                              </div>
+                            )}
+                          </div>
+                          {displayTraveler.groupInfo && (
+                            <div className="mt-1 print:mt-0.5">
+                              <TravelerGroupBadge sequence={displayTraveler.groupInfo.currentSequence} total={displayTraveler.groupInfo.totalCount} label={displayTraveler.groupLabel || undefined} />
                             </div>
                           )}
                         </div>
-                        {displayTraveler.groupInfo && (
-                          <div className="mt-1 print:mt-0.5">
-                            <TravelerGroupBadge sequence={displayTraveler.groupInfo.currentSequence} total={displayTraveler.groupInfo.totalCount} label={displayTraveler.groupLabel || undefined} />
-                          </div>
-                        )}
                       </div>
                     </td>
                     {/* Center: RMA ROUTING title */}
