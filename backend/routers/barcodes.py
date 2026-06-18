@@ -26,6 +26,16 @@ def rma_job_display(traveler):
         return f"{rma} RMA JOB NO {traveler.job_number}"
     return traveler.job_number
 
+
+def extract_job_number(scanned: str) -> str:
+    """A scanned RMA label is in combined form "<rma> RMA JOB NO <job>".
+    Return the <job> portion so the traveler lookup still resolves; pass
+    through unchanged for plain (non-RMA) job-number barcodes."""
+    marker = " RMA JOB NO "
+    if scanned and marker in scanned:
+        return scanned.split(marker, 1)[1].strip()
+    return scanned
+
 class BarcodeData(BaseModel):
     barcode: str
 
@@ -59,9 +69,13 @@ async def get_traveler_barcode(
             detail="Traveler not found"
         )
 
+    # RMA travelers encode the combined "<rma> RMA JOB NO <job>" string so a
+    # scanned RMA label reads in the same format shown everywhere else.
+    barcode_value = rma_job_display(traveler)
+
     # Generate barcode with work order
     barcode_image = BarcodeService.generate_traveler_barcode(
-        traveler.id, traveler.job_number, traveler.work_order_number or ""
+        traveler.id, barcode_value, traveler.work_order_number or ""
     )
 
     # Generate QR code
@@ -72,8 +86,8 @@ async def get_traveler_barcode(
     # Generate unique ID
     unique_id = BarcodeService.generate_unique_traveler_id()
 
-    # Build barcode data string - job number only
-    barcode_data = traveler.job_number
+    # Build barcode data string (combined form for RMA, plain job number otherwise)
+    barcode_data = barcode_value
 
     return {
         "traveler_id": traveler.id,
@@ -107,10 +121,10 @@ async def scan_barcode(
                 Traveler.id == parsed_data["traveler_id"]
             ).first()
 
-    # Otherwise look up by job number directly
+    # Otherwise look up by job number directly (handling combined RMA labels)
     if not traveler:
         traveler = db.query(Traveler).filter(
-            Traveler.job_number == scanned
+            Traveler.job_number == extract_job_number(scanned)
         ).first()
 
     if not traveler:
@@ -500,9 +514,9 @@ async def search_by_barcode_or_qr(
 
             return result
 
-    # Fallback: try looking up by job number directly (plain barcode scan)
+    # Fallback: try looking up by job number directly (plain or combined RMA barcode)
     traveler = db.query(Traveler).filter(
-        Traveler.job_number == code
+        Traveler.job_number == extract_job_number(code)
     ).first()
     if traveler:
         return {
