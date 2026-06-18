@@ -21,9 +21,9 @@ def rma_job_display(traveler):
     scanned RMA label resolves to the same combined form shown everywhere."""
     if traveler is None:
         return None
-    rma = (getattr(traveler, "rma_number", None) or "").strip()
-    if rma and getattr(traveler, "traveler_type", None) in _RMA_TYPES:
-        return f"{rma} RMA JOB NO {traveler.job_number}"
+    if getattr(traveler, "traveler_type", None) in _RMA_TYPES:
+        rma = (getattr(traveler, "rma_number", None) or "").strip()
+        return f"{rma} RMA JOB NO {traveler.job_number or ''}".strip()
     return traveler.job_number
 
 

@@ -3355,7 +3355,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             </div>
                           ) : (
                             <div className="text-lg font-black text-black dark:text-white print:text-[22px] whitespace-nowrap" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
-                              {displayTraveler.rmaNumber ? `${displayTraveler.rmaNumber} RMA JOB NO ${displayTraveler.jobNumber}` : displayTraveler.jobNumber}
+                              {`${displayTraveler.rmaNumber || ''} RMA JOB NO ${displayTraveler.jobNumber || ''}`.trim()}
                             </div>
                           )}
                         </div>

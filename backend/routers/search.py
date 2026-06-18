@@ -252,7 +252,7 @@ async def autocomplete_job_numbers(
         # value/job_number stay the real job number so lookups still resolve.
         rma = (t.rma_number or "").strip()
         is_rma = t.traveler_type in rma_types
-        job_display = f"{rma} RMA JOB NO {t.job_number}" if (rma and is_rma) else t.job_number
+        job_display = f"{rma} RMA JOB NO {t.job_number or ''}".strip() if is_rma else t.job_number
         label = f"{job_display}"
         if wo:
             label += f" / WO {wo}"
