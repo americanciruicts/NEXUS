@@ -3666,7 +3666,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
 
             {/* Desktop Table View */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print:overflow-x-visible">
             <table className={`routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 dark:border-slate-500 min-w-[640px] ${isEditing ? 'editing-mode' : ''}`} style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
               <thead>
                 <tr className="bg-gray-200 dark:bg-slate-700 border-b-2 border-gray-400 dark:border-slate-500">
@@ -4330,7 +4330,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   </button>
                 )}
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto print:overflow-x-visible">
                 <table className="w-full border-collapse text-sm print:text-[8px]">
                   <thead>
                     <tr className="bg-pink-100 dark:bg-pink-900/30 border-b-2 border-black dark:border-slate-600">
@@ -4398,7 +4398,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   </div>
                 )}
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto print:overflow-x-visible">
                 <table className="w-full border-collapse text-sm print:text-[8px]" style={{tableLayout: 'fixed'}}>
                   <colgroup>
                     <col style={{width: '40px'}} />
@@ -4413,7 +4413,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       {tableColumns.map((col, ci) => {
                         const isLast = ci === tableColumns.length - 1;
                         return (
-                          <th key={col.key} className={`relative ${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top break-words`}>
+                          <th key={col.key} className={`relative ${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top whitespace-normal break-normal`}>
                             <div className="flex items-start justify-between gap-1">
                               {isEditing ? (
                                 <input
@@ -4425,7 +4425,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                   title="Click to rename this column"
                                 />
                               ) : (
-                                <span className="break-words whitespace-normal">{col.label}</span>
+                                <span className="whitespace-normal break-normal">{col.label}</span>
                               )}
                               {isEditing && (
                                 <button onClick={() => removeRmaTableColumn(col.key)} className="text-red-600 hover:text-red-800 no-print shrink-0 mt-0.5" title={`Delete column "${col.label}"`}>
@@ -4491,7 +4491,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 border-b-4 border-black dark:border-slate-600 print:!border-black px-4 py-4">
                 <h2 className="font-bold text-3xl text-purple-900 dark:text-purple-200 print:!text-black">LABOR HOURS TRACKING</h2>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto print:overflow-x-visible">
               <table className="labor-table-desktop w-full border-collapse min-w-[640px]">
                 <thead>
                   <tr className="bg-purple-100 dark:bg-purple-900/30 border-b-4 border-black dark:border-slate-600">

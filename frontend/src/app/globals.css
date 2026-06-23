@@ -225,8 +225,18 @@ textarea {
   }
 
   @page {
-    margin: 0.1in;
+    margin: 0.1in 0.1in 0.3in 0.1in;
     size: letter portrait;
+    /* Page number in the bottom-right corner of every printed page, for all
+       traveler types. Standards-based @page margin box: renders in Firefox,
+       Safari, and most print-to-PDF engines. Chrome/Edge currently ignore
+       @page margin boxes — there they need the print dialog's built-in
+       "Headers and footers" option (no reliable pure-CSS alternative). */
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9pt;
+      color: #000;
+    }
   }
 
   body {
