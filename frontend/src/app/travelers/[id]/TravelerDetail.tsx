@@ -100,7 +100,16 @@ type RmaTableColumn = {
   key: string;
   label: string;
   type: 'standard' | 'custom';
+  // Relative print/display width in px (used as a proportion under table-layout:
+  // fixed). User-adjustable in edit mode; persisted so print reflects the choice.
+  width?: number;
 };
+
+// Default/clamp values for adjustable Unit Serial Number Tracking columns.
+const RMA_COL_DEFAULT_WIDTH = 140;
+const RMA_COL_MIN_WIDTH = 70;
+const RMA_COL_MAX_WIDTH = 360;
+const RMA_COL_WIDTH_STEP = 20;
 
 interface Traveler {
   id: string;
@@ -1150,6 +1159,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     if (!editedTraveler) return;
     const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
     const next = current.map(c => c.key === key ? { ...c, label } : c);
+    setEditedTraveler({ ...editedTraveler, rmaTableColumns: next });
+  };
+
+  // Grow/shrink a Unit Serial Number Tracking column. Width is persisted on the
+  // column and applied to both screen and print so the user's sizing carries over.
+  const resizeRmaTableColumn = (key: string, delta: number) => {
+    if (!editedTraveler) return;
+    const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
+    const next = current.map(c => c.key === key
+      ? { ...c, width: Math.max(RMA_COL_MIN_WIDTH, Math.min(RMA_COL_MAX_WIDTH, (c.width || RMA_COL_DEFAULT_WIDTH) + delta)) }
+      : c);
     setEditedTraveler({ ...editedTraveler, rmaTableColumns: next });
   };
 
@@ -3820,7 +3840,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                   console.error('Failed to load QR code for step', step.id);
                                 }}
                               />
-                            ) : step.id ? (
+                            ) : step.id && !stepQRCodesFetchDone ? (
                               <div className="text-[8px] text-gray-400 dark:text-slate-500 flex-shrink-0 print:hidden">QR Loading...</div>
                             ) : null}
                           </div>
@@ -4262,7 +4282,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 px-3 py-2 print:px-1 print:py-0">
                 <h2 className="font-bold text-sm text-purple-900 dark:text-purple-200 print:!text-black print:text-[9px]">COMMENTS & NOTES</h2>
               </div>
-              <div className="bg-purple-50 dark:bg-slate-800 p-3 min-h-[40px] text-sm print:p-1 print:min-h-0 print:text-[8px]">
+              <div className="bg-purple-50 dark:bg-slate-800 p-3 min-h-[40px] text-sm print:p-1 print:min-h-[480px] print:text-[8px]">
                 {isEditing ? (
                   <>
                     <textarea value={editData.comments} onChange={(e) => updateField('comments', e.target.value)} className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded min-h-[60px] text-sm screen-only" placeholder="Enter comments..." />
@@ -4353,14 +4373,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 )}
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm print:text-[8px]">
+                <table className="w-full border-collapse text-sm print:text-[8px]" style={{tableLayout: 'fixed'}}>
+                  <colgroup>
+                    <col style={{width: '40px'}} />
+                    {tableColumns.map(col => (
+                      <col key={col.key} style={{width: `${col.width || RMA_COL_DEFAULT_WIDTH}px`}} />
+                    ))}
+                    {isEditing && <col style={{width: '40px'}} />}
+                  </colgroup>
                   <thead>
                     <tr className="bg-red-100 dark:bg-red-900/30 border-b-2 border-black dark:border-slate-600">
-                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold w-10">No.</th>
+                      <th className="border-r border-black dark:border-slate-600 px-2 py-2 text-center font-bold">No.</th>
                       {tableColumns.map((col, ci) => {
                         const isLast = ci === tableColumns.length - 1;
                         return (
-                          <th key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top`} style={{minWidth: '120px'}}>
+                          <th key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top break-words`}>
                             <div className="flex items-start justify-between gap-1">
                               {isEditing ? (
                                 <input
@@ -4372,7 +4399,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                   title="Click to rename this column"
                                 />
                               ) : (
-                                <span>{col.label}</span>
+                                <span className="break-words whitespace-normal">{col.label}</span>
                               )}
                               {isEditing && (
                                 <button onClick={() => removeRmaTableColumn(col.key)} className="text-red-600 hover:text-red-800 no-print shrink-0 mt-0.5" title={`Delete column "${col.label}"`}>
@@ -4380,10 +4407,17 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                                 </button>
                               )}
                             </div>
+                            {isEditing && (
+                              <div className="flex items-center gap-1 mt-1 no-print" title="Adjust this column's width (applies to print)">
+                                <button onClick={() => resizeRmaTableColumn(col.key, -RMA_COL_WIDTH_STEP)} className="px-1.5 py-0.5 text-xs font-bold leading-none bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded" title="Narrower">−</button>
+                                <span className="text-[10px] text-gray-500 dark:text-slate-400 tabular-nums">{col.width || RMA_COL_DEFAULT_WIDTH}px</span>
+                                <button onClick={() => resizeRmaTableColumn(col.key, RMA_COL_WIDTH_STEP)} className="px-1.5 py-0.5 text-xs font-bold leading-none bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded" title="Wider">+</button>
+                              </div>
+                            )}
                           </th>
                         );
                       })}
-                      {isEditing && <th className="px-2 py-2 w-10 no-print"></th>}
+                      {isEditing && <th className="px-2 py-2 no-print"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -4394,10 +4428,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           const isLast = ci === tableColumns.length - 1;
                           const value = cellValue(unit, col);
                           return (
-                            <td key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2`}>
+                            <td key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 align-top break-words`}>
                               {isEditing ? (
                                 <input type="text" value={value} onChange={(e) => onCellChange(idx, col, e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" />
-                              ) : (value || '')}
+                              ) : (<span className="block whitespace-pre-wrap break-words">{value || ''}</span>)}
                             </td>
                           );
                         })}
