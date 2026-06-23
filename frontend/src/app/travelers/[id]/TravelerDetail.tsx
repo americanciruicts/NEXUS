@@ -1241,12 +1241,59 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     return null;
   };
 
+  // When an Original WO Number is entered on an RMA traveler, look up the
+  // original (non-RMA) traveler for that work order and auto-fill the original
+  // job's details into the RMA. No-op when the WO isn't found in the system.
+  const autofillFromOriginalWo = async (wo: string) => {
+    const trimmed = (wo || '').trim();
+    if (!trimmed || !isRmaType(editedTraveler?.travelerType || '')) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/travelers/original-by-work-order/${encodeURIComponent(trimmed)}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('nexus_token') || ''}` }
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data) {
+        toast.error(`No original traveler found for WO ${trimmed}`);
+        return;
+      }
+      setEditedTraveler(prev => prev ? {
+        ...prev,
+        partNumber: data.part_number || prev.partNumber,
+        description: data.part_description || prev.description,
+        revision: data.revision || prev.revision,
+        customerRevision: data.customer_revision || prev.customerRevision,
+        partRevision: data.part_revision || prev.partRevision,
+        customerCode: data.customer_code || prev.customerCode,
+        customerName: data.customer_name || prev.customerName,
+        originalPoNumber: data.po_number || prev.originalPoNumber,
+        originalBuiltQuantity: (data.quantity ?? prev.originalBuiltQuantity),
+      } : prev);
+      toast.success(`Filled details from original WO ${trimmed}${data.job_number ? ` (job ${data.job_number})` : ''}`);
+    } catch (error) {
+      console.error('Failed to fetch original traveler by work order:', error);
+    }
+  };
+
   // Fetch next work order number in create mode
   useEffect(() => {
     if (!createMode) return;
     generateWorkOrder({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createMode]);
+
+  // Default an RMA traveler's "Issued on" date to today whenever it hasn't been
+  // set yet (new traveler or a draft saved without one). Only fills when empty,
+  // so an already-entered issue date is never overwritten.
+  useEffect(() => {
+    if (!isEditing || !isRmaType(editedTraveler?.travelerType || '')) return;
+    if (editedTraveler && !editedTraveler.createdAt) {
+      setEditedTraveler(prev => prev && !prev.createdAt
+        ? { ...prev, createdAt: new Date().toISOString().split('T')[0] }
+        : prev);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, editedTraveler?.travelerType, editedTraveler?.createdAt]);
 
   const travelerTypes = [
     { value: 'PCB_ASSEMBLY', label: 'PCB Assembly', description: 'Full board assembly with components', subtitle: 'SMT, Through-Hole, Inspection, Testing', gradient: 'from-teal-600 to-emerald-700', borderColor: 'border-blue-400', iconBg: 'bg-white/20', bubbleColor: 'bg-blue-400/20', icon: CpuChipIcon },
@@ -3344,9 +3391,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     <td className="border-r-2 border-black dark:border-slate-600 px-4 py-3 print:px-4 print:py-3 align-middle" style={{width: '40%'}}>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <div className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider print:text-[12px] whitespace-nowrap">
-                            {rmaLabel} Job No.
-                          </div>
                           {isEditing ? (
                             <div className="flex items-center gap-1.5 whitespace-nowrap">
                               <input type="text" value={editData.rmaNumber || ''} onChange={(e) => updateField('rmaNumber', e.target.value)} className="w-20 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-base font-black text-black dark:text-white" placeholder="RMA #" />
@@ -3428,7 +3472,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   {displayTraveler.travelerType === 'RMA_SAME' && (
                   <tr className="border-b border-gray-300 dark:border-slate-600">
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Original WO Number:</td>
-                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.originalWoNumber || ''} onChange={(e) => updateField('originalWoNumber', e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalWoNumber || '-')}</td>
+                    <td className="px-2 py-1.5 print:px-1 print:py-0.5 border-r border-gray-300 dark:border-slate-600 text-black dark:text-white">{isEditing ? <input type="text" value={editData.originalWoNumber || ''} onChange={(e) => updateField('originalWoNumber', e.target.value)} onBlur={(e) => autofillFromOriginalWo(e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalWoNumber || '-')}</td>
                     <td className="px-3 py-1.5 print:px-2 print:py-0.5 font-bold text-black dark:text-white whitespace-nowrap">Original Built Quantity:</td>
                     <td className="px-2 py-1.5 print:px-1 print:py-0.5 text-black dark:text-white">{isEditing ? <input type="number" value={editData.originalBuiltQuantity || ''} onChange={(e) => updateField('originalBuiltQuantity', parseInt(e.target.value) || 0)} className="w-full border border-gray-300 dark:border-slate-600 rounded px-2 py-0.5 text-sm text-black dark:text-white" /> : (displayTraveler.originalBuiltQuantity || '-')}</td>
                   </tr>

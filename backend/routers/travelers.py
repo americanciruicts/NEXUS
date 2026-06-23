@@ -642,6 +642,53 @@ async def get_latest_revision_traveler(
     print(f"Returning traveler with {len(result['process_steps'])} process steps")
     return result
 
+
+_RMA_TRAVELER_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
+
+
+@router.get("/original-by-work-order/{work_order}")
+async def get_original_by_work_order(
+    work_order: str,
+    current_user: User = Depends(get_user_or_system),
+    db: Session = Depends(get_db)
+):
+    """Look up the original (non-RMA) traveler for a work order number so an RMA
+    traveler can auto-fill the original job's details. Returns the latest-revision
+    normal traveler matching the WO, or null if none exists."""
+    wo = (work_order or "").strip()
+    if not wo:
+        return None
+
+    traveler = db.query(Traveler).filter(
+        Traveler.work_order_number == wo,
+        Traveler.traveler_type.notin_([t.value for t in _RMA_TRAVELER_TYPES]),
+    ).order_by(Traveler.revision.desc()).first()
+
+    if not traveler:
+        return None
+
+    # ITAR access check — mirror the other traveler lookups.
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    has_itar_access = getattr(current_user, 'is_itar', False)
+    is_itar_job = bool(re.search(r'[0-9]M[L\s]|[0-9]M$|[0-9]ML$', traveler.job_number or ''))
+    if is_itar_job and not is_admin and not has_itar_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="ITAR restricted: You do not have permission to view this traveler")
+
+    return {
+        "id": traveler.id,
+        "job_number": traveler.job_number,
+        "work_order_number": traveler.work_order_number,
+        "po_number": traveler.po_number,
+        "part_number": traveler.part_number,
+        "part_description": traveler.part_description,
+        "revision": traveler.revision,
+        "customer_revision": traveler.customer_revision,
+        "part_revision": getattr(traveler, 'part_revision', ''),
+        "quantity": traveler.quantity,
+        "customer_code": traveler.customer_code,
+        "customer_name": traveler.customer_name,
+    }
+
 ## ── Traveler Group endpoints ──
 
 @router.post("/groups")
