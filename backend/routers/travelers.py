@@ -643,7 +643,7 @@ async def get_latest_revision_traveler(
     return result
 
 
-_RMA_TRAVELER_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
+_RMA_TRAVELER_TYPE_VALUES = ("RMA_SAME", "RMA_DIFF", "MODIFICATION")
 
 
 @router.get("/original-by-work-order/{work_order}")
@@ -661,7 +661,7 @@ async def get_original_by_work_order(
 
     traveler = db.query(Traveler).filter(
         Traveler.work_order_number == wo,
-        Traveler.traveler_type.notin_([t.value for t in _RMA_TRAVELER_TYPES]),
+        Traveler.traveler_type.notin_(_RMA_TRAVELER_TYPE_VALUES),
     ).order_by(Traveler.revision.desc()).first()
 
     if not traveler:
