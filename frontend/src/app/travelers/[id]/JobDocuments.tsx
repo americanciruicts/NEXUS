@@ -6,8 +6,9 @@ interface Doc { id: number; original_name: string; file_size: number | null; con
 
 // A rendered preview of an uploaded document. Images render natively; PDFs are
 // rasterized page-by-page (client-side via pdf.js) into PNG data URLs so they
-// print exactly as uploaded. Anything else is listed but not previewable.
-interface Preview { id: number; name: string; category: string; kind: 'image' | 'pdf' | 'other'; images: string[]; error?: boolean; }
+// print exactly as uploaded. blobUrl is always kept so the document can be
+// opened/embedded even if inline rendering fails.
+interface Preview { id: number; name: string; category: string; kind: 'image' | 'pdf' | 'other'; images: string[]; blobUrl?: string; error?: boolean; }
 
 // Rasterize every page of a PDF to PNG data URLs. pdf.js is imported lazily so
 // it never runs during SSR and only loads when a PDF actually needs rendering.
@@ -55,22 +56,29 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
     const objectUrls: string[] = [];
     const built: Preview[] = await Promise.all(docs.map(async (d): Promise<Preview> => {
       const ct = (d.content_type || '').toLowerCase();
-      const isImage = ct.startsWith('image/');
-      const isPdf = ct === 'application/pdf' || (d.original_name || '').toLowerCase().endsWith('.pdf');
-      if (!isImage && !isPdf) return { id: d.id, name: d.original_name, category: d.category, kind: 'other', images: [] };
+      const name = (d.original_name || '').toLowerCase();
+      // Detect by content-type OR file extension — uploads sometimes have a
+      // missing/generic content type, which previously hid the document.
+      const isImage = ct.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name);
+      const isPdf = ct === 'application/pdf' || name.endsWith('.pdf');
+      const kind: Preview['kind'] = isImage ? 'image' : isPdf ? 'pdf' : 'other';
       try {
         const res = await fetch(`${API_BASE_URL}/features/documents/file/${d.id}/raw`, { headers });
         if (!res.ok) throw new Error('fetch failed');
-        if (isImage) {
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          objectUrls.push(url);
-          return { id: d.id, name: d.original_name, category: d.category, kind: 'image', images: [url] };
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        objectUrls.push(blobUrl);
+        let images: string[] = [];
+        if (kind === 'image') {
+          images = [blobUrl];
+        } else if (kind === 'pdf') {
+          // Rasterize for an exact-as-uploaded print. If pdf.js fails (e.g.
+          // worker issue), images stays empty and we fall back to an embed.
+          try { images = await rasterizePdf(await blob.arrayBuffer()); } catch { images = []; }
         }
-        const pages = await rasterizePdf(await res.arrayBuffer());
-        return { id: d.id, name: d.original_name, category: d.category, kind: 'pdf', images: pages };
+        return { id: d.id, name: d.original_name, category: d.category, kind, images, blobUrl };
       } catch {
-        return { id: d.id, name: d.original_name, category: d.category, kind: isPdf ? 'pdf' : 'image', images: [], error: true };
+        return { id: d.id, name: d.original_name, category: d.category, kind, images: [], error: true };
       }
     }));
     setPreviews(built);
@@ -152,16 +160,23 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
           <div className="bg-white p-3 print:p-0">
             {previews.map(p => (
               <div key={p.id} className="mb-4 print:mb-0 print:break-before-page print:break-inside-avoid">
-                <div className="text-xs font-semibold text-gray-600 dark:text-slate-300 print:text-black mb-1 print:text-[9px]">
-                  {p.name}{p.category && p.category !== 'general' ? ` (${p.category})` : ''}
+                <div className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-slate-300 print:text-black mb-1 print:text-[9px]">
+                  <span>{p.name}{p.category && p.category !== 'general' ? ` (${p.category})` : ''}</span>
+                  {p.blobUrl && (
+                    <a href={p.blobUrl} target="_blank" rel="noreferrer" className="screen-only text-teal-700 hover:underline font-normal">Open ↗</a>
+                  )}
                 </div>
                 {p.error ? (
-                  <div className="text-xs text-red-600 italic">Could not load this document for preview.</div>
-                ) : p.kind === 'other' ? (
-                  <div className="text-xs text-gray-500 italic print:text-black">Attached file (not previewable inline): {p.name}</div>
-                ) : p.images.length === 0 ? (
-                  <div className="text-xs text-gray-400 italic screen-only">Rendering…</div>
-                ) : (
+                  <div className="text-xs text-red-600 italic">Could not load this document.{p.blobUrl ? ' Use “Open ↗”.' : ''}</div>
+                ) : p.kind === 'image' && p.images.length > 0 ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.images[0]}
+                    alt={p.name}
+                    className="w-full h-auto border border-gray-300 dark:border-slate-600 print:border-0 print:break-inside-avoid"
+                    style={{ pageBreakInside: 'avoid' }}
+                  />
+                ) : p.kind === 'pdf' && p.images.length > 0 ? (
                   p.images.map((src, i) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -172,6 +187,17 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
                       style={{ pageBreakInside: 'avoid' }}
                     />
                   ))
+                ) : p.kind === 'pdf' && p.blobUrl ? (
+                  // pdf.js rasterization unavailable — embed so it's at least
+                  // visible on screen (note: embeds may not appear in print).
+                  <>
+                    <iframe src={p.blobUrl} title={p.name} className="screen-only w-full h-[600px] border border-gray-300 dark:border-slate-600" />
+                    <div className="print-only text-xs text-gray-600">PDF attached: {p.name} (open digitally to view).</div>
+                  </>
+                ) : p.kind === 'other' ? (
+                  <div className="text-xs text-gray-500 italic print:text-black">Attached file: {p.name}{p.blobUrl ? ' — use “Open ↗” to view/download.' : ''}</div>
+                ) : (
+                  <div className="text-xs text-gray-400 italic screen-only">Rendering…</div>
                 )}
               </div>
             ))}
