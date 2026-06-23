@@ -147,17 +147,22 @@ async def upload_document(
     unique_name = f"{traveler_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = os.path.join(UPLOAD_DIR, unique_name)
 
-    # Save file
+    # Stream to disk in chunks so large files don't get fully buffered in RAM.
+    size = 0
     with open(file_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+        while True:
+            chunk = await file.read(1024 * 1024)  # 1MB
+            if not chunk:
+                break
+            f.write(chunk)
+            size += len(chunk)
 
     doc = JobDocument(
         traveler_id=traveler_id,
         filename=unique_name,
         original_name=file.filename or "file",
         file_path=file_path,
-        file_size=len(content),
+        file_size=size,
         content_type=file.content_type,
         category=category,
         uploaded_by=current_user.id,
