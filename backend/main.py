@@ -160,6 +160,7 @@ async def lifespan(app: FastAPI):
             ("DETAILED INSPEC",    "Detailed inspection - sample or 100% inspection",        "Quality"),
             ("INCOMING INSPECTION","Inspect incoming RMA units, verify quantity and condition","Quality"),
             ("TESTING",            "Test units per original test procedures",                "Test"),
+            ("X-RAY",              "X-ray inspection of solder joints/components as requested by customer", "Test"),
             ("PROGRAMMING",        "Program or reprogram units",                             "Test"),
             ("TROUBLESHOOTING",    "Diagnose and troubleshoot defective units",              "Test"),
             ("REPAIR",             "Repair defective units per customer complaint",          "Soldering"),
@@ -180,7 +181,7 @@ async def lifespan(app: FastAPI):
         # Work-center CODES are kept stable across the display-name rename so that
         # existing process_steps (FK on work_center_code) keep resolving. The two
         # renamed steps map back to their original code token.
-        CODE_TOKEN_OVERRIDE = {"PARTS INVENTORY": "INVENTORY", "PCBA STOCK": "STOCK"}
+        CODE_TOKEN_OVERRIDE = {"PARTS INVENTORY": "INVENTORY", "PCBA STOCK": "STOCK", "X-RAY": "XRAY"}
 
         RMA_WC_DATA = {
             "RMA_SAME": RMA_SAME_DIFF_STEPS,

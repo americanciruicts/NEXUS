@@ -139,6 +139,7 @@ export const RMA_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'DETAILED INSPEC', description: 'Detailed inspection - sample or 100% inspection', department: 'Quality' },
   { name: 'INCOMING INSPECTION', description: 'Inspect incoming RMA units, verify quantity and condition', department: 'Quality' },
   { name: 'TESTING', description: 'Test units per original test procedures', department: 'Test' },
+  { name: 'X-RAY', description: 'X-ray inspection of solder joints/components as requested by customer', department: 'Test' },
   { name: 'PROGRAMMING', description: 'Program or reprogram units', department: 'Test' },
   { name: 'TROUBLESHOOTING', description: 'Diagnose and troubleshoot defective units', department: 'Test' },
   { name: 'REPAIR', description: 'Repair defective units per customer complaint', department: 'Soldering' },
