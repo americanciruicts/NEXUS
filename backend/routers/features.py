@@ -20,6 +20,7 @@ from database import get_db
 from models import (
     Shift, LaborRate, JobDocument, QualityCheckItem, CommunicationLog,
     User, Traveler, ProcessStep, KittingTimerSession, KittingEventLog,
+    UserRole,
 )
 from routers.auth import get_current_user
 
@@ -139,6 +140,8 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(403, "Only admins can add documents")
     traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
     if not traveler: raise HTTPException(404, "Traveler not found")
 
@@ -173,6 +176,8 @@ async def upload_document(
 
 @router.delete("/documents/file/{doc_id}")
 def delete_document(doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(403, "Only admins can delete documents")
     doc = db.query(JobDocument).filter(JobDocument.id == doc_id).first()
     if not doc: raise HTTPException(404, "Document not found")
     # Remove file from disk

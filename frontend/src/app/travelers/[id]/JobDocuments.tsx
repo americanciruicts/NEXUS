@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
+import { useAuth } from '@/context/AuthContext';
 
 interface Doc { id: number; original_name: string; file_size: number | null; content_type: string | null; category: string; note: string | null; created_at: string; }
 
@@ -39,6 +40,8 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState('general');
   const [previews, setPreviews] = useState<Preview[]>([]);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('nexus_token') : '';
   const headers = { Authorization: `Bearer ${token || ''}` };
@@ -138,16 +141,20 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
       <div className="screen-only">
         <div className="bg-teal-200 dark:bg-teal-900/50 px-3 py-2 flex items-center justify-between">
           <h2 className="font-bold text-sm text-teal-900 dark:text-teal-200">DOCUMENTS</h2>
-          <div className="flex items-center gap-2">
-            <select value={category} onChange={e => setCategory(e.target.value)} className="text-xs border rounded px-1 py-0.5 dark:bg-slate-700 dark:text-white dark:border-slate-600">
-              <option value="general">General</option><option value="drawing">Drawing</option>
-              <option value="spec">Spec</option><option value="quality">Quality</option><option value="customer">Customer</option>
-            </select>
-            <label className="text-xs bg-teal-700 text-white px-2 py-1 rounded cursor-pointer hover:bg-teal-800">
-              {uploading ? 'Uploading...' : 'Upload'}
-              <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-            </label>
-          </div>
+          {isAdmin ? (
+            <div className="flex items-center gap-2">
+              <select value={category} onChange={e => setCategory(e.target.value)} className="text-xs border rounded px-1 py-0.5 dark:bg-slate-700 dark:text-white dark:border-slate-600">
+                <option value="general">General</option><option value="drawing">Drawing</option>
+                <option value="spec">Spec</option><option value="quality">Quality</option><option value="customer">Customer</option>
+              </select>
+              <label className="text-xs bg-teal-700 text-white px-2 py-1 rounded cursor-pointer hover:bg-teal-800">
+                {uploading ? 'Uploading...' : 'Upload'}
+                <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+              </label>
+            </div>
+          ) : (
+            <span className="text-[10px] text-teal-800 dark:text-teal-300">View only</span>
+          )}
         </div>
         <div className="bg-teal-50 dark:bg-slate-800 p-3 min-h-[40px]">
           {docs.length === 0 ? (
@@ -160,7 +167,7 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
                   <span className="text-gray-400">{fmtSize(d.file_size)}</span>
                   <span className="text-gray-400 bg-gray-100 dark:bg-slate-600 px-1.5 py-0.5 rounded text-[10px]">{d.category}</span>
                   <span className="text-gray-400">{new Date(d.created_at).toLocaleDateString()}</span>
-                  <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-700 font-bold">x</button>
+                  {isAdmin && <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-700 font-bold">x</button>}
                 </div>
               ))}
             </div>
