@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { API_BASE_URL } from '@/config/api';
 
 interface Doc { id: number; original_name: string; file_size: number | null; content_type: string | null; category: string; note: string | null; created_at: string; }
@@ -95,14 +96,30 @@ export default function JobDocuments({ travelerId }: { travelerId: number }) {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!travelerId || travelerId <= 0) {
+      toast.error('Save the traveler before uploading documents.');
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('category', category);
-      await fetch(`${API_BASE_URL}/features/documents/${travelerId}`, { method: 'POST', headers: { Authorization: headers.Authorization }, body: fd });
-      fetch_docs();
-    } catch { /* silent */ }
+      const res = await fetch(`${API_BASE_URL}/features/documents/${travelerId}`, { method: 'POST', headers: { Authorization: headers.Authorization }, body: fd });
+      if (res.ok) {
+        toast.success(`Uploaded ${file.name}`);
+        fetch_docs();
+      } else if (res.status === 413) {
+        toast.error(`${file.name} is too large to upload.`);
+      } else if (res.status === 401) {
+        toast.error('Session expired — please log in again.');
+      } else {
+        toast.error(`Upload failed (HTTP ${res.status}).`);
+      }
+    } catch {
+      toast.error('Upload failed — network error.');
+    }
     setUploading(false);
     e.target.value = '';
   };
