@@ -4293,13 +4293,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           )}
 
           {/* Documents (uploaded files render inline on screen AND print) +
-              Communication Log (screen only). */}
-          {displayTraveler?.id && (
+              Communication Log (screen only). travelerId is the numeric DB id
+              (displayTraveler.id is the job number, not the DB id). */}
+          {displayTraveler?.travelerId ? (
             <>
-              <JobDocuments travelerId={Number(displayTraveler.id)} />
-              <CommunicationLogSection travelerId={Number(displayTraveler.id)} />
+              <JobDocuments travelerId={displayTraveler.travelerId} />
+              <CommunicationLogSection travelerId={displayTraveler.travelerId} />
             </>
-          )}
+          ) : null}
 
           {/* RMA Page 2: Comments + Unit Tracking */}
           {isRmaType(displayTraveler.travelerType) && (
