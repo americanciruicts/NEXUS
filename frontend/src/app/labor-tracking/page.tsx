@@ -29,7 +29,7 @@ interface LaborEntry {
   created_at: string;
   // Additional fields for display
   job_number?: string;
-  // Combined "<rma> RMA JOB NO <job>" label for RMA travelers (else plain job number)
+  // Combined "<rma> <job>" label for RMA travelers (else plain job number)
   job_display?: string;
   work_order?: string;
   work_center?: string;

@@ -16,14 +16,14 @@ _RMA_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFIC
 
 
 def rma_job_display(traveler):
-    """Combined "<rma> RMA JOB NO <job>" label for RMA travelers (matching the
-    format used outside NEXUS); plain job number for everything else. So a
-    scanned RMA label resolves to the same combined form shown everywhere."""
+    """Combined "<rma> <job>" label for RMA travelers; plain job number for
+    everything else. So a scanned RMA label resolves to the same combined
+    form shown everywhere."""
     if traveler is None:
         return None
     if getattr(traveler, "traveler_type", None) in _RMA_TYPES:
         rma = (getattr(traveler, "rma_number", None) or "").strip()
-        return f"{rma} RMA JOB NO {traveler.job_number or ''}".strip()
+        return f"{rma} {traveler.job_number or ''}".strip()
     return traveler.job_number
 
 
