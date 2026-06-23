@@ -1162,15 +1162,41 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     setEditedTraveler({ ...editedTraveler, rmaTableColumns: next });
   };
 
-  // Grow/shrink a Unit Serial Number Tracking column. Width is persisted on the
-  // column and applied to both screen and print so the user's sizing carries over.
+  // Set a Unit Serial Number Tracking column to an absolute width (clamped).
+  // Uses a functional update so rapid drag-resize moves don't race on stale state.
+  const setRmaTableColumnWidth = (key: string, width: number) => {
+    const w = Math.max(RMA_COL_MIN_WIDTH, Math.min(RMA_COL_MAX_WIDTH, Math.round(width)));
+    setEditedTraveler(prev => {
+      if (!prev) return prev;
+      const current = prev.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
+      return { ...prev, rmaTableColumns: current.map(c => c.key === key ? { ...c, width: w } : c) };
+    });
+  };
+
+  // Grow/shrink a column by a fixed step (− / + buttons).
   const resizeRmaTableColumn = (key: string, delta: number) => {
-    if (!editedTraveler) return;
-    const current = editedTraveler.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
-    const next = current.map(c => c.key === key
-      ? { ...c, width: Math.max(RMA_COL_MIN_WIDTH, Math.min(RMA_COL_MAX_WIDTH, (c.width || RMA_COL_DEFAULT_WIDTH) + delta)) }
-      : c);
-    setEditedTraveler({ ...editedTraveler, rmaTableColumns: next });
+    const cols = editedTraveler?.rmaTableColumns || DEFAULT_RMA_TABLE_COLUMNS;
+    const cur = cols.find(c => c.key === key)?.width || RMA_COL_DEFAULT_WIDTH;
+    setRmaTableColumnWidth(key, cur + delta);
+  };
+
+  // Drag the divider on a column's right edge to resize it live.
+  const startColResize = (e: React.MouseEvent, col: RmaTableColumn) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = col.width || RMA_COL_DEFAULT_WIDTH;
+    const onMove = (ev: MouseEvent) => setRmaTableColumnWidth(col.key, startW + (ev.clientX - startX));
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   };
 
   const removeRmaTableColumn = (key: string) => {
@@ -4387,7 +4413,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       {tableColumns.map((col, ci) => {
                         const isLast = ci === tableColumns.length - 1;
                         return (
-                          <th key={col.key} className={`${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top break-words`}>
+                          <th key={col.key} className={`relative ${isLast ? '' : 'border-r border-black dark:border-slate-600'} px-2 py-2 text-left font-bold align-top break-words`}>
                             <div className="flex items-start justify-between gap-1">
                               {isEditing ? (
                                 <input
@@ -4409,10 +4435,18 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             </div>
                             {isEditing && (
                               <div className="flex items-center gap-1 mt-1 no-print" title="Adjust this column's width (applies to print)">
-                                <button onClick={() => resizeRmaTableColumn(col.key, -RMA_COL_WIDTH_STEP)} className="px-1.5 py-0.5 text-xs font-bold leading-none bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded" title="Narrower">−</button>
-                                <span className="text-[10px] text-gray-500 dark:text-slate-400 tabular-nums">{col.width || RMA_COL_DEFAULT_WIDTH}px</span>
-                                <button onClick={() => resizeRmaTableColumn(col.key, RMA_COL_WIDTH_STEP)} className="px-1.5 py-0.5 text-xs font-bold leading-none bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded" title="Wider">+</button>
+                                <span className="text-[10px] text-gray-500 dark:text-slate-400">Width</span>
+                                <button onClick={() => resizeRmaTableColumn(col.key, -RMA_COL_WIDTH_STEP)} className="px-1.5 py-0.5 text-xs font-bold leading-none bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 border border-gray-400 dark:border-slate-500 rounded" title="Narrower">−</button>
+                                <span className="text-[10px] text-gray-600 dark:text-slate-300 tabular-nums w-9 text-center">{col.width || RMA_COL_DEFAULT_WIDTH}px</span>
+                                <button onClick={() => resizeRmaTableColumn(col.key, RMA_COL_WIDTH_STEP)} className="px-1.5 py-0.5 text-xs font-bold leading-none bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 border border-gray-400 dark:border-slate-500 rounded" title="Wider">+</button>
                               </div>
+                            )}
+                            {isEditing && (
+                              <div
+                                onMouseDown={(e) => startColResize(e, col)}
+                                className="absolute top-0 right-0 h-full w-2 cursor-col-resize bg-blue-400/50 hover:bg-blue-600 no-print"
+                                title="Drag to resize this column"
+                              />
                             )}
                           </th>
                         );
