@@ -4292,7 +4292,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
           )}
 
-          {/* Documents & Communication Log — screen only, not printed */}
+          {/* Documents (uploaded files render inline on screen AND print) +
+              Communication Log (screen only). */}
           {displayTraveler?.id && (
             <>
               <JobDocuments travelerId={Number(displayTraveler.id)} />

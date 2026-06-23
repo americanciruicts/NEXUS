@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -177,6 +178,22 @@ def delete_document(doc_id: int, db: Session = Depends(get_db), current_user: Us
         pass
     db.delete(doc); db.commit()
     return {"ok": True}
+
+@router.get("/documents/file/{doc_id}/raw")
+def get_document_raw(doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Serve the original uploaded file bytes so the traveler can render the
+    document inline (image preview, or PDF rasterized client-side) on screen
+    and in print, exactly as uploaded."""
+    doc = db.query(JobDocument).filter(JobDocument.id == doc_id).first()
+    if not doc: raise HTTPException(404, "Document not found")
+    if not doc.file_path or not os.path.exists(doc.file_path):
+        raise HTTPException(404, "File missing on disk")
+    return FileResponse(
+        doc.file_path,
+        media_type=doc.content_type or "application/octet-stream",
+        filename=doc.original_name,
+        content_disposition_type="inline",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
