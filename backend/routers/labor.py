@@ -189,14 +189,14 @@ _RMA_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFIC
 
 def rma_job_display(traveler) -> Optional[str]:
     """Job-number label for labor views. RMA travelers combine both the RMA
-    number and the job number into one field — "<rma> <job>". Non-RMA travelers
-    show the plain job number. The stored job_number is unchanged (still the
-    lookup key)."""
+    number and the job number into one field — "<rma> RMA JOB NO <job>" —
+    matching the format used outside NEXUS. Non-RMA travelers show the plain
+    job number. The stored job_number is unchanged (still the lookup key)."""
     if traveler is None:
         return None
     if getattr(traveler, "traveler_type", None) in _RMA_TYPES:
         rma = (getattr(traveler, "rma_number", None) or "").strip()
-        return f"{rma} {traveler.job_number or ''}".strip()
+        return f"{rma} RMA JOB NO {traveler.job_number or ''}".strip()
     return traveler.job_number
 
 

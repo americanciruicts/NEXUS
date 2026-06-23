@@ -119,13 +119,14 @@ type LaborProgress = {
 };
 
 // RMA travelers display their job number combined with the RMA number as
-// "<rma> <job>" (e.g. "1234 12345-6"). Non-RMA travelers show the plain job number.
+// "<rma> RMA JOB NO <job>" (e.g. "1234 RMA JOB NO 12345-6"), matching the
+// format used outside NEXUS. Non-RMA travelers show the plain job number.
 const RMA_TRAVELER_TYPES = ['RMA_SAME', 'RMA_DIFF', 'MODIFICATION'];
 function formatJobDisplay(travelerType: string, rmaNumber: string, jobNumber: string): string {
   // RMA travelers always render in the combined format, even when the RMA
   // number or job number hasn't been entered yet.
   return RMA_TRAVELER_TYPES.includes(travelerType)
-    ? `${rmaNumber} ${jobNumber}`.trim()
+    ? `${rmaNumber} RMA JOB NO ${jobNumber}`.trim()
     : jobNumber;
 }
 

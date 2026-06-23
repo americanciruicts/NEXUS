@@ -3350,11 +3350,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           {isEditing ? (
                             <div className="flex items-center gap-1.5 whitespace-nowrap">
                               <input type="text" value={editData.rmaNumber || ''} onChange={(e) => updateField('rmaNumber', e.target.value)} className="w-20 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-base font-black text-black dark:text-white" placeholder="RMA #" />
+                              <span className="text-sm font-black text-black dark:text-white">RMA JOB NO</span>
                               <input type="text" value={editData.jobNumber} onChange={(e) => updateField('jobNumber', e.target.value)} className="w-28 border-2 border-gray-400 dark:border-slate-500 rounded px-2 py-1 text-base font-black text-black dark:text-white" placeholder="Job #" />
                             </div>
                           ) : (
                             <div className="text-lg font-black text-black dark:text-white print:text-[22px] whitespace-nowrap" style={{fontWeight: '900', letterSpacing: '0.5px'}}>
-                              {`${displayTraveler.rmaNumber || ''} ${displayTraveler.jobNumber || ''}`.trim()}
+                              {`${displayTraveler.rmaNumber || ''} RMA JOB NO ${displayTraveler.jobNumber || ''}`.trim()}
                             </div>
                           )}
                         </div>

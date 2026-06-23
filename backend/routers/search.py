@@ -247,12 +247,12 @@ async def autocomplete_job_numbers(
         wo = (t.work_order_number or "").strip()
         desc = t.part_description or ""
         desc_short = f"{desc[:50]}{'...' if len(desc) > 50 else ''}"
-        # RMA travelers combine RMA number + job number into the displayed label
-        # ("1234 12345-6"). value/job_number stay the real job number so lookups
-        # still resolve.
+        # RMA travelers combine RMA number + job number into the displayed label,
+        # matching the format used outside NEXUS ("1234 RMA JOB NO 12345-6").
+        # value/job_number stay the real job number so lookups still resolve.
         rma = (t.rma_number or "").strip()
         is_rma = t.traveler_type in rma_types
-        job_display = f"{rma} {t.job_number or ''}".strip() if is_rma else t.job_number
+        job_display = f"{rma} RMA JOB NO {t.job_number or ''}".strip() if is_rma else t.job_number
         label = f"{job_display}"
         if wo:
             label += f" / WO {wo}"
