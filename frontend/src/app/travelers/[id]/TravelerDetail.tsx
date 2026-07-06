@@ -3116,8 +3116,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   <div className="font-bold text-orange-800 mb-1 text-sm">Important Dates</div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex justify-between"><span className="font-semibold">Start:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.createdAt} onChange={(e) => updateField('createdAt', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.createdAt) || '-'}</span></> : (formatDateDisplay(displayTraveler.createdAt) || '-')}</span></div>
-                    <div className="flex justify-between"><span className="font-semibold">Due:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.dueDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.dueDate) || '-')}</span></div>
-                    <div className="col-span-2 flex justify-between"><span className="font-semibold">Ship Date:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.shipDate} onChange={(e) => updateField('shipDate', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.shipDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.shipDate) || '-')}</span></div>
+                    <div className="flex justify-between"><span className="font-semibold">Ship Date:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.shipDate} onChange={(e) => updateField('shipDate', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.shipDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.shipDate) || '-')}</span></div>
+                    <div className="col-span-2 flex justify-between"><span className="font-semibold">Due:</span> <span className="text-black dark:text-white">{isEditing ? <><input type="date" value={editData.dueDate} onChange={(e) => updateField('dueDate', e.target.value)} className="w-28 border border-gray-300 dark:border-slate-600 rounded px-1 text-[10px] screen-only text-black dark:text-white"/><span className="print-only">{formatDateDisplay(editData.dueDate) || '-'}</span></> : (formatDateDisplay(displayTraveler.dueDate) || '-')}</span></div>
                   </div>
                 </div>
               </div>
@@ -3360,22 +3360,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1 ">
-                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Due Date:</span>
-                  {isEditing ? (
-                    <>
-                      <input
-                        type="date"
-                        value={editData.dueDate}
-                        onChange={(e) => updateField('dueDate', e.target.value)}
-                        className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
-                      />
-                      <span className="print-only flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.dueDate) || '-'}</span>
-                    </>
-                  ) : (
-                    <span className="flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-2 print:gap-1 ">
                   <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Ship Date:</span>
                   {isEditing ? (
                     <>
@@ -3389,6 +3373,22 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                     </>
                   ) : (
                     <span className="flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.shipDate) || '-'}</span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2 print:gap-1 ">
+                  <span className="font-bold text-sm min-w-[80px] print:text-[8px] print:min-w-[70px] print:leading-tight text-black dark:text-white">Due Date:</span>
+                  {isEditing ? (
+                    <>
+                      <input
+                        type="date"
+                        value={editData.dueDate}
+                        onChange={(e) => updateField('dueDate', e.target.value)}
+                        className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-1 py-0.5 text-xs text-right screen-only text-black dark:text-white"
+                      />
+                      <span className="print-only flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(editData.dueDate) || '-'}</span>
+                    </>
+                  ) : (
+                    <span className="flex-1 text-right text-xs whitespace-nowrap print:text-[8px] print:leading-tight text-black dark:text-white">{formatDateDisplay(displayTraveler.dueDate) || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 print:gap-1">

@@ -1484,20 +1484,20 @@ export default function TravelerForm({ mode = 'create', initialData, travelerId,
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Due Date</label>
-              <input
-                type="date"
-                value={formData.dueDate}
-                onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
-                className="w-full min-w-0 border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-              />
-            </div>
-            <div>
               <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Ship Date</label>
               <input
                 type="date"
                 value={formData.shipDate}
                 onChange={(e) => setFormData({...formData, shipDate: e.target.value})}
+                className="w-full min-w-0 border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Due Date</label>
+              <input
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
                 className="w-full min-w-0 border-2 border-gray-300 dark:border-slate-600 rounded px-2 py-1.5 text-xs sm:text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               />
             </div>
