@@ -10,8 +10,8 @@ import { WrenchScrewdriverIcon, ArrowTopRightOnSquareIcon } from '@heroicons/rea
 // Served same-origin via the /formsm rewrite in next.config.ts. Loading the
 // external URL directly would be cross-origin and the form's session cookies
 // would be blocked, causing silent submission failures.
-const MAINTENANCE_FORM_SRC = '/formsm/public/form/new/975dee18-714b-498a-9d1d-6fcdac49e21c';
-const MAINTENANCE_FORM_EXTERNAL = 'http://aci.lmhosted.com/formsm/public/form/new/975dee18-714b-498a-9d1d-6fcdac49e21c';
+const MAINTENANCE_FORM_SRC = '/formsm/public/form/new/864c8594-4dfc-4658-b403-c0b2bceecd77';
+const MAINTENANCE_FORM_EXTERNAL = 'http://aci.lmhosted.com/formsm/public/form/new/864c8594-4dfc-4658-b403-c0b2bceecd77';
 
 export default function MaintenancePage() {
   const { user, isLoading } = useAuth();
