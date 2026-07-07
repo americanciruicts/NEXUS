@@ -464,6 +464,7 @@ function TravelersPage() {
                           t.jobDisplay.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          t.customerCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           t.customerName.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'All Statuses' || t.status === statusFilter;
@@ -1112,7 +1113,6 @@ function TravelersPage() {
                       <td className="px-2 py-2">
                         <div className="space-y-0.5 overflow-hidden">
                           <div className="text-xs text-gray-600 dark:text-slate-400 truncate">Code: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.customerCode || 'N/A'}</span></div>
-                          <div className="text-xs text-gray-600 dark:text-slate-400 truncate" title={traveler.customerName}>Name: <span className="font-semibold text-gray-900 dark:text-slate-100">{traveler.customerName || 'N/A'}</span></div>
                         </div>
                       </td>
                       <td className="px-2 py-2">
@@ -1284,14 +1284,10 @@ function TravelersPage() {
                       </div>
 
                       {/* Customer */}
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
+                      <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                         <div>
                           <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Cust Code</div>
                           <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">{traveler.customerCode || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold uppercase">Cust Name</div>
-                          <div className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate" title={traveler.customerName}>{traveler.customerName || 'N/A'}</div>
                         </div>
                       </div>
 
