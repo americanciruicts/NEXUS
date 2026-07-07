@@ -28,6 +28,22 @@ import { readLiveCache, writeLiveCache, notifyDataUpdated, LIVE_REFRESH_MS } fro
 
 const TRAVELERS_CACHE_KEY = 'nexus_travelers_v1';
 
+// Canonical department order for the card's Department Progress chips. Engineering
+// is always first, Shipping always last, and the middle follows the same fixed
+// order the traveler detail view uses — so every card lists departments the same
+// way regardless of per-traveler step sequence. Any department not listed here
+// sorts just before Shipping.
+const DEPARTMENT_ORDER = [
+  'Engineering', 'Engineering/Prep', 'Prep', 'Receiving', 'SMT', 'ALL',
+  'Quality', 'TH', 'Soldering', 'Test', 'Coating', 'Cable', 'Purchasing', 'Other',
+  'Shipping',
+];
+const departmentRank = (name: string): number => {
+  const i = DEPARTMENT_ORDER.indexOf(name);
+  // Unknown departments sit just before Shipping (the always-last entry).
+  return i !== -1 ? i : DEPARTMENT_ORDER.length - 1.5;
+};
+
 // Toast notification component
 interface ToastProps {
   message: string;
@@ -370,7 +386,9 @@ function TravelersPage() {
           progress: Number(t.percent_complete || 0),
           totalSteps: Number(t.total_steps || 0),
           completedSteps: Number(t.completed_steps || 0),
-          departmentProgress: Array.isArray(t.department_progress) ? t.department_progress as DeptProgress[] : [],
+          departmentProgress: (Array.isArray(t.department_progress) ? t.department_progress as DeptProgress[] : [])
+            .slice()
+            .sort((a, b) => departmentRank(a.department) - departmentRank(b.department)),
           laborProgress: (t.labor_progress as LaborProgress) || { total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 },
           createdAt: String(t.created_at || ''),
           dueDate: String(t.due_date || ''),
