@@ -233,7 +233,7 @@ function TravelersPage() {
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Sorting
-  type SortField = 'jobNumber' | 'partNumber' | 'customerName' | 'createdAt' | 'dueDate' | 'shipDate' | 'status' | 'quantity' | 'progress';
+  type SortField = 'jobNumber' | 'partNumber' | 'customerCode' | 'createdAt' | 'dueDate' | 'shipDate' | 'status' | 'quantity' | 'progress';
   type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -877,8 +877,8 @@ function TravelersPage() {
                   <option value="shipDate:asc">Ship Date (soonest)</option>
                   <option value="shipDate:desc">Ship Date (latest)</option>
                   <option value="status:asc">Status (A → Z)</option>
-                  <option value="customerName:asc">Customer (A → Z)</option>
-                  <option value="customerName:desc">Customer (Z → A)</option>
+                  <option value="customerCode:asc">Customer (A → Z)</option>
+                  <option value="customerCode:desc">Customer (Z → A)</option>
                   <option value="partNumber:asc">Part # (A → Z)</option>
                   <option value="partNumber:desc">Part # (Z → A)</option>
                   <option value="quantity:desc">Quantity (high → low)</option>
@@ -965,12 +965,12 @@ function TravelersPage() {
                     <th className="px-2 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">
                       <button
                         type="button"
-                        onClick={() => toggleSort('customerName')}
+                        onClick={() => toggleSort('customerCode')}
                         className="inline-flex items-center gap-1 hover:text-yellow-200 transition-colors"
                         title="Sort by Customer"
                       >
                         <span>Customer</span>
-                        {sortField === 'customerName' ? (
+                        {sortField === 'customerCode' ? (
                           sortDirection === 'asc' ? <ChevronUpIcon className="h-4 w-4 text-yellow-300" /> : <ChevronDownIcon className="h-4 w-4 text-yellow-300" />
                         ) : <ChevronUpDownIcon className="h-4 w-4 text-yellow-300" />}
                       </button>
