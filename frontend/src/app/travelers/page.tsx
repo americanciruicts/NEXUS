@@ -508,8 +508,11 @@ function TravelersPage() {
   // Sort filtered travelers
   const sortedTravelers = [...filteredTravelers].sort((a, b) => {
     const dir = sortDirection === 'asc' ? 1 : -1;
-    const av = a[sortField];
-    const bv = b[sortField];
+    // Customer sort keys off the customer code, but falls back to the customer
+    // name when the code is blank — otherwise every traveler with an empty code
+    // would be dumped unsorted at the end.
+    const av = sortField === 'customerCode' ? (a.customerCode || a.customerName) : a[sortField];
+    const bv = sortField === 'customerCode' ? (b.customerCode || b.customerName) : b[sortField];
 
     // Handle empty/undefined — push empties to the end regardless of direction
     const aEmpty = av === null || av === undefined || av === '';
