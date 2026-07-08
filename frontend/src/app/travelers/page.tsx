@@ -246,7 +246,7 @@ function TravelersPage() {
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
 
   // Sorting
   type SortField = 'jobNumber' | 'partNumber' | 'customerCode' | 'createdAt' | 'dueDate' | 'shipDate' | 'status' | 'quantity' | 'progress';
