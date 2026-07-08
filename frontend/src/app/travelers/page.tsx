@@ -246,7 +246,9 @@ function TravelersPage() {
   const [selectedTravelers, setSelectedTravelers] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(100);
+  // 1000 acts as "All" — the list API caps at 200, so this always shows every
+  // loaded traveler on a single page.
+  const [itemsPerPage, setItemsPerPage] = useState(1000);
 
   // Sorting
   type SortField = 'jobNumber' | 'partNumber' | 'customerCode' | 'createdAt' | 'dueDate' | 'shipDate' | 'status' | 'quantity' | 'progress';
@@ -1449,6 +1451,7 @@ function TravelersPage() {
                         <option value={20}>20</option>
                         <option value={50}>50</option>
                         <option value={100}>100</option>
+                        <option value={1000}>All</option>
                       </select>
                       <span className="text-xs text-white/80">{startIndex + 1}-{Math.min(endIndex, filteredTravelers.length)} of {filteredTravelers.length}</span>
                     </div>
