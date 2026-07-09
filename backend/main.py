@@ -173,6 +173,8 @@ async def lifespan(app: FastAPI):
             ("QUALITY",            "Send boards with CofC (Chemring)",                       "Quality"),
             ("PCBA STOCK",         "Check stock - any PCBA or cable assemblies on hand?",    "Receiving"),
             ("LABELLING",          "Apply labels as required",                               "Shipping"),
+            ("PACKING",            "Pack units for shipment",                                "Shipping"),
+            ("PACKING AND SHIPPING","Pack and ship units back to customer",                  "Shipping"),
             ("SHIPPING",           "Ship units back to customer",                            "Shipping"),
         ]
         # Modification RMAs skip the stock-check step (per existing convention)

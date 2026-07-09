@@ -154,6 +154,8 @@ export const RMA_WORK_CENTERS: WorkCenterItem[] = [
   { name: 'QUALITY', description: 'Send boards with CofC (Chemring)', department: 'Quality' },
   { name: 'PCBA STOCK', description: 'Check stock - any PCBA or cable assemblies on hand?', department: 'Receiving' },
   { name: 'LABELLING', description: 'Apply labels as required', department: 'Shipping' },
+  { name: 'PACKING', description: 'Pack units for shipment', department: 'Shipping' },
+  { name: 'PACKING AND SHIPPING', description: 'Pack and ship units back to customer', department: 'Shipping' },
   { name: 'SHIPPING', description: 'Ship units back to customer', department: 'Shipping' },
 ];
 

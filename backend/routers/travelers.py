@@ -115,7 +115,9 @@ MANUFACTURING_STEPS["RMA_SAME"] = [
     {"step_number": 7, "operation": "MISC.", "work_center_code": "RMA_MISC", "instructions": "Miscellaneous operations as needed", "sub_steps": [], "estimated_time": 15, "is_required": False},
     {"step_number": 8, "operation": "FINAL INSPEC", "work_center_code": "RMA_FINAL_INSPEC", "instructions": "Final inspection - sample or 100% inspection", "sub_steps": [], "estimated_time": 30, "is_required": True},
     {"step_number": 9, "operation": "STOCK", "work_center_code": "RMA_STOCK", "instructions": "Check stock - do we have any PCBA or cable assemblies in stock?", "sub_steps": [], "estimated_time": 15, "is_required": False},
-    {"step_number": 10, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
+    {"step_number": 10, "operation": "PACKING", "work_center_code": "RMA_PACKING", "instructions": "Pack repaired units for shipment", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 11, "operation": "PACKING AND SHIPPING", "work_center_code": "RMA_PACKING_AND_SHIPPING", "instructions": "Pack and ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 12, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
 ]
 
 # RMA Router - Different Jobs/Rev, PO & WO (same work center steps, different header fields)
@@ -129,7 +131,9 @@ MANUFACTURING_STEPS["RMA_DIFF"] = [
     {"step_number": 7, "operation": "MISC.", "work_center_code": "RMA_MISC", "instructions": "Miscellaneous operations as needed", "sub_steps": [], "estimated_time": 15, "is_required": False},
     {"step_number": 8, "operation": "FINAL INSPEC", "work_center_code": "RMA_FINAL_INSPEC", "instructions": "Final inspection - sample or 100% inspection", "sub_steps": [], "estimated_time": 30, "is_required": True},
     {"step_number": 9, "operation": "STOCK", "work_center_code": "RMA_STOCK", "instructions": "Check stock - do we have any PCBA or cable assemblies in stock?", "sub_steps": [], "estimated_time": 15, "is_required": False},
-    {"step_number": 10, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
+    {"step_number": 10, "operation": "PACKING", "work_center_code": "RMA_PACKING", "instructions": "Pack repaired units for shipment", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 11, "operation": "PACKING AND SHIPPING", "work_center_code": "RMA_PACKING_AND_SHIPPING", "instructions": "Pack and ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 12, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship repaired units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
 ]
 
 # Modification RMA (no STOCK step per Word template)
@@ -142,7 +146,9 @@ MANUFACTURING_STEPS["MODIFICATION"] = [
     {"step_number": 6, "operation": "PURCHASING", "work_center_code": "RMA_PURCHASING", "instructions": "Parts ordered and waiting to be received", "sub_steps": [], "estimated_time": 15, "is_required": False},
     {"step_number": 7, "operation": "MISC.", "work_center_code": "RMA_MISC", "instructions": "Miscellaneous operations as needed", "sub_steps": [], "estimated_time": 15, "is_required": False},
     {"step_number": 8, "operation": "FINAL INSPEC", "work_center_code": "RMA_FINAL_INSPEC", "instructions": "Final inspection - sample or 100% inspection", "sub_steps": [], "estimated_time": 30, "is_required": True},
-    {"step_number": 9, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship modified units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
+    {"step_number": 9, "operation": "PACKING", "work_center_code": "RMA_PACKING", "instructions": "Pack modified units for shipment", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 10, "operation": "PACKING AND SHIPPING", "work_center_code": "RMA_PACKING_AND_SHIPPING", "instructions": "Pack and ship modified units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": False},
+    {"step_number": 11, "operation": "SHIPPING", "work_center_code": "RMA_SHIPPING", "instructions": "Ship modified units back to customer", "sub_steps": [], "estimated_time": 15, "is_required": True},
 ]
 
 @router.get("/next-work-order-number")
