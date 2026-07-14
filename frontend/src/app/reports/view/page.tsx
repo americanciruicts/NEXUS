@@ -573,6 +573,40 @@ function ReportViewContent() {
             </div>
           </div>
 
+          {/* Last Step Summary - Single Traveler only */}
+          {type === 'single_traveler' && (() => {
+            const withEnd = travelerData.filter((e) => e && e.end_time);
+            if (withEnd.length === 0) return null;
+            const lastEntry = withEnd.reduce((latest, e) =>
+              new Date(e.end_time).getTime() > new Date(latest.end_time).getTime() ? e : latest
+            );
+            const lastStepId = lastEntry.step_id ?? null;
+            const matchEntries = travelerData.filter((e) =>
+              lastStepId != null ? e.step_id === lastStepId : e.work_center === lastEntry.work_center
+            );
+            const operators = Array.from(new Set(
+              matchEntries.map((e) => e.employee_name).filter((n) => n && String(n).trim())
+            ));
+            const stepTotalHours = matchEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+            const wcLabel = lastEntry.work_center || 'N/A';
+            return (
+              <div className="bg-indigo-50 dark:bg-slate-800 border-l-4 border-indigo-600 dark:border-indigo-400 print:!bg-indigo-50" style={{
+                borderRadius: '6px',
+                padding: '10px 14px',
+                marginBottom: '20px',
+                fontSize: '12px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '6px 16px'
+              }}>
+                <span className="text-indigo-700 dark:text-indigo-300 print:!text-indigo-700" style={{ fontWeight: 'bold' }}>Last Step: {wcLabel}</span>
+                <span className="text-gray-600 dark:text-slate-300">by {operators.length > 0 ? operators.join(', ') : 'N/A'}</span>
+                <span className="text-green-600 dark:text-green-400" style={{ fontWeight: 'bold' }}>{stepTotalHours.toFixed(2)}h</span>
+              </div>
+            );
+          })()}
+
           {/* Traveler Tracking Table - Digital */}
           {!isLaborReport && travelerData.length > 0 && (
             <>
@@ -584,7 +618,8 @@ function ReportViewContent() {
                       <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>WORK CENTER</th>
                       <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '12%', wordWrap: 'break-word' }}>OPERATOR</th>
                       <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>START TIME</th>
-                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '22%', wordWrap: 'break-word' }}>END TIME</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '14%', wordWrap: 'break-word' }}>END TIME</th>
+                      <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'center', width: '8%', wordWrap: 'break-word' }}>QTY</th>
                       <th style={{ border: '1px solid #e5e7eb', padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '10%', wordWrap: 'break-word' }}>HOURS</th>
                     </tr>
                   </thead>
@@ -615,6 +650,9 @@ function ReportViewContent() {
                             hour12: true
                           }) : '-'}
                         </td>
+                        <td className="text-gray-600 dark:text-slate-300" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', textAlign: 'center', wordWrap: 'break-word', overflow: 'hidden' }}>
+                          {entry.qty_completed ?? '-'}
+                        </td>
                         <td className="text-green-600 dark:text-green-400" style={{ border: '1px solid #e5e7eb', padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', wordWrap: 'break-word', overflow: 'hidden' }}>
                           {entry.hours_worked.toFixed(2)}
                         </td>
@@ -623,7 +661,7 @@ function ReportViewContent() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-indigo-50 dark:bg-slate-700/50 print:!bg-indigo-50">
-                      <td colSpan={4} className="text-indigo-600 dark:text-indigo-400" style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
+                      <td colSpan={5} className="text-indigo-600 dark:text-indigo-400" style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
                         TOTAL HOURS:
                       </td>
                       <td className="text-green-600 dark:text-green-400" style={{ border: '1px solid #4338ca', padding: '8px', fontSize: '11px', fontWeight: 'bold', textAlign: 'right' }}>
@@ -680,6 +718,12 @@ function ReportViewContent() {
                               minute: '2-digit',
                               hour12: true
                             }) : '-'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Qty</label>
+                          <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center font-medium">
+                            {entry.qty_completed ?? '-'}
                           </div>
                         </div>
                         <div>
@@ -787,7 +831,8 @@ function ReportViewContent() {
                                     <tr className="bg-gray-50 dark:bg-slate-700 print:!bg-gray-50" style={{ borderBottom: '1px solid #e5e7eb' }}>
                                       <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
                                       <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
-                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '20%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'center', width: '10%', wordWrap: 'break-word' }}>QTY</th>
                                       <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
                                     </tr>
                                   </thead>
@@ -816,6 +861,9 @@ function ReportViewContent() {
                                             minute: '2-digit',
                                             hour12: true
                                           }) : '-'}
+                                        </td>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', textAlign: 'center', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                          {entry.qty_completed ?? '-'}
                                         </td>
                                         <td className="text-green-600 dark:text-green-400" style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.hours_worked.toFixed(2)}
@@ -871,6 +919,12 @@ function ReportViewContent() {
                                               minute: '2-digit',
                                               hour12: true
                                             }) : '-'}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Qty</label>
+                                          <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center font-medium">
+                                            {entry.qty_completed ?? '-'}
                                           </div>
                                         </div>
                                         <div>
@@ -1003,7 +1057,8 @@ function ReportViewContent() {
                                     <tr className="bg-gray-50 dark:bg-slate-700 print:!bg-gray-50" style={{ borderBottom: '1px solid #e5e7eb' }}>
                                       <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '20%', wordWrap: 'break-word' }}>OPERATOR</th>
                                       <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>START TIME</th>
-                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '30%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'left', width: '20%', wordWrap: 'break-word' }}>END TIME</th>
+                                      <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'center', width: '10%', wordWrap: 'break-word' }}>QTY</th>
                                       <th className="text-gray-600 dark:text-slate-300" style={{ padding: '6px 4px', fontSize: '9px', fontWeight: 'bold', textAlign: 'right', width: '20%', wordWrap: 'break-word' }}>HOURS</th>
                                     </tr>
                                   </thead>
@@ -1032,6 +1087,9 @@ function ReportViewContent() {
                                             minute: '2-digit',
                                             hour12: true
                                           }) : '-'}
+                                        </td>
+                                        <td className="text-gray-600 dark:text-slate-300" style={{ padding: '4px', fontSize: '9px', textAlign: 'center', wordWrap: 'break-word', overflow: 'hidden' }}>
+                                          {entry.qty_completed ?? '-'}
                                         </td>
                                         <td className="text-green-600 dark:text-green-400" style={{ padding: '4px', fontSize: '9px', textAlign: 'right', fontWeight: 'bold', wordWrap: 'break-word', overflow: 'hidden' }}>
                                           {entry.hours_worked.toFixed(2)}
@@ -1087,6 +1145,12 @@ function ReportViewContent() {
                                               minute: '2-digit',
                                               hour12: true
                                             }) : '-'}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Qty</label>
+                                          <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center font-medium">
+                                            {entry.qty_completed ?? '-'}
                                           </div>
                                         </div>
                                         <div>
@@ -1196,7 +1260,8 @@ function ReportViewContent() {
                                 <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '20%' }}>WORK CENTER</th>
                                 <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '18%' }}>OPERATOR</th>
                                 <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '24%' }}>START TIME</th>
-                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '24%' }}>END TIME</th>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'left', color: colors.bg, width: '16%' }}>END TIME</th>
+                                <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'center', color: colors.bg, width: '8%' }}>QTY</th>
                                 <th style={{ padding: '8px 6px', fontSize: '10px', fontWeight: 'bold', textAlign: 'right', color: colors.bg, width: '14%' }}>HOURS</th>
                               </tr>
                             </thead>
@@ -1221,6 +1286,9 @@ function ReportViewContent() {
                                       hour: '2-digit', minute: '2-digit', hour12: true
                                     }) : '-'}
                                   </td>
+                                  <td className="text-gray-600 dark:text-slate-300" style={{ padding: '6px', fontSize: '10px', textAlign: 'center' }}>
+                                    {entry.qty_completed ?? '-'}
+                                  </td>
                                   <td className="text-green-600 dark:text-green-400" style={{ padding: '6px', fontSize: '10px', textAlign: 'right', fontWeight: 'bold' }}>
                                     {entry.hours_worked.toFixed(2)}
                                   </td>
@@ -1228,7 +1296,7 @@ function ReportViewContent() {
                               ))}
                               {/* Category Total Footer */}
                               <tr style={{ backgroundColor: colors.light, borderTop: `2px solid ${colors.bg}` }}>
-                                <td colSpan={4} style={{ padding: '8px 6px', fontSize: '11px', fontWeight: 'bold', color: colors.bg }}>
+                                <td colSpan={5} style={{ padding: '8px 6px', fontSize: '11px', fontWeight: 'bold', color: colors.bg }}>
                                   {cat} Total
                                 </td>
                                 <td style={{ padding: '8px 6px', fontSize: '11px', textAlign: 'right', fontWeight: 'bold', color: colors.bg }}>
@@ -1270,6 +1338,12 @@ function ReportViewContent() {
                                         hour: '2-digit', minute: '2-digit', hour12: true
                                       }) : '-'}
                                     </div>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">Qty</label>
+                                  <div className="text-sm bg-gray-50 dark:bg-slate-700 p-2 rounded text-center font-medium">
+                                    {entry.qty_completed ?? '-'}
                                   </div>
                                 </div>
                                 <div>

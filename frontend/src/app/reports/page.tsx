@@ -19,6 +19,7 @@ interface LaborEntry {
   start_time: string;
   end_time?: string | null;
   hours_worked: number;
+  qty_completed?: number | null;
   is_completed: boolean;
   work_center?: string;
   description?: string;
@@ -604,13 +605,14 @@ export default function ReportsPage() {
                     <th className="px-3 py-2.5 text-left text-xs font-bold">Work Center</th>
                     <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">Start Time</th>
                     <th className="mobile-hide-report px-3 py-2.5 text-left text-xs font-bold">End Time</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-bold">Qty</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold">Hours</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {reportData.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-8 text-gray-500 dark:text-slate-400">
+                      <td colSpan={10} className="text-center py-8 text-gray-500 dark:text-slate-400">
                         No data found for the selected criteria
                       </td>
                     </tr>
@@ -640,6 +642,9 @@ export default function ReportsPage() {
                         </td>
                         <td className="mobile-hide-report px-3 py-2 text-sm text-gray-600 dark:text-slate-300">
                           {entry.end_time ? new Date(entry.end_time).toLocaleTimeString() : <span className="text-amber-600 dark:text-amber-400">In Progress</span>}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-center text-gray-600 dark:text-slate-300">
+                          {entry.qty_completed ?? '-'}
                         </td>
                         <td className="px-3 py-2 text-sm font-bold text-green-600 dark:text-green-400">
                           {entry.hours_worked.toFixed(2)}

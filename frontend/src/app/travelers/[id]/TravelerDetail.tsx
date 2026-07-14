@@ -354,7 +354,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [overallProgress, setOverallProgress] = useState({ total_steps: 0, completed_steps: 0, percent_complete: 0 });
   const [laborOverall, setLaborOverall] = useState<LaborOverall>({ total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 });
   const [categoryHours, setCategoryHours] = useState<Record<string, number>>({});
-  const [lastLoggedStep, setLastLoggedStep] = useState<{ work_center: string; employee_name: string; hours_worked: number; end_time: string } | null>(null);
+  const [lastLoggedStep, setLastLoggedStep] = useState<{ work_center: string; operators: string[]; hours_worked: number; end_time: string } | null>(null);
 
   // Refs for step rows to enable auto-scroll after reordering
   const stepRowRefs = useRef<{ [key: number]: HTMLTableRowElement | null }>({});
@@ -656,16 +656,24 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           headers: { 'Authorization': `Bearer ${token || ''}` }
         });
         if (!response.ok) return;
-        const entries: Array<{ work_center: string | null; employee_name: string; hours_worked: number; end_time: string | null }> = await response.json();
+        const entries: Array<{ step_id: number | null; work_center: string | null; employee_name: string; hours_worked: number; end_time: string | null }> = await response.json();
         const completed = entries
           .filter(e => e.end_time && e.work_center)
           .sort((a, b) => new Date(b.end_time as string).getTime() - new Date(a.end_time as string).getTime());
         const last = completed[0];
         if (last) {
+          // A single step can be worked by 2-3 operators (each logs their own
+          // labor entry). Gather every operator + their hours for the LAST step
+          // so the summary shows all names, not just whoever closed it last.
+          const sameStep = completed.filter(e =>
+            last.step_id != null ? e.step_id === last.step_id : e.work_center === last.work_center
+          );
+          const operators = Array.from(new Set(sameStep.map(e => (e.employee_name || '').trim()).filter(Boolean)));
+          const totalHours = sameStep.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
           setLastLoggedStep({
             work_center: last.work_center as string,
-            employee_name: last.employee_name || '',
-            hours_worked: last.hours_worked || 0,
+            operators,
+            hours_worked: totalHours,
             end_time: last.end_time as string,
           });
         } else {
@@ -2624,9 +2632,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Last step
                         </span>
-                        <span className="text-sm font-bold text-gray-900 dark:text-white">{lastLoggedStep.work_center}</span>
-                        {lastLoggedStep.employee_name && (
-                          <span className="text-xs text-gray-500 dark:text-slate-400">by {lastLoggedStep.employee_name}</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">{lastLoggedStep.work_center.replace(/_/g, ' ')}</span>
+                        {lastLoggedStep.operators.length > 0 && (
+                          <span className="text-xs text-gray-500 dark:text-slate-400">by {lastLoggedStep.operators.join(', ')}</span>
                         )}
                         {lastLoggedStep.hours_worked > 0 && (
                           <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{lastLoggedStep.hours_worked.toFixed(2)}h</span>
@@ -3665,6 +3673,21 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               )}
             </div>
 
+            {/* Last completed step — mirrors the on-screen badge but prints on
+                the paper traveler so the floor can see the latest progress. */}
+            {lastLoggedStep && (
+              <div className="print-only mb-1 border border-gray-500 dark:border-slate-400 rounded px-2 py-1" style={{ fontSize: '10px' }}>
+                <span className="font-bold uppercase mr-2">Last Step:</span>
+                <span className="font-bold">{lastLoggedStep.work_center.replace(/_/g, ' ')}</span>
+                {lastLoggedStep.operators.length > 0 && (
+                  <span className="mx-2">by {lastLoggedStep.operators.join(', ')}</span>
+                )}
+                {lastLoggedStep.hours_worked > 0 && (
+                  <span className="font-semibold">{lastLoggedStep.hours_worked.toFixed(2)}h</span>
+                )}
+              </div>
+            )}
+
             {/* Desktop Table View */}
             <div className="overflow-x-auto print:overflow-x-visible">
             <table className={`routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 dark:border-slate-500 min-w-[640px] ${isEditing ? 'editing-mode' : ''}`} style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
@@ -3778,7 +3801,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             placeholder="Enter instructions..."
                             rows={1}
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{fontSize: '9px', minHeight: '16px'}}>{step.instruction || '\u00A0'}</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{fontSize: '9px', minHeight: '16px'}}><span className="inline-block align-middle mr-1 border border-gray-600" style={{width: '11px', height: '11px'}} />{step.instruction || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
@@ -3872,7 +3895,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           </div>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-1 py-1 text-sm break-words print:px-0.5 print:py-0.5 print:text-[9px]" style={{minWidth: '120px'}}>
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.instruction || '\u00A0'}</span>
+                          <div className="flex items-start gap-1">
+                            {/* Empty box for the operator to pen-check when the step is done on the printed traveler */}
+                            <span className="inline-block flex-shrink-0 mt-0.5 border border-gray-600 dark:border-slate-400" style={{width: '13px', height: '13px'}} />
+                            <span className="inline-block flex-1 border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.instruction || '\u00A0'}</span>
+                          </div>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
                           <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.completedTime || '\u00A0'}</span>
