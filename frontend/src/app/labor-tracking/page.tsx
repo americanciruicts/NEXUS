@@ -138,6 +138,10 @@ export default function LaborTrackingPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [manualEntryData, setManualEntryData] = useState({
     job_number: '',
+    // Combined RMA label shown in the field; job_number stays the lookup key.
+    job_display: '',
+    // Pins the work-center lookup to one traveler when several share a job_number.
+    traveler_id: undefined as number | undefined,
     work_center: '',
     step_id: undefined as number | undefined,
     operator_name: '',
@@ -421,6 +425,15 @@ export default function LaborTrackingPage() {
     return () => { if (qrResolveRef.current) clearTimeout(qrResolveRef.current); };
   }, [newEntry.work_center, isTimerRunning, resolveQrCode]);
 
+  // Mirror of backend utils/job_display.extract_job_number: pull the real job
+  // number out of a combined RMA label so lookups still resolve. The field now
+  // carries the whole label ("1107 RMA JOB NO 8825L"); the API wants "8825L".
+  const extractJobNumber = (labelOrJob: string): string => {
+    const marker = ' RMA JOB NO ';
+    const s = labelOrJob || '';
+    return s.includes(marker) ? s.split(marker)[1].trim() : s.trim();
+  };
+
   // Autocomplete fetch functions
   const fetchJobNumbers = async (query: string) => {
     try {
@@ -437,8 +450,12 @@ export default function LaborTrackingPage() {
 
       if (response.ok) {
         const data = await response.json();
+        // value is the UNIQUE combined label, not the bare job number: an RMA
+        // traveler and the job it reworks share a job_number, so a bare-number
+        // value made the options ambiguous and exact-match/scan always resolved
+        // to the first (non-RMA) traveler.
         return data.map((item: any) => ({
-          value: item.job_number,
+          value: item.job_display || item.job_number,
           label: item.label,
           description: item.customer_name,
           ...item
@@ -542,8 +559,9 @@ export default function LaborTrackingPage() {
     // traveler_id — the operator may now mean a different traveler entirely.
     scannedTravelerIdRef.current = null;
     setScannedWorkOrder(null);
-    // Manual typing has no RMA context — display follows the typed job number.
-    setNewEntry(prev => ({ ...prev, job_number: value, job_display: '' }));
+    // The field carries the display label (possibly a full RMA label, typed or
+    // scanned); job_number stays the real lookup key.
+    setNewEntry(prev => ({ ...prev, job_number: extractJobNumber(value), job_display: value }));
     if (!value) {
       setJobWorkCenterOptions([]);
     }
@@ -551,7 +569,9 @@ export default function LaborTrackingPage() {
 
   // Handle job number selection from autocomplete dropdown - THIS is when we fetch steps
   const handleJobNumberSelect = async (option: any) => {
-    const jobNum = (option.job_number || option.value || '').trim();
+    // option.value is now the combined label; extract the real job number when
+    // the option is synthesized from typed/scanned text (no job_number field).
+    const jobNum = (option.job_number || extractJobNumber(option.value || '')).trim();
     if (!jobNum) return;
     // The dropdown now returns one row per traveler (job_number + WO). If the
     // picked option carries a traveler_id, pin it so the start-timer flow
@@ -563,7 +583,7 @@ export default function LaborTrackingPage() {
       typeof option.id === 'number' ? option.id : null;
     scannedTravelerIdRef.current = pickedTravelerId;
     setScannedWorkOrder(option.work_order_number || null);
-    setNewEntry(prev => ({ ...prev, job_number: jobNum, job_display: option.job_display || jobNum, work_center: '', step_id: undefined }));
+    setNewEntry(prev => ({ ...prev, job_number: jobNum, job_display: option.job_display || option.value || jobNum, work_center: '', step_id: undefined }));
     const steps = await fetchWorkCentersByJob(jobNum, '', pickedTravelerId);
     setJobWorkCenterOptions(steps);
     // After the job is scanned/selected, pull focus to the Work Center field
@@ -1506,6 +1526,8 @@ export default function LaborTrackingPage() {
         setIsManualEntryOpen(false);
         setManualEntryData({
           job_number: '',
+          job_display: '',
+          traveler_id: undefined,
           work_center: '',
           step_id: undefined,
           operator_name: '',
@@ -1871,7 +1893,7 @@ export default function LaborTrackingPage() {
                   </label>
                   <Autocomplete
                     ref={jobNumberAutocompleteRef}
-                    value={newEntry.job_number}
+                    value={newEntry.job_display || newEntry.job_number}
                     onChange={handleJobNumberChange}
                     onSelect={handleJobNumberSelect}
                     fetchSuggestions={fetchJobNumbers}
@@ -3131,6 +3153,8 @@ export default function LaborTrackingPage() {
           setIsManualEntryOpen(false);
           setManualEntryData({
             job_number: '',
+            job_display: '',
+            traveler_id: undefined,
             work_center: '',
             step_id: undefined,
             operator_name: '',
@@ -3151,6 +3175,8 @@ export default function LaborTrackingPage() {
                 setIsManualEntryOpen(false);
                 setManualEntryData({
                   job_number: '',
+                  job_display: '',
+                  traveler_id: undefined,
                   work_center: '',
                   step_id: undefined,
                   operator_name: '',
@@ -3183,17 +3209,25 @@ export default function LaborTrackingPage() {
                 Job Number <span className="text-red-500">*</span>
               </label>
               <Autocomplete
-                value={manualEntryData.job_number}
+                value={manualEntryData.job_display || manualEntryData.job_number}
                 onChange={(value) => {
-                  setManualEntryData({ ...manualEntryData, job_number: value });
+                  // Typing invalidates any pinned traveler; keep the label in
+                  // job_display and the real number in job_number.
+                  setManualEntryData({ ...manualEntryData, job_number: extractJobNumber(value), job_display: value, traveler_id: undefined });
                   if (!value) {
                     setManualJobWorkCenterOptions([]);
                   }
                 }}
-                onSelect={async (option) => {
-                  const jobNum = option.job_number || option.value;
-                  setManualEntryData(prev => ({ ...prev, job_number: jobNum, work_center: '', step_id: undefined }));
-                  const steps = await fetchWorkCentersByJob(jobNum);
+                onSelect={async (option: any) => {
+                  const jobNum = (option.job_number || extractJobNumber(option.value || '')).trim();
+                  if (!jobNum) return;
+                  // Pin the picked traveler so an RMA and the job it reworks
+                  // (same job_number) resolve to their OWN work centers.
+                  const pickedTravelerId =
+                    typeof option.traveler_id === 'number' ? option.traveler_id :
+                    typeof option.id === 'number' ? option.id : undefined;
+                  setManualEntryData(prev => ({ ...prev, job_number: jobNum, job_display: option.job_display || option.value || jobNum, traveler_id: pickedTravelerId, work_center: '', step_id: undefined }));
+                  const steps = await fetchWorkCentersByJob(jobNum, '', pickedTravelerId);
                   setManualJobWorkCenterOptions(steps);
                 }}
                 fetchSuggestions={fetchJobNumbers}
@@ -3215,7 +3249,7 @@ export default function LaborTrackingPage() {
                 }}
                 fetchSuggestions={async (query) => {
                   if (manualEntryData.job_number) {
-                    const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query);
+                    const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query, manualEntryData.traveler_id);
                     if (jobSteps.length > 0) {
                       const generalWCs = await fetchWorkCenters(query);
                       const existingValues = new Set(jobSteps.map((f: any) => f.value));
