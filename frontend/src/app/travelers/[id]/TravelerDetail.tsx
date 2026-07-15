@@ -2460,6 +2460,20 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .bg-blue-200.border-b { page-break-before: avoid !important; break-before: avoid !important; page-break-after: avoid !important; break-after: avoid !important; }
           .border-b.border-black:not(.bg-purple-200) { page-break-inside: avoid !important; break-inside: avoid !important; }
 
+          /* ROUTING must start directly under its title. The step table is
+             taller than a page, so the section itself has to be breakable —
+             forcing break-inside:avoid on it made the browser bail out and push
+             the table to the next page, leaving the title stranded. Instead:
+             let the section and table flow, glue the title to the table, keep
+             individual rows intact, and repeat the header on each page. */
+          .routing-section { page-break-inside: auto !important; break-inside: auto !important; }
+          .routing-section > div:first-child { page-break-after: avoid !important; break-after: avoid !important; }
+          .routing-table-wrap { page-break-before: avoid !important; break-before: avoid !important; page-break-inside: auto !important; break-inside: auto !important; }
+          table.routing-table { page-break-before: avoid !important; break-before: avoid !important; page-break-inside: auto !important; break-inside: auto !important; }
+          table.routing-table thead { display: table-header-group !important; }
+          table.routing-table thead tr { page-break-after: avoid !important; break-after: avoid !important; }
+          table.routing-table tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+
           /* Section content compact */
           .bg-yellow-50, .bg-purple-50 { padding: 0.05rem 0.1rem !important; font-size: 9px !important; margin: 0 !important; }
           .bg-purple-50 { padding: 0.1rem !important; min-height: 30px !important; }
@@ -3658,8 +3672,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
           </div>
 
-          {/* Routing Section */}
-          <div className="border-b-2 border-black dark:border-slate-600 print:break-inside-avoid">
+          {/* Routing Section — must NOT be break-inside:avoid. The step table is
+              taller than a page, so the browser abandons the constraint and
+              breaks after the first child, stranding the ROUTING title at the
+              foot of one page with the table on the next. Let it flow; the CSS
+              keeps the title glued to the table and repeats the header row. */}
+          <div className="routing-section border-b-2 border-black dark:border-slate-600">
             <div className="bg-blue-200 dark:bg-blue-900/50 border-b border-black dark:border-slate-600 px-2 py-0.5 flex justify-between items-center print:px-1 print:py-0 print:!bg-blue-200">
               <h2 className="font-bold text-xs text-blue-900 dark:text-blue-200 print:!text-black print:text-[9px]">ROUTING</h2>
               {isEditing && (
@@ -3678,7 +3696,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 stays in the on-screen header. */}
 
             {/* Desktop Table View */}
-            <div className="overflow-x-auto print:overflow-x-visible">
+            <div className="routing-table-wrap overflow-x-auto print:overflow-x-visible">
             <table className={`routing-table routing-table-desktop w-full border-collapse text-sm border-2 border-gray-400 dark:border-slate-500 min-w-[640px] ${isEditing ? 'editing-mode' : ''}`} style={{tableLayout: isEditing ? 'fixed' : 'auto'}}>
               <thead>
                 <tr className="bg-gray-200 dark:bg-slate-700 border-b-2 border-gray-400 dark:border-slate-500">
