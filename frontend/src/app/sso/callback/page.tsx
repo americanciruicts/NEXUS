@@ -50,6 +50,9 @@ function SSOCallbackContent() {
           loginTime: Date.now(),
           sso: true,
         }))
+        // Start the idle clock for SSO logins too, or the first session check
+        // would fall back to loginTime and drift out of sync with other tabs.
+        try { localStorage.setItem('nexus_last_activity', String(Date.now())); } catch {}
 
         setStatus('success')
 

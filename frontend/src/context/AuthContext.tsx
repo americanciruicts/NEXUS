@@ -37,9 +37,41 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-const SESSION_TIMEOUT_MS = 14 * 60 * 60 * 1000;
+// Sessions end on INACTIVITY, not on a fixed clock from login: an operator part
+// way through a shift was being logged out mid-task. The clock restarts on any
+// interaction, so only a genuinely abandoned terminal falls out.
+const SESSION_TIMEOUT_MS = 12 * 60 * 60 * 1000; // 12h with no activity
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
+// Last activity lives in localStorage so every tab shares one clock — a tab
+// left idle in the background no longer expires while you work in another.
+const LAST_ACTIVITY_KEY = 'nexus_last_activity';
+// Renew the token well inside its lifetime so an active session never 401s.
+const TOKEN_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+const readLastActivity = (): number => {
+  try {
+    const raw = localStorage.getItem(LAST_ACTIVITY_KEY);
+    const ts = raw ? parseInt(raw, 10) : NaN;
+    if (!Number.isNaN(ts) && ts > 0) return ts;
+    // No activity stamp yet (fresh login, or upgrading from the old absolute
+    // session): fall back to loginTime, never to 0 — 0 would read as "idle
+    // since 1970" and log the user straight back out.
+    const authData = localStorage.getItem('nexus_auth');
+    const loginTime = authData ? (JSON.parse(authData).loginTime || 0) : 0;
+    return loginTime || Date.now();
+  } catch {
+    return Date.now();
+  }
+};
+
+const markActivity = () => {
+  try {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+  } catch {
+    /* storage full / disabled — session simply falls back to the token's own expiry */
+  }
+};
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
@@ -56,11 +88,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (authData) {
           const parsed = JSON.parse(authData);
           if (parsed.isAuthenticated && parsed.role) {
-            const loginTime = parsed.loginTime || 0;
             const currentTime = Date.now();
 
-            if (currentTime - loginTime > SESSION_TIMEOUT_MS) {
-              console.log('Session expired after 14 hours');
+            if (currentTime - readLastActivity() > SESSION_TIMEOUT_MS) {
+              console.log('Session expired after 12 hours of inactivity');
               localStorage.removeItem('nexus_auth');
               localStorage.removeItem('nexus_token');
               setUser(null);
@@ -102,8 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const token = localStorage.getItem('nexus_token');
         if (authData && token) {
           const parsed = JSON.parse(authData);
-          const loginTime = parsed.loginTime || 0;
-          if (parsed.isAuthenticated && parsed.role && (Date.now() - loginTime) < SESSION_TIMEOUT_MS) {
+          if (parsed.isAuthenticated && parsed.role && (Date.now() - readLastActivity()) < SESSION_TIMEOUT_MS) {
             // Auth is still valid in localStorage — restore it instead of redirecting
             const derivedFirstName = parsed.first_name || (parsed.username?.includes('@') ? parsed.username.split('@')[0].charAt(0).toUpperCase() + parsed.username.split('@')[0].slice(1) : parsed.username);
             setUser({
@@ -141,6 +171,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       localStorage.removeItem('nexus_auth');
       localStorage.removeItem('nexus_token');
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
     } catch (error) {
       console.error('Error clearing localStorage:', error);
     }
@@ -161,9 +192,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const authData = localStorage.getItem('nexus_auth');
         if (authData && user) {
-          const parsed = JSON.parse(authData);
-          const loginTime = parsed.loginTime || 0;
-          const elapsed = Date.now() - loginTime;
+          const elapsed = Date.now() - readLastActivity();
           const remaining = SESSION_TIMEOUT_MS - elapsed;
 
           if (remaining <= 0) {
@@ -171,10 +200,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (typeof navigator !== 'undefined' && !navigator.onLine) {
               return;
             }
-            console.log('Session expired after 14 hours - auto logout');
+            console.log('Session expired after 12 hours of inactivity - auto logout');
             toast.warning('Your session has expired. Please log in again.');
             logout();
             return;
+          }
+
+          // Any interaction pushes the deadline back, so a warned-then-resumed
+          // operator must not keep the stale warning flags.
+          if (remaining > FIFTEEN_MINUTES_MS) {
+            warningShown15.current = false;
+            warningShown5.current = false;
           }
 
           // 15-minute warning
@@ -200,10 +236,58 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    // Check every 2 minutes — session is 9 hours so no need for 30s checks
+    // Check every 2 minutes — the idle window is 12h so no need for 30s checks
     const intervalId = setInterval(checkSessionExpiration, 120000);
     return () => clearInterval(intervalId);
   }, [user, logout]);
+
+  // Record activity (throttled) so the idle clock restarts while the operator
+  // is working. Stamped in localStorage, so all tabs share one deadline.
+  useEffect(() => {
+    if (!user) return;
+    let last = 0;
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - last < 30000) return; // at most one write per 30s
+      last = now;
+      markActivity();
+    };
+    markActivity();
+    const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'focus'];
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+    const onVisible = () => { if (document.visibilityState === 'visible') onActivity(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      events.forEach(e => window.removeEventListener(e, onActivity));
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user]);
+
+  // Keep the token fresh while the session is alive. Without this an operator
+  // working past the token's lifetime would start getting 401s despite the
+  // idle clock saying they're still signed in.
+  useEffect(() => {
+    if (!user) return;
+    const renew = async () => {
+      try {
+        const token = localStorage.getItem('nexus_token');
+        if (!token) return;
+        if (Date.now() - readLastActivity() > SESSION_TIMEOUT_MS) return; // idle out instead
+        const res = await fetch(API_ENDPOINTS.AUTH.REFRESH, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return; // leave the session alone; the idle check owns logout
+        const data = await res.json();
+        if (data?.access_token) localStorage.setItem('nexus_token', data.access_token);
+      } catch {
+        /* offline or transient — try again next tick */
+      }
+    };
+    renew();
+    const id = setInterval(renew, TOKEN_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [user]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
@@ -247,6 +331,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             isAuthenticated: true,
             loginTime: Date.now()
           }));
+          markActivity();
         } catch (error) {
           console.error('Error saving to localStorage:', error);
         }

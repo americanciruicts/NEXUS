@@ -188,6 +188,25 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
 
+@router.post("/refresh")
+async def refresh_access_token(current_user: User = Depends(get_current_user)):
+    """Issue a fresh token for an already-authenticated caller.
+
+    Sessions end on inactivity, not on a fixed clock: the client renews while
+    the operator is working, so a shift never gets cut off mid-task. An expired
+    token can't refresh (get_current_user rejects it), so an abandoned terminal
+    still falls out of the session on its own.
+    """
+    access_token = create_access_token(
+        data={"sub": str(current_user.id)},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
+
 @router.post("/sso/callback")
 async def sso_callback(request: Request, db: Session = Depends(get_db)):
     """Handle SSO callback from ACI FORGE. Validates SSO token and returns NEXUS JWT."""
