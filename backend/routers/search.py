@@ -260,7 +260,7 @@ async def autocomplete_job_numbers(
             "id": t.id,
             "traveler_id": t.id,
             "job_number": t.job_number,
-            "rma_number": rma or None,
+            "rma_number": (t.rma_number or "").strip() or None,
             "traveler_type": t.traveler_type.value if hasattr(t.traveler_type, 'value') else str(t.traveler_type),
             "job_display": job_display,
             "work_order_number": wo or None,
