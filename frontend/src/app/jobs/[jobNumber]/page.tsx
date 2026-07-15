@@ -1113,21 +1113,21 @@ function TimelineTab({ events, travelers, loading }: { events: TimelineEvent[]; 
   const laneIds = new Set(travelers.map(t => t.traveler_id));
   const orphans = events.filter(e => e.traveler_id && !laneIds.has(e.traveler_id));
 
+  // Compact rows: the rail sits inside each lane, so lanes can live side by
+  // side and scroll on their own instead of stacking into one endless page.
   const renderTrack = (list: TimelineEvent[]) => (
     <div className="relative">
-      <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-700" />
-      <div className="space-y-4">
+      <div className="absolute left-3 top-1 bottom-1 w-px bg-gray-200 dark:bg-slate-700" />
+      <div className="space-y-2.5">
         {list.map((event, i) => (
-          <div key={i} className="relative flex gap-4 pl-2">
-            <div className={`relative z-10 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${getIconColor(event.type)}`}>
+          <div key={i} className="relative flex gap-2.5">
+            <div className={`relative z-10 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 ${getIconColor(event.type)}`}>
               {getIconComponent(event.icon)}
             </div>
-            <div className="flex-1 min-w-0 pb-4">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{event.title}</p>
-                <span className="text-[10px] text-gray-400 dark:text-slate-500">{formatTimestamp(event.timestamp)}</span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{event.detail}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-gray-900 dark:text-white leading-snug break-words">{event.title}</p>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 leading-snug break-words">{event.detail}</p>
+              <span className="text-[10px] text-gray-400 dark:text-slate-500 tabular-nums">{formatTimestamp(event.timestamp)}</span>
             </div>
           </div>
         ))}
@@ -1137,48 +1137,86 @@ function TimelineTab({ events, travelers, loading }: { events: TimelineEvent[]; 
 
   const isRma = (t: TimelineTraveler) => t.traveler_type?.startsWith('RMA') || t.traveler_type === 'MODIFICATION';
 
-  return (
-    <div className="p-4 space-y-6">
-      {jobEvents.length > 0 && renderTrack(jobEvents)}
+  // Split view: one column per traveler, each scrolling on its own. Stacked
+  // lanes meant scrolling past ~40 events of one traveler to reach the next;
+  // side by side they stay comparable at a glance. Columns wrap on narrow
+  // screens rather than squeezing into unreadable slivers.
+  const columnClass =
+    lanes.length >= 3 ? 'lg:grid-cols-2 2xl:grid-cols-3'
+    : lanes.length === 2 ? 'lg:grid-cols-2'
+    : 'grid-cols-1';
 
-      {lanes.map(({ traveler: t, events: list }) => (
-        <div key={t.traveler_id} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-          {/* Lane header — this traveler's identity and its OWN total time */}
-          <div className={`flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b ${
-            isRma(t)
-              ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800'
-              : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
-          }`}>
-            <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{t.job_display}</span>
-              {t.work_order_number && (
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300">
-                  WO {t.work_order_number}
-                </span>
-              )}
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                isRma(t)
-                  ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
-                  : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-              }`}>
-                {t.traveler_type.replace(/_/g, ' ')}
-              </span>
-              <span className="text-[10px] text-gray-500 dark:text-slate-400">Qty {t.quantity}</span>
-              <span className="text-[10px] text-gray-500 dark:text-slate-400">{t.completed_steps}/{t.total_steps} steps</span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <ClockIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{t.total_hours.toFixed(2)}h</span>
-              <span className="text-[10px] text-gray-400 dark:text-slate-500">({t.entries_count} entries)</span>
-            </div>
-          </div>
-          <div className="p-4">
-            {list.length > 0
-              ? renderTrack(list)
-              : <p className="text-xs text-gray-400 dark:text-slate-500 italic">No events on this traveler yet</p>}
-          </div>
+  return (
+    <div className="p-4 space-y-4">
+      {/* Job-level events (created in KOSH) — one shared strip above the lanes */}
+      {jobEvents.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-4 py-3">
+          {renderTrack(jobEvents)}
         </div>
-      ))}
+      )}
+
+      <div className={`grid grid-cols-1 ${columnClass} gap-4 items-start`}>
+        {lanes.map(({ traveler: t, events: list }) => (
+          <div
+            key={t.traveler_id}
+            className={`flex flex-col rounded-xl border overflow-hidden bg-white dark:bg-slate-900 ${
+              isRma(t) ? 'border-rose-200 dark:border-rose-800' : 'border-gray-200 dark:border-slate-700'
+            }`}
+          >
+            {/* Sticky lane header: identity + this traveler's OWN total time */}
+            <div className={`sticky top-0 z-10 px-3 py-2 border-b backdrop-blur-sm ${
+              isRma(t)
+                ? 'bg-rose-50/95 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800'
+                : 'bg-gray-50/95 dark:bg-slate-800/95 border-gray-200 dark:border-slate-700'
+            }`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-bold text-gray-900 dark:text-white truncate" title={t.job_display}>
+                  {t.job_display}
+                </span>
+                <span className="flex items-center gap-1 flex-shrink-0 text-sm font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                  <ClockIcon className="h-3.5 w-3.5" />
+                  {t.total_hours.toFixed(2)}h
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                {t.work_order_number && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300">
+                    WO {t.work_order_number}
+                  </span>
+                )}
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                  isRma(t)
+                    ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
+                    : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                }`}>
+                  {t.traveler_type.replace(/_/g, ' ')}
+                </span>
+                <span className="text-[10px] text-gray-500 dark:text-slate-400">Qty {t.quantity}</span>
+                <span className="text-[10px] text-gray-500 dark:text-slate-400 tabular-nums">
+                  {t.completed_steps}/{t.total_steps} steps
+                </span>
+                <span className="text-[10px] text-gray-400 dark:text-slate-500 tabular-nums">
+                  {t.entries_count} {t.entries_count === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
+              {/* Step progress */}
+              <div className="mt-1.5 h-1 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${isRma(t) ? 'bg-rose-500' : 'bg-blue-500'}`}
+                  style={{ width: `${t.total_steps ? Math.round((t.completed_steps / t.total_steps) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Each lane scrolls on its own — the page stays put */}
+            <div className="px-3 py-3 overflow-y-auto max-h-[60vh]">
+              {list.length > 0
+                ? renderTrack(list)
+                : <p className="text-xs text-gray-400 dark:text-slate-500 italic">No events on this traveler yet</p>}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {orphans.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-4">
