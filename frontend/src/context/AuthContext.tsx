@@ -49,27 +49,28 @@ const LAST_ACTIVITY_KEY = 'nexus_last_activity';
 // Renew the token well inside its lifetime so an active session never 401s.
 const TOKEN_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
-const readLastActivity = (): number => {
-  try {
-    const raw = localStorage.getItem(LAST_ACTIVITY_KEY);
-    const ts = raw ? parseInt(raw, 10) : NaN;
-    if (!Number.isNaN(ts) && ts > 0) return ts;
-    // No activity stamp yet (fresh login, or upgrading from the old absolute
-    // session): fall back to loginTime, never to 0 — 0 would read as "idle
-    // since 1970" and log the user straight back out.
-    const authData = localStorage.getItem('nexus_auth');
-    const loginTime = authData ? (JSON.parse(authData).loginTime || 0) : 0;
-    return loginTime || Date.now();
-  } catch {
-    return Date.now();
-  }
-};
-
 const markActivity = () => {
   try {
     localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
   } catch {
     /* storage full / disabled — session simply falls back to the token's own expiry */
+  }
+};
+
+const readLastActivity = (): number => {
+  try {
+    const raw = localStorage.getItem(LAST_ACTIVITY_KEY);
+    const ts = raw ? parseInt(raw, 10) : NaN;
+    if (!Number.isNaN(ts) && ts > 0) return ts;
+    // No stamp yet — a fresh login, or the first load after this build reached
+    // the browser. Start the idle clock NOW and persist it. Deliberately do NOT
+    // fall back to the old absolute loginTime: anyone who logged in more than
+    // the idle window ago would be read as "idle that whole time" and thrown
+    // out on sight, which is the very behaviour this replaced.
+    markActivity();
+    return Date.now();
+  } catch {
+    return Date.now();
   }
 };
 
