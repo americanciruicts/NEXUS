@@ -227,6 +227,9 @@ async def autocomplete_job_numbers(
         query = query.filter(
             or_(
                 Traveler.job_number.ilike(search_term),
+                # An RMA traveler's job_number is the job it reworks, so its RMA
+                # number ("1107") is only findable by searching this column.
+                Traveler.rma_number.ilike(search_term),
                 Traveler.part_description.ilike(search_term),
                 Traveler.customer_name.ilike(search_term)
             )

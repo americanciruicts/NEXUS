@@ -660,11 +660,16 @@ export default function LaborTrackingPage() {
     const workCenter = entry.work_center || entry.description?.split(' - ')?.[0] || '';
     const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || '';
 
-    // Filter by job number. Match the RMA display label ("1080B RMA JOB NO
-    // 8656") as well as the raw job number, so the job chips — which show the
-    // display label — select their entries, and typing either the RMA number or
-    // the bare job number still finds an RMA traveler's hours.
-    if (filter.jobNumber) {
+    // Filter by job number. A picked chip is an EXACT identity match on the
+    // chip's own label: an RMA traveler's label contains the job number it
+    // reworks ("1107 RMA JOB NO 8825L" contains "8825L"), so a substring test
+    // made the plain 8825L chip sweep in the RMA's hours too — the opposite of
+    // keeping RMA rework time separate. Free-text still matches loosely across
+    // the label and the raw number.
+    if (selectedJobChip) {
+      const chipLabel = entry.job_display || entry.job_number || `Traveler #${entry.traveler_id}`;
+      if (chipLabel !== selectedJobChip) return false;
+    } else if (filter.jobNumber) {
       const needle = filter.jobNumber.toLowerCase();
       const haystack = `${entry.job_display || ''} ${entry.job_number || ''}`.toLowerCase();
       if (!haystack.includes(needle)) return false;
