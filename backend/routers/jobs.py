@@ -1,5 +1,5 @@
 """
-Jobs router — reads job data from the KOSH PostgreSQL database (pcb_inventory schema).
+Jobs router — reads job data from the KOSH PostgreSQL database (warehouse schema).
 No data duplication: queries tblJob, tblBOM, tblWhse_Inventory directly.
 All endpoints are ADMIN-only and read-only (NEXUS never writes to KOSH tables).
 """
@@ -73,7 +73,7 @@ def list_jobs(
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
         # Get total count
-        cursor.execute(f'SELECT COUNT(*) as total FROM pcb_inventory."tblJob" {where_sql}', params)
+        cursor.execute(f'SELECT COUNT(*) as total FROM warehouse."tblJob" {where_sql}', params)
         total = cursor.fetchone()["total"]
 
         # Get jobs
@@ -81,7 +81,7 @@ def list_jobs(
             SELECT id, job_number, description, customer, cust_pn, build_qty,
                    order_qty, job_rev, cust_rev, wo_number, status, notes,
                    created_by, created_at, updated_at
-            FROM pcb_inventory."tblJob"
+            FROM warehouse."tblJob"
             {where_sql}
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
@@ -126,7 +126,7 @@ def lookup_job(job_number: str, current_user=Depends(get_current_user)):
         cursor.execute("""
             SELECT job_number, description, customer, cust_pn, build_qty, order_qty,
                    job_rev, cust_rev, wo_number, status
-            FROM pcb_inventory."tblJob"
+            FROM warehouse."tblJob"
             WHERE job_number ILIKE %s
             ORDER BY
                 CASE WHEN job_number = %s THEN 0 ELSE 1 END,
@@ -169,6 +169,7 @@ def list_jobs_enriched(
 ):
     """Jobs list with traveler counts, progress, shortage counts, and health indicators."""
     from models import Traveler, TravelerStatus, LaborEntry
+    from utils.job_display import is_rma
     from collections import defaultdict
     from datetime import date
 
@@ -187,14 +188,14 @@ def list_jobs_enriched(
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-        cursor.execute(f'SELECT COUNT(*) as total FROM pcb_inventory."tblJob" {where_sql}', params)
+        cursor.execute(f'SELECT COUNT(*) as total FROM warehouse."tblJob" {where_sql}', params)
         total = cursor.fetchone()["total"]
 
         cursor.execute(f"""
             SELECT id, job_number, description, customer, cust_pn, build_qty,
                    order_qty, job_rev, cust_rev, wo_number, status, notes,
                    created_by, created_at, updated_at
-            FROM pcb_inventory."tblJob"
+            FROM warehouse."tblJob"
             {where_sql}
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
@@ -235,13 +236,19 @@ def list_jobs_enriched(
             return remainder != "" and all(c in ("L", "M") for c in remainder)
         return False
 
+    # RMA travelers are bucketed separately. An RMA traveler carries the job
+    # number of the job it reworks, so folding it in here would add its rework
+    # hours to that job's actuals and count it as another build traveler. RMA
+    # rework is its own work; it is reported alongside, never merged in.
     travelers_by_job = defaultdict(list)
+    rma_travelers_by_job = defaultdict(list)
     for t in all_travelers:
         # Prefer an exact match; fall back to a compliance-suffix match.
         exact = next((jn for jn in job_numbers if t.job_number.upper() == jn.upper()), None)
         target = exact or next((jn for jn in job_numbers if _job_matches(t.job_number, jn)), None)
         if target is not None:
-            travelers_by_job[target].append(t)
+            bucket = rma_travelers_by_job if is_rma(t) else travelers_by_job
+            bucket[target].append(t)
 
     # Batch-fetch labor hours — aggregate in SQL (one grouped query) instead of
     # pulling every labor row into Python and summing in a loop.
@@ -265,12 +272,14 @@ def list_jobs_enriched(
         jn = j["job_number"]
         order_qty = int(j["order_qty"] or 1)
         tvs = travelers_by_job.get(jn, [])
+        rma_tvs = rma_travelers_by_job.get(jn, [])
         traveler_count = len(tvs)
         completed = sum(1 for t in tvs if t.status == TravelerStatus.COMPLETED)
         in_progress = sum(1 for t in tvs if t.status == TravelerStatus.IN_PROGRESS)
         qty_mfg = sum(t.quantity for t in tvs if t.status == TravelerStatus.COMPLETED)
         progress = round((qty_mfg / order_qty * 100), 1) if order_qty > 0 else 0
         labor_hrs = round(sum(labor_by_traveler.get(t.id, 0) for t in tvs), 2)
+        rma_labor_hrs = round(sum(labor_by_traveler.get(t.id, 0) for t in rma_tvs), 2)
 
         has_overdue = any(
             t.due_date and str(t.due_date)[:10] < str(date.today()) and t.status not in (TravelerStatus.COMPLETED, TravelerStatus.CANCELLED, TravelerStatus.ARCHIVED)
@@ -306,6 +315,9 @@ def list_jobs_enriched(
             "in_progress_travelers": in_progress,
             "progress_percent": progress,
             "total_labor_hours": labor_hrs,
+            # RMA rework hours on this job number, kept out of total_labor_hours.
+            "rma_labor_hours": rma_labor_hrs,
+            "rma_traveler_count": len(rma_tvs),
             "health": health,
             "has_overdue": has_overdue,
         })
@@ -322,7 +334,7 @@ def get_job_detail(job_number: str, current_user=Depends(require_admin)):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Get job record
-        cursor.execute('SELECT * FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT * FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found")
@@ -362,7 +374,7 @@ def get_job_bom(job_number: str, current_user=Depends(require_admin)):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Verify job exists & get quantities
-        cursor.execute('SELECT build_qty, order_qty FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT build_qty, order_qty FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found")
@@ -387,10 +399,10 @@ def get_job_bom(job_number: str, current_user=Depends(require_admin)):
                     b.cust,
                     b.cust_pn,
                     b.cust_rev
-                FROM pcb_inventory."tblBOM" b
+                FROM warehouse."tblBOM" b
                 WHERE b.job = %s
-                    AND (b.job_rev = (SELECT job_rev FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
-                         OR NOT EXISTS (SELECT 1 FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
+                    AND (b.job_rev = (SELECT job_rev FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
+                         OR NOT EXISTS (SELECT 1 FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
                 ORDER BY b.aci_pn, b.line
             ),
             inventory_match AS (
@@ -415,7 +427,7 @@ def get_job_bom(job_number: str, current_user=Depends(require_admin)):
                     w.loc_to,
                     CASE WHEN bl.aci_pn = w.item THEN 1 WHEN w.item IS NOT NULL THEN 2 ELSE 3 END as match_priority
                 FROM bom_lines bl
-                LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                LEFT JOIN warehouse."tblWhse_Inventory" w
                     ON (bl.aci_pn = w.item OR bl.bom_mpn = w.mpn)
                     AND COALESCE(w.loc_to, '') != 'MFG Floor'
                 ORDER BY COALESCE(w.pcn, bl.aci_pn || '_nopcn'), bl.aci_pn, match_priority
@@ -543,7 +555,7 @@ def get_job_stock(job_number: str, current_user=Depends(require_admin)):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Verify job exists
-        cursor.execute('SELECT order_qty FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT order_qty FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found")
@@ -554,10 +566,10 @@ def get_job_stock(job_number: str, current_user=Depends(require_admin)):
         cursor.execute("""
             WITH bom_items AS (
                 SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn as bom_mpn, b.qty, b."DESC", b.line
-                FROM pcb_inventory."tblBOM" b
+                FROM warehouse."tblBOM" b
                 WHERE b.job = %s
-                    AND (b.job_rev = (SELECT job_rev FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
-                         OR NOT EXISTS (SELECT 1 FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
+                    AND (b.job_rev = (SELECT job_rev FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
+                         OR NOT EXISTS (SELECT 1 FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
                 ORDER BY b.aci_pn, b.line
             )
             SELECT
@@ -575,7 +587,7 @@ def get_job_stock(job_number: str, current_user=Depends(require_admin)):
                 COALESCE(w.dc, '') as date_code,
                 COALESCE(w.po, '') as po_number
             FROM bom_items bi
-            LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+            LEFT JOIN warehouse."tblWhse_Inventory" w
                 ON (bi.aci_pn = w.item OR bi.bom_mpn = w.mpn)
             ORDER BY
                 CASE WHEN bi.line ~ '^[0-9]+$' THEN CAST(bi.line AS INTEGER) ELSE 999999 END,
@@ -623,7 +635,7 @@ def get_job_progress(job_number: str, db: Session = Depends(get_db), current_use
     conn = get_kosh_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute('SELECT order_qty FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT order_qty FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found")
@@ -669,7 +681,7 @@ def get_job_enriched(job_number: str, db: Session = Depends(get_db), current_use
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Get job from KOSH
-        cursor.execute('SELECT * FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT * FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found")
@@ -685,10 +697,10 @@ def get_job_enriched(job_number: str, db: Session = Depends(get_db), current_use
                 WITH bom_lines AS (
                     SELECT DISTINCT ON (b.aci_pn)
                         b.aci_pn, b.qty, b.mpn as bom_mpn
-                    FROM pcb_inventory."tblBOM" b
+                    FROM warehouse."tblBOM" b
                     WHERE b.job = %s
-                        AND (b.job_rev = (SELECT job_rev FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
-                             OR NOT EXISTS (SELECT 1 FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
+                        AND (b.job_rev = (SELECT job_rev FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
+                             OR NOT EXISTS (SELECT 1 FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
                     ORDER BY b.aci_pn
                 )
                 SELECT
@@ -697,7 +709,7 @@ def get_job_enriched(job_number: str, db: Session = Depends(get_db), current_use
                     COALESCE(SUM(CASE WHEN COALESCE(w.loc_to, '') != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as stockroom_qty,
                     COALESCE(SUM(CASE WHEN w.loc_to = 'MFG Floor' THEN CAST(NULLIF(w.mfg_qty, '') AS INTEGER) ELSE 0 END), 0) as mfg_floor_qty
                 FROM bom_lines bl
-                LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                LEFT JOIN warehouse."tblWhse_Inventory" w
                     ON (bl.aci_pn = w.item OR bl.bom_mpn = w.mpn)
                 GROUP BY bl.aci_pn, bl.qty
             """, (job_number, job_number, job_number))
@@ -807,7 +819,7 @@ def get_kitting_status(job_number: str, current_user=Depends(require_admin)):
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute('SELECT order_qty FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT order_qty FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found")
@@ -818,10 +830,10 @@ def get_kitting_status(job_number: str, current_user=Depends(require_admin)):
             WITH bom_lines AS (
                 SELECT DISTINCT ON (b.aci_pn)
                     b.aci_pn, b."DESC", b.qty, b.mpn as bom_mpn, b.line
-                FROM pcb_inventory."tblBOM" b
+                FROM warehouse."tblBOM" b
                 WHERE b.job = %s
-                    AND (b.job_rev = (SELECT job_rev FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
-                         OR NOT EXISTS (SELECT 1 FROM pcb_inventory."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
+                    AND (b.job_rev = (SELECT job_rev FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != '' ORDER BY created_at DESC LIMIT 1)
+                         OR NOT EXISTS (SELECT 1 FROM warehouse."tblBOM" WHERE job = %s AND job_rev IS NOT NULL AND job_rev != ''))
                 ORDER BY b.aci_pn
             )
             SELECT
@@ -832,7 +844,7 @@ def get_kitting_status(job_number: str, current_user=Depends(require_admin)):
                 COALESCE(SUM(CASE WHEN COALESCE(w.loc_to, '') != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as stockroom_qty,
                 COALESCE(SUM(CASE WHEN w.loc_to = 'MFG Floor' THEN CAST(NULLIF(w.mfg_qty, '') AS INTEGER) ELSE 0 END), 0) as mfg_floor_qty
             FROM bom_lines bl
-            LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+            LEFT JOIN warehouse."tblWhse_Inventory" w
                 ON (bl.aci_pn = w.item OR bl.bom_mpn = w.mpn)
             GROUP BY bl.aci_pn, bl."DESC", bl.line, bl.qty
             ORDER BY
@@ -905,7 +917,7 @@ def auto_create_traveler(job_number: str, db: Session = Depends(get_db), current
     conn = get_kosh_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute('SELECT * FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT * FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_number} not found in KOSH")
@@ -1017,7 +1029,7 @@ def get_job_timeline(job_number: str, db: Session = Depends(get_db), current_use
     conn = get_kosh_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute('SELECT created_at, created_by, status FROM pcb_inventory."tblJob" WHERE job_number = %s', (job_number,))
+        cursor.execute('SELECT created_at, created_by, status FROM warehouse."tblJob" WHERE job_number = %s', (job_number,))
         job = cursor.fetchone()
         if job and job["created_at"]:
             events.append({

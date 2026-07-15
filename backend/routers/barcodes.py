@@ -6,35 +6,12 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from database import get_db
-from models import User, Traveler, StepScanEvent, TravelerType
+from models import User, Traveler, StepScanEvent
 from routers.auth import get_current_user
 from services.barcode_service import BarcodeService
+from utils.job_display import rma_job_display, extract_job_number
 
 router = APIRouter()
-
-_RMA_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
-
-
-def rma_job_display(traveler):
-    """Combined "<rma> RMA JOB NO <job>" label for RMA travelers (matching the
-    format used outside NEXUS); plain job number for everything else. So a
-    scanned RMA label resolves to the same combined form shown everywhere."""
-    if traveler is None:
-        return None
-    if getattr(traveler, "traveler_type", None) in _RMA_TYPES:
-        rma = (getattr(traveler, "rma_number", None) or "").strip()
-        return f"{rma} RMA JOB NO {traveler.job_number or ''}".strip()
-    return traveler.job_number
-
-
-def extract_job_number(scanned: str) -> str:
-    """A scanned RMA label is in combined form "<rma> RMA JOB NO <job>".
-    Return the <job> portion so the traveler lookup still resolves; pass
-    through unchanged for plain (non-RMA) job-number barcodes."""
-    marker = " RMA JOB NO "
-    if scanned and marker in scanned:
-        return scanned.split(marker, 1)[1].strip()
-    return scanned
 
 class BarcodeData(BaseModel):
     barcode: str

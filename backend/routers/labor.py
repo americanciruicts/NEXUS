@@ -184,20 +184,7 @@ class PauseLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
-_RMA_TYPES = (TravelerType.RMA_SAME, TravelerType.RMA_DIFF, TravelerType.MODIFICATION)
-
-
-def rma_job_display(traveler) -> Optional[str]:
-    """Job-number label for labor views. RMA travelers combine both the RMA
-    number and the job number into one field — "<rma> RMA JOB NO <job>" —
-    matching the format used outside NEXUS. Non-RMA travelers show the plain
-    job number. The stored job_number is unchanged (still the lookup key)."""
-    if traveler is None:
-        return None
-    if getattr(traveler, "traveler_type", None) in _RMA_TYPES:
-        rma = (getattr(traveler, "rma_number", None) or "").strip()
-        return f"{rma} RMA JOB NO {traveler.job_number or ''}".strip()
-    return traveler.job_number
+from utils.job_display import rma_job_display, is_rma
 
 
 class LaborEntryResponse(BaseModel):
@@ -274,12 +261,20 @@ async def scan_qr_lookup(
             qr_description = parts[6] if len(parts) > 6 else (parts[4] if len(parts) > 4 else None)
 
             candidate_traveler_ids: list = []
+            qr_traveler = None
             if qr_traveler_id:
                 candidate_traveler_ids.append(qr_traveler_id)
+                qr_traveler = db.query(Traveler).filter(Traveler.id == qr_traveler_id).first()
             if qr_job_number_fb:
                 sibling_q = db.query(Traveler.id).filter(Traveler.job_number == qr_job_number_fb)
                 if qr_work_order_fb:
                     sibling_q = sibling_q.filter(Traveler.work_order_number == qr_work_order_fb)
+                # Same RMA/original split as the PROCESS branch below: never let
+                # an RMA scan fall back onto the traveler for the job it reworks.
+                if qr_traveler is not None:
+                    sibling_q = sibling_q.filter(Traveler.traveler_type == qr_traveler.traveler_type)
+                    if is_rma(qr_traveler):
+                        sibling_q = sibling_q.filter(Traveler.rma_number == qr_traveler.rma_number)
                 for (tid,) in sibling_q.all():
                     if tid not in candidate_traveler_ids:
                         candidate_traveler_ids.append(tid)
@@ -360,12 +355,23 @@ async def scan_qr_lookup(
         # with the QR's traveler_id, then widen to (job_number + work_order)
         # in case the original traveler was replaced.
         candidate_traveler_ids: list = []
+        qr_traveler = None
         if qr_traveler_id:
             candidate_traveler_ids.append(qr_traveler_id)
+            qr_traveler = db.query(Traveler).filter(Traveler.id == qr_traveler_id).first()
         if qr_job_number_fb:
             sibling_q = db.query(Traveler.id).filter(Traveler.job_number == qr_job_number_fb)
             if qr_work_order_fb:
                 sibling_q = sibling_q.filter(Traveler.work_order_number == qr_work_order_fb)
+            # An RMA traveler shares its job_number with the job it reworks, so
+            # widening by job_number alone can land an RMA scan on the ORIGINAL
+            # job's traveler (or vice versa) — logging rework hours against the
+            # wrong traveler. Keep the fallback on the scanned traveler's own
+            # side of that line: same type, and same RMA number when it is one.
+            if qr_traveler is not None:
+                sibling_q = sibling_q.filter(Traveler.traveler_type == qr_traveler.traveler_type)
+                if is_rma(qr_traveler):
+                    sibling_q = sibling_q.filter(Traveler.rma_number == qr_traveler.rma_number)
             for (tid,) in sibling_q.all():
                 if tid not in candidate_traveler_ids:
                     candidate_traveler_ids.append(tid)

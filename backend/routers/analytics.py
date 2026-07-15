@@ -663,7 +663,7 @@ async def get_analytics(
                     kosh_jn = jn
                     for try_jn in (jn, base) if base != jn else (jn,):
                         kosh_cur.execute(
-                            'SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s',
+                            'SELECT order_qty, status FROM warehouse."tblJob" WHERE job_number = %s',
                             (try_jn,),
                         )
                         row = kosh_cur.fetchone()
@@ -679,7 +679,7 @@ async def get_analytics(
                         """
                         WITH bom_items AS (
                             SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
-                            FROM pcb_inventory."tblBOM" b
+                            FROM warehouse."tblBOM" b
                             WHERE b.job = %s
                             ORDER BY b.aci_pn, b.line
                         )
@@ -687,7 +687,7 @@ async def get_analytics(
                             CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
                             COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
                         FROM bom_items bi
-                        LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                        LEFT JOIN warehouse."tblWhse_Inventory" w
                             ON bi.aci_pn = w.item OR bi.mpn = w.mpn
                         GROUP BY bi.aci_pn, bi.qty
                         """,

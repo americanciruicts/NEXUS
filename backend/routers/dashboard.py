@@ -10,6 +10,7 @@ from models import (
 )
 from routers.auth import get_current_user
 from schemas.dashboard_schemas import DashboardStats
+from utils.job_display import format_job_display
 import time as _time
 
 router = APIRouter()
@@ -119,18 +120,27 @@ async def get_dashboard_stats(
             LaborEntry.end_time.isnot(None)
         ).group_by(func.date(LaborEntry.start_time), LaborEntry.work_center).order_by(func.date(LaborEntry.start_time)).all()
 
-        # Get job-level detail: date + work center + job_number
+        # Get job-level detail: date + work center + job_number.
+        # Group on traveler_type + rma_number too, NOT job_number alone: an RMA
+        # traveler shares its job_number with the original job, so grouping by
+        # job_number would sum RMA rework hours into the original job's actuals
+        # and emit them as one row. Keeping them apart is the whole point.
         labor_trend_jobs = db.query(
             func.date(LaborEntry.start_time).label('date'),
             LaborEntry.work_center,
             Traveler.job_number,
+            Traveler.traveler_type,
+            Traveler.rma_number,
             func.sum(LaborEntry.hours_worked).label('hours')
         ).join(Traveler, LaborEntry.traveler_id == Traveler.id).filter(
             LaborEntry.start_time >= start_dt,
             LaborEntry.start_time <= end_dt,
             LaborEntry.hours_worked > 0,
             LaborEntry.end_time.isnot(None)
-        ).group_by(func.date(LaborEntry.start_time), LaborEntry.work_center, Traveler.job_number).order_by(func.date(LaborEntry.start_time)).all()
+        ).group_by(
+            func.date(LaborEntry.start_time), LaborEntry.work_center,
+            Traveler.job_number, Traveler.traveler_type, Traveler.rma_number
+        ).order_by(func.date(LaborEntry.start_time)).all()
 
         date_map = OrderedDict()
         for date, wc, hours in labor_trend_data:
@@ -141,14 +151,15 @@ async def get_dashboard_stats(
             date_map[date_str][wc_name] = round(float(hours), 2)
 
         # Attach job details
-        for date, wc, job_num, hours in labor_trend_jobs:
+        for date, wc, job_num, ttype, rma_num, hours in labor_trend_jobs:
             date_str = date.strftime("%b %d") if date else ""
             wc_name = wc or "Unknown"
             if date_str in date_map:
                 details = date_map[date_str]["_details"]
                 if wc_name not in details:
                     details[wc_name] = []
-                details[wc_name].append({"job": job_num or "N/A", "hours": round(float(hours), 2)})
+                job_label = format_job_display(ttype, rma_num, job_num)
+                details[wc_name].append({"job": job_label or "N/A", "hours": round(float(hours), 2)})
 
         labor_trend = list(date_map.values())
     else:
@@ -163,17 +174,23 @@ async def get_dashboard_stats(
             LaborEntry.end_time.isnot(None)
         ).group_by(func.date_trunc('week', LaborEntry.start_time), LaborEntry.work_center).order_by(func.date_trunc('week', LaborEntry.start_time)).all()
 
+        # Same RMA-vs-original split as the daily branch above.
         labor_trend_jobs = db.query(
             func.date_trunc('week', LaborEntry.start_time).label('week'),
             LaborEntry.work_center,
             Traveler.job_number,
+            Traveler.traveler_type,
+            Traveler.rma_number,
             func.sum(LaborEntry.hours_worked).label('hours')
         ).join(Traveler, LaborEntry.traveler_id == Traveler.id).filter(
             LaborEntry.start_time >= start_dt,
             LaborEntry.start_time <= end_dt,
             LaborEntry.hours_worked > 0,
             LaborEntry.end_time.isnot(None)
-        ).group_by(func.date_trunc('week', LaborEntry.start_time), LaborEntry.work_center, Traveler.job_number).order_by(func.date_trunc('week', LaborEntry.start_time)).all()
+        ).group_by(
+            func.date_trunc('week', LaborEntry.start_time), LaborEntry.work_center,
+            Traveler.job_number, Traveler.traveler_type, Traveler.rma_number
+        ).order_by(func.date_trunc('week', LaborEntry.start_time)).all()
 
         date_map = OrderedDict()
         for week, wc, hours in labor_trend_data:
@@ -183,14 +200,15 @@ async def get_dashboard_stats(
                 date_map[date_str] = {"date": date_str, "_details": {}}
             date_map[date_str][wc_name] = round(float(hours), 2)
 
-        for week, wc, job_num, hours in labor_trend_jobs:
+        for week, wc, job_num, ttype, rma_num, hours in labor_trend_jobs:
             date_str = week.strftime("%b %d") if week else ""
             wc_name = wc or "Unknown"
             if date_str in date_map:
                 details = date_map[date_str]["_details"]
                 if wc_name not in details:
                     details[wc_name] = []
-                details[wc_name].append({"job": job_num or "N/A", "hours": round(float(hours), 2)})
+                job_label = format_job_display(ttype, rma_num, job_num)
+                details[wc_name].append({"job": job_label or "N/A", "hours": round(float(hours), 2)})
 
         labor_trend = list(date_map.values())
 
@@ -553,11 +571,11 @@ async def get_dashboard_stats(
                 # Strip L/M suffixes to get base job number for KOSH lookup
                 base_job = t.job_number.rstrip('LM') if t.job_number else t.job_number
 
-                kosh_cur.execute('SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s', (t.job_number,))
+                kosh_cur.execute('SELECT order_qty, status FROM warehouse."tblJob" WHERE job_number = %s', (t.job_number,))
                 kosh_job = kosh_cur.fetchone()
                 kosh_job_number = t.job_number
                 if not kosh_job:
-                    kosh_cur.execute('SELECT order_qty, status FROM pcb_inventory."tblJob" WHERE job_number = %s', (base_job,))
+                    kosh_cur.execute('SELECT order_qty, status FROM warehouse."tblJob" WHERE job_number = %s', (base_job,))
                     kosh_job = kosh_cur.fetchone()
                     if kosh_job:
                         kosh_job_number = base_job
@@ -569,7 +587,7 @@ async def get_dashboard_stats(
                     kosh_cur.execute("""
                         WITH bom_items AS (
                             SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
-                            FROM pcb_inventory."tblBOM" b
+                            FROM warehouse."tblBOM" b
                             WHERE b.job = %s
                             ORDER BY b.aci_pn, b.line
                         )
@@ -578,7 +596,7 @@ async def get_dashboard_stats(
                             CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per_board,
                             COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
                         FROM bom_items bi
-                        LEFT JOIN pcb_inventory."tblWhse_Inventory" w
+                        LEFT JOIN warehouse."tblWhse_Inventory" w
                             ON bi.aci_pn = w.item OR bi.mpn = w.mpn
                         GROUP BY bi.aci_pn, bi.qty
                     """, (kosh_job_number,))
@@ -798,8 +816,8 @@ async def get_dashboard_insights(
             WITH job_bom AS (
                 SELECT j.job_number, j.order_qty, j.customer, j.description, j.status,
                        COUNT(DISTINCT b.aci_pn) as total_parts
-                FROM pcb_inventory."tblJob" j
-                JOIN pcb_inventory."tblBOM" b ON b.job = j.job_number
+                FROM warehouse."tblJob" j
+                JOIN warehouse."tblBOM" b ON b.job = j.job_number
                 WHERE j.status IN ('New', 'In Prep', 'In Mfg')
                 GROUP BY j.job_number, j.order_qty, j.customer, j.description, j.status
                 HAVING COUNT(DISTINCT b.aci_pn) > 0
@@ -822,14 +840,14 @@ async def get_dashboard_insights(
                 kosh_cur.execute("""
                     WITH bom_items AS (
                         SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty, b."DESC"
-                        FROM pcb_inventory."tblBOM" b WHERE b.job = %s
+                        FROM warehouse."tblBOM" b WHERE b.job = %s
                         ORDER BY b.aci_pn, b.line
                     )
                     SELECT bi.aci_pn, bi."DESC",
                         CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
                         COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
                     FROM bom_items bi
-                    LEFT JOIN pcb_inventory."tblWhse_Inventory" w ON bi.aci_pn = w.item OR bi.mpn = w.mpn
+                    LEFT JOIN warehouse."tblWhse_Inventory" w ON bi.aci_pn = w.item OR bi.mpn = w.mpn
                     GROUP BY bi.aci_pn, bi."DESC", bi.qty
                 """, (job_num,))
                 parts = kosh_cur.fetchall()
