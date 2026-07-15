@@ -3673,20 +3673,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               )}
             </div>
 
-            {/* Last completed step — mirrors the on-screen badge but prints on
-                the paper traveler so the floor can see the latest progress. */}
-            {lastLoggedStep && (
-              <div className="print-only mb-1 border border-gray-500 dark:border-slate-400 rounded px-2 py-1" style={{ fontSize: '10px' }}>
-                <span className="font-bold uppercase mr-2">Current Step:</span>
-                <span className="font-bold">{lastLoggedStep.work_center.replace(/_/g, ' ')}</span>
-                {lastLoggedStep.operators.length > 0 && (
-                  <span className="mx-2">by {lastLoggedStep.operators.join(', ')}</span>
-                )}
-                {lastLoggedStep.hours_worked > 0 && (
-                  <span className="font-semibold">{lastLoggedStep.hours_worked.toFixed(2)}h</span>
-                )}
-              </div>
-            )}
+            {/* Current step is deliberately screen-only: the paper traveler is
+                the routing record and shouldn't carry live progress. The badge
+                stays in the on-screen header. */}
 
             {/* Desktop Table View */}
             <div className="overflow-x-auto print:overflow-x-visible">
