@@ -634,9 +634,14 @@ export default function LaborTrackingPage() {
     const workCenter = entry.work_center || entry.description?.split(' - ')?.[0] || '';
     const operatorName = entry.employee_name || entry.description?.split(' - ')?.[1] || '';
 
-    // Filter by job number
-    if (filter.jobNumber && !entry.job_number?.toLowerCase().includes(filter.jobNumber.toLowerCase())) {
-      return false;
+    // Filter by job number. Match the RMA display label ("1080B RMA JOB NO
+    // 8656") as well as the raw job number, so the job chips — which show the
+    // display label — select their entries, and typing either the RMA number or
+    // the bare job number still finds an RMA traveler's hours.
+    if (filter.jobNumber) {
+      const needle = filter.jobNumber.toLowerCase();
+      const haystack = `${entry.job_display || ''} ${entry.job_number || ''}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
     }
 
     // Filter by work center
@@ -1937,6 +1942,9 @@ export default function LaborTrackingPage() {
                           setNewEntry(prev => ({
                             ...prev,
                             job_number: scanData.job_number || prev.job_number,
+                            // Without this the banner keeps the PREVIOUS scan's
+                            // label — an RMA scan would show the wrong job.
+                            job_display: scanData.job_display || scanData.job_number || prev.job_display,
                             work_center: scanData.operation, // display name like "AOI"
                             step_id: scanData.step_id,
                           }));
@@ -2131,8 +2139,10 @@ export default function LaborTrackingPage() {
           {/* Job Summary — Filter Card */}
           {(() => {
             // Get unique job numbers from labor entries
+            // RMA travelers chip as their full job number ("1080B RMA JOB NO
+            // 8656"), so an RMA and the job it reworks stay separate chips.
             const uniqueJobs = Array.from(new Set(
-              laborEntries.map(entry => entry.job_number || `Traveler #${entry.traveler_id}`)
+              laborEntries.map(entry => entry.job_display || entry.job_number || `Traveler #${entry.traveler_id}`)
             )).sort();
 
             // Filter job chips by the summary search
@@ -2823,7 +2833,7 @@ export default function LaborTrackingPage() {
               <div>
                 <label className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number</label>
                 <p className="text-base text-gray-900 dark:text-slate-100 mt-1">
-                  {selectedEntry.job_number || `Traveler #${selectedEntry.traveler_id}`}
+                  {selectedEntry.job_display || selectedEntry.job_number || `Traveler #${selectedEntry.traveler_id}`}
                 </p>
               </div>
               <div>
@@ -2917,7 +2927,7 @@ export default function LaborTrackingPage() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Job Number:</span>
-                <span className="text-sm text-gray-900 dark:text-slate-100">{entryToDelete.job_number || `Traveler #${entryToDelete.traveler_id}`}</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100">{entryToDelete.job_display || entryToDelete.job_number || `Traveler #${entryToDelete.traveler_id}`}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm font-semibold text-gray-600 dark:text-slate-400">Operator:</span>

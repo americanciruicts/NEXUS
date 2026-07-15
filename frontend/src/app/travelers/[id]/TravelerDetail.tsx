@@ -2630,7 +2630,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-sm no-print">
                         <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          Last step
+                          Current step
                         </span>
                         <span className="text-sm font-bold text-gray-900 dark:text-white">{lastLoggedStep.work_center.replace(/_/g, ' ')}</span>
                         {lastLoggedStep.operators.length > 0 && (
@@ -3677,7 +3677,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 the paper traveler so the floor can see the latest progress. */}
             {lastLoggedStep && (
               <div className="print-only mb-1 border border-gray-500 dark:border-slate-400 rounded px-2 py-1" style={{ fontSize: '10px' }}>
-                <span className="font-bold uppercase mr-2">Last Step:</span>
+                <span className="font-bold uppercase mr-2">Current Step:</span>
                 <span className="font-bold">{lastLoggedStep.work_center.replace(/_/g, ' ')}</span>
                 {lastLoggedStep.operators.length > 0 && (
                   <span className="mx-2">by {lastLoggedStep.operators.join(', ')}</span>

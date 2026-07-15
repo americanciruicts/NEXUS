@@ -71,7 +71,8 @@ function ReportViewContent() {
         if (!response.ok) throw new Error(`Failed to fetch labor data (${response.status})`);
         let data = await response.json();
         if (type === 'single_traveler' && jobNumber) {
-          data = data.filter((entry: any) => entry.job_number === jobNumber);
+          // jobNumber may arrive as the raw number or the full RMA label.
+          data = data.filter((entry: any) => entry.job_number === jobNumber || entry.job_display === jobNumber);
         }
         // Apply date range filter
         data = filterByDateRange(data);
@@ -114,7 +115,9 @@ function ReportViewContent() {
         if (jobNumber && jobNumber.trim()) {
           const jobSearchTerm = jobNumber.toLowerCase();
           data = data.filter((entry: any) => {
-            const job = entry.job_number || '';
+            // Match the RMA label too, so searching either "1080B" or "8656"
+            // finds an RMA traveler's hours.
+            const job = `${entry.job_display || ''} ${entry.job_number || ''}`;
             return job.toLowerCase().includes(jobSearchTerm);
           });
         }
@@ -552,7 +555,9 @@ function ReportViewContent() {
             </div>
             <div className="info-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: '11px', alignItems: 'center' }}>
               {/* Universal fields for ALL report types */}
-              <div><strong>Job Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.job_number || laborData[0]?.job_number || categoryData[0]?.job_number || jobNumber || 'N/A'}</span></div>
+              {/* job_display first: an RMA traveler's job number is the whole
+                  combined form, e.g. "1080B RMA JOB NO 8656". */}
+              <div><strong>Job Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.job_display || travelerData[0]?.job_number || laborData[0]?.job_display || laborData[0]?.job_number || categoryData[0]?.job_display || categoryData[0]?.job_number || jobNumber || 'N/A'}</span></div>
               <div><strong>Work Order:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.work_order || laborData[0]?.work_order || categoryData[0]?.work_order || workOrder || 'N/A'}</span></div>
               <div><strong>PO Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.po_number || laborData[0]?.po_number || categoryData[0]?.po_number || 'N/A'}</span></div>
               <div><strong>Part Number:</strong> <span className="text-gray-600 dark:text-slate-300">{travelerData[0]?.part_number || laborData[0]?.part_number || categoryData[0]?.part_number || 'N/A'}</span></div>
@@ -573,7 +578,7 @@ function ReportViewContent() {
             </div>
           </div>
 
-          {/* Last Step Summary — the most recently completed step on the
+          {/* Current Step Summary — the most recently completed step on the
               traveler(s) in scope, with every operator who worked it. Uses
               whichever dataset this report type loaded. */}
           {(() => {
@@ -603,7 +608,7 @@ function ReportViewContent() {
                 alignItems: 'center',
                 gap: '6px 16px'
               }}>
-                <span className="text-indigo-700 dark:text-indigo-300 print:!text-indigo-700" style={{ fontWeight: 'bold' }}>Last Step: {wcLabel}</span>
+                <span className="text-indigo-700 dark:text-indigo-300 print:!text-indigo-700" style={{ fontWeight: 'bold' }}>Current Step: {wcLabel}</span>
                 <span className="text-gray-600 dark:text-slate-300">by {operators.length > 0 ? operators.join(', ') : 'N/A'}</span>
                 <span className="text-green-600 dark:text-green-400" style={{ fontWeight: 'bold' }}>{stepTotalHours.toFixed(2)}h</span>
               </div>
@@ -751,20 +756,25 @@ function ReportViewContent() {
 
           {/* Work Center Reports - Grouped by Traveler */}
           {(type === 'single_work_center' || type === 'all_work_centers') && laborData.length > 0 && (() => {
-            // Group data by traveler (job_number + work_order)
-            const travelerGroups: Record<string, any[]> = {};
+            // Group data by traveler (job + work_order). Key on job_display,
+            // not job_number: an RMA traveler carries the job number of the job
+            // it reworks, so keying on job_number would merge its rework hours
+            // into that job's section and total. RMA hours stay their own group.
+            const travelerGroups: Record<string, { jobLabel: string; workOrder: string; entries: any[] }> = {};
             laborData.forEach(entry => {
-              const key = `${entry.job_number || 'N/A'}_${entry.work_order || 'N/A'}`;
+              const jobLabel = entry.job_display || entry.job_number || 'N/A';
+              const wo = entry.work_order || 'N/A';
+              const key = `${jobLabel} • ${wo}`;
               if (!travelerGroups[key]) {
-                travelerGroups[key] = [];
+                travelerGroups[key] = { jobLabel, workOrder: wo, entries: [] };
               }
-              travelerGroups[key].push(entry);
+              travelerGroups[key].entries.push(entry);
             });
 
             return (
               <div style={{ marginBottom: '0' }}>
-                {Object.entries(travelerGroups).map(([key, entries]) => {
-                  const [jobNumber, workOrder] = key.split('_');
+                {Object.entries(travelerGroups).map(([key, group]) => {
+                  const { jobLabel: jobNumber, workOrder, entries } = group;
 
                   // Group by work center within this traveler
                   const workCenterGroups: Record<string, any[]> = {};
@@ -977,20 +987,25 @@ function ReportViewContent() {
 
           {/* Operator Reports - Grouped by Traveler */}
           {(type === 'single_operator' || type === 'all_operators') && laborData.length > 0 && (() => {
-            // Group data by traveler (job_number + work_order)
-            const travelerGroups: Record<string, any[]> = {};
+            // Group data by traveler (job + work_order). Key on job_display,
+            // not job_number: an RMA traveler carries the job number of the job
+            // it reworks, so keying on job_number would merge its rework hours
+            // into that job's section and total. RMA hours stay their own group.
+            const travelerGroups: Record<string, { jobLabel: string; workOrder: string; entries: any[] }> = {};
             laborData.forEach(entry => {
-              const key = `${entry.job_number || 'N/A'}_${entry.work_order || 'N/A'}`;
+              const jobLabel = entry.job_display || entry.job_number || 'N/A';
+              const wo = entry.work_order || 'N/A';
+              const key = `${jobLabel} • ${wo}`;
               if (!travelerGroups[key]) {
-                travelerGroups[key] = [];
+                travelerGroups[key] = { jobLabel, workOrder: wo, entries: [] };
               }
-              travelerGroups[key].push(entry);
+              travelerGroups[key].entries.push(entry);
             });
 
             return (
               <div style={{ marginBottom: '0' }}>
-                {Object.entries(travelerGroups).map(([key, entries]) => {
-                  const [jobNumber, workOrder] = key.split('_');
+                {Object.entries(travelerGroups).map(([key, group]) => {
+                  const { jobLabel: jobNumber, workOrder, entries } = group;
 
                   // Group by work center within this traveler
                   const workCenterGroups: Record<string, any[]> = {};
