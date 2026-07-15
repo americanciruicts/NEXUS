@@ -397,7 +397,10 @@ export default function LaborTrackingPage() {
         }));
         setWorkCenterConfirmed(true);
         if (scanData.job_number) {
-          const steps = await fetchWorkCentersByJob(scanData.job_number);
+          // Pin to the scanned traveler (set just above): an RMA and the job it
+          // reworks share a job_number, so an unpinned lookup returns the wrong
+          // traveler's steps (e.g. SHIPPING as step 19 instead of the RMA's 9).
+          const steps = await fetchWorkCentersByJob(scanData.job_number, '', scannedTravelerIdRef.current);
           setJobWorkCenterOptions(steps);
         }
         // Intentionally NOT warning on already-completed steps. Operators
@@ -529,11 +532,14 @@ export default function LaborTrackingPage() {
   // Fetch work centers from process steps for a specific job number.
   // travelerId pins the lookup to a specific WO breakout when the same
   // job_number has multiple travelers (the dropdown supplies it).
-  const fetchWorkCentersByJob = async (jobNumber: string, query: string = '', travelerId?: number | null) => {
+  const fetchWorkCentersByJob = async (jobNumber: string, query: string = '', travelerId?: number | null, jobDisplay?: string | null) => {
     try {
       const token = localStorage.getItem('nexus_token');
       const travelerParam = travelerId != null ? `&traveler_id=${encodeURIComponent(travelerId)}` : '';
-      const url = `${API_BASE_URL}/search/autocomplete/work-centers-by-job?job_number=${encodeURIComponent(jobNumber)}&q=${encodeURIComponent(query)}${travelerParam}`;
+      // Fallback disambiguator when no traveler is pinned (typed / scanner Enter):
+      // the combined RMA label identifies the traveler the bare job_number can't.
+      const displayParam = !travelerId && jobDisplay ? `&job_display=${encodeURIComponent(jobDisplay)}` : '';
+      const url = `${API_BASE_URL}/search/autocomplete/work-centers-by-job?job_number=${encodeURIComponent(jobNumber)}&q=${encodeURIComponent(query)}${travelerParam}${displayParam}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token || 'mock-token'}` }
       });
@@ -1978,7 +1984,7 @@ export default function LaborTrackingPage() {
 
                           // Fetch work center options for this job
                           if (scanData.job_number) {
-                            const steps = await fetchWorkCentersByJob(scanData.job_number);
+                            const steps = await fetchWorkCentersByJob(scanData.job_number, '', scannedTravelerIdRef.current);
                             setJobWorkCenterOptions(steps);
                           }
 
@@ -2009,9 +2015,12 @@ export default function LaborTrackingPage() {
                       }
                     }}
                     fetchSuggestions={async (query) => {
-                      // If job number is set, fetch work centers from its process steps
+                      // If job number is set, fetch work centers from its process steps.
+                      // Pass the pinned traveler — without it this refetch drops the
+                      // pin set at job selection and falls back to the first traveler
+                      // sharing the job_number (the non-RMA one).
                       if (newEntry.job_number) {
-                        const jobSteps = await fetchWorkCentersByJob(newEntry.job_number, query);
+                        const jobSteps = await fetchWorkCentersByJob(newEntry.job_number, query, scannedTravelerIdRef.current, newEntry.job_display);
                         if (jobSteps.length > 0) {
                           // Also include general work centers as fallback
                           const generalWCs = await fetchWorkCenters(query);
@@ -3249,7 +3258,7 @@ export default function LaborTrackingPage() {
                 }}
                 fetchSuggestions={async (query) => {
                   if (manualEntryData.job_number) {
-                    const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query, manualEntryData.traveler_id);
+                    const jobSteps = await fetchWorkCentersByJob(manualEntryData.job_number, query, manualEntryData.traveler_id, manualEntryData.job_display);
                     if (jobSteps.length > 0) {
                       const generalWCs = await fetchWorkCenters(query);
                       const existingValues = new Set(jobSteps.map((f: any) => f.value));

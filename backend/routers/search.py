@@ -400,6 +400,7 @@ async def autocomplete_work_centers_by_job(
     job_number: str = Query(..., description="Job number to fetch process steps for"),
     q: str = Query("", description="Optional filter query"),
     traveler_id: Optional[int] = Query(None, description="Specific traveler ID — disambiguates multiple WO breakouts of the same job"),
+    job_display: Optional[str] = Query(None, description="Combined RMA label ('<rma> RMA JOB NO <job>') — disambiguates an RMA traveler from the job it reworks when no traveler_id is pinned"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -421,7 +422,18 @@ async def autocomplete_work_centers_by_job(
         if traveler and traveler.job_number != job_number:
             traveler = None
     else:
-        traveler = base.filter(Traveler.job_number == job_number).first()
+        # An RMA traveler carries the job_number of the job it reworks, so a
+        # bare job_number can match several travelers and .first() would return
+        # the wrong one (the RMA's SHIPPING is step 9; the job's is step 19).
+        # When the client sends the combined label (typed or scanned, where no
+        # traveler_id gets pinned), use it to pick the exact traveler.
+        candidates = base.filter(Traveler.job_number == job_number).all()
+        traveler = None
+        if job_display and job_display.strip():
+            wanted = job_display.strip()
+            traveler = next((t for t in candidates if rma_job_display(t) == wanted), None)
+        if traveler is None:
+            traveler = candidates[0] if candidates else None
 
     if not traveler:
         return []
