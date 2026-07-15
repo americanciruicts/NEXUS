@@ -1123,4 +1123,35 @@ def get_job_timeline(job_number: str, db: Session = Depends(get_db), current_use
     # Sort all events chronologically
     events.sort(key=lambda e: e["timestamp"] or "")
 
-    return {"job_number": job_number, "events": events, "total": len(events)}
+    # Per-traveler metadata so the timeline can be split into one lane per
+    # traveler with its own hours. A job commonly carries several travelers (WO
+    # breakouts, plus RMA rework), and merging them into a single stream made it
+    # impossible to see how long any ONE traveler actually took.
+    from utils.job_display import rma_job_display
+
+    traveler_lanes = []
+    for t in travelers:
+        t_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id == t.id).all()
+        total_steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == t.id).count()
+        done_steps = db.query(ProcessStep).filter(
+            ProcessStep.traveler_id == t.id, ProcessStep.is_completed == True
+        ).count()
+        traveler_lanes.append({
+            "traveler_id": t.id,
+            "job_display": rma_job_display(t),
+            "work_order_number": t.work_order_number or "",
+            "traveler_type": t.traveler_type.value if t.traveler_type else "",
+            "quantity": t.quantity,
+            "status": t.status.value if t.status else "",
+            "total_hours": round(sum(e.hours_worked or 0 for e in t_entries), 2),
+            "entries_count": len(t_entries),
+            "completed_steps": done_steps,
+            "total_steps": total_steps,
+        })
+
+    return {
+        "job_number": job_number,
+        "events": events,
+        "total": len(events),
+        "travelers": traveler_lanes,
+    }

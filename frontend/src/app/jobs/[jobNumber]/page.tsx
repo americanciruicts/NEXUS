@@ -63,6 +63,21 @@ interface TimelineEvent {
   traveler_id?: number;
 }
 
+// One lane per traveler on the job — a job usually has several (WO breakouts,
+// plus RMA rework), and each carries its own hours.
+interface TimelineTraveler {
+  traveler_id: number;
+  job_display: string;
+  work_order_number: string;
+  traveler_type: string;
+  quantity: number;
+  status: string;
+  total_hours: number;
+  entries_count: number;
+  completed_steps: number;
+  total_steps: number;
+}
+
 interface EnrichedData {
   traveler_count: number;
   completed_travelers: number;
@@ -93,6 +108,7 @@ export default function JobDetailPage() {
   const [kitting, setKitting] = useState<KittingStatus | null>(null);
   const [kittingLoading, setKittingLoading] = useState(false);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [timelineTravelers, setTimelineTravelers] = useState<TimelineTraveler[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [enriched, setEnriched] = useState<EnrichedData | null>(null);
   const [creatingRerun, setCreatingRerun] = useState(false);
@@ -192,6 +208,7 @@ export default function JobDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setTimeline(data.events || []);
+        setTimelineTravelers(data.travelers || []);
       }
     } catch (err) {
       console.error('Error fetching timeline:', err);
@@ -509,7 +526,7 @@ export default function JobDetailPage() {
           )}
           {activeTab === 'stock' && <StockTab stockData={stockData} loading={stockLoading} />}
           {activeTab === 'labor' && <LaborSummaryTab enriched={enriched} />}
-          {activeTab === 'timeline' && <TimelineTab events={timeline} loading={timelineLoading} />}
+          {activeTab === 'timeline' && <TimelineTab events={timeline} travelers={timelineTravelers} loading={timelineLoading} />}
         </div>
 
         {/* Notes */}
@@ -1049,7 +1066,7 @@ function LaborSummaryTab({ enriched }: { enriched: EnrichedData | null }) {
   );
 }
 
-function TimelineTab({ events, loading }: { events: TimelineEvent[]; loading: boolean }) {
+function TimelineTab({ events, travelers, loading }: { events: TimelineEvent[]; travelers: TimelineTraveler[]; loading: boolean }) {
   if (loading) return <LoadingSpinner />;
   if (events.length === 0) return <EmptyState text="No events recorded for this job yet" />;
 
@@ -1084,31 +1101,91 @@ function TimelineTab({ events, loading }: { events: TimelineEvent[]; loading: bo
     } catch { return ts; }
   };
 
-  return (
-    <div className="p-4">
-      <div className="relative">
-        {/* Vertical line */}
-        <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-700" />
+  // One timeline per traveler, each with its own hours. Events that belong to
+  // the job itself (e.g. created in KOSH) have no traveler and lead the page.
+  const jobEvents = events.filter(e => !e.traveler_id);
+  const lanes = travelers.map(t => ({
+    traveler: t,
+    events: events.filter(e => e.traveler_id === t.traveler_id),
+  }));
+  // Any traveler the lane list didn't cover (shouldn't happen, but never drop
+  // events silently — an unaccounted event would look like lost history).
+  const laneIds = new Set(travelers.map(t => t.traveler_id));
+  const orphans = events.filter(e => e.traveler_id && !laneIds.has(e.traveler_id));
 
-        <div className="space-y-4">
-          {events.map((event, i) => (
-            <div key={i} className="relative flex gap-4 pl-2">
-              {/* Icon */}
-              <div className={`relative z-10 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${getIconColor(event.type)}`}>
-                {getIconComponent(event.icon)}
-              </div>
-              {/* Content */}
-              <div className="flex-1 min-w-0 pb-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{event.title}</p>
-                  <span className="text-[10px] text-gray-400 dark:text-slate-500">{formatTimestamp(event.timestamp)}</span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{event.detail}</p>
-              </div>
+  const renderTrack = (list: TimelineEvent[]) => (
+    <div className="relative">
+      <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-700" />
+      <div className="space-y-4">
+        {list.map((event, i) => (
+          <div key={i} className="relative flex gap-4 pl-2">
+            <div className={`relative z-10 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${getIconColor(event.type)}`}>
+              {getIconComponent(event.icon)}
             </div>
-          ))}
-        </div>
+            <div className="flex-1 min-w-0 pb-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{event.title}</p>
+                <span className="text-[10px] text-gray-400 dark:text-slate-500">{formatTimestamp(event.timestamp)}</span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{event.detail}</p>
+            </div>
+          </div>
+        ))}
       </div>
+    </div>
+  );
+
+  const isRma = (t: TimelineTraveler) => t.traveler_type?.startsWith('RMA') || t.traveler_type === 'MODIFICATION';
+
+  return (
+    <div className="p-4 space-y-6">
+      {jobEvents.length > 0 && renderTrack(jobEvents)}
+
+      {lanes.map(({ traveler: t, events: list }) => (
+        <div key={t.traveler_id} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+          {/* Lane header — this traveler's identity and its OWN total time */}
+          <div className={`flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b ${
+            isRma(t)
+              ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800'
+              : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700'
+          }`}>
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{t.job_display}</span>
+              {t.work_order_number && (
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300">
+                  WO {t.work_order_number}
+                </span>
+              )}
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                isRma(t)
+                  ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
+                  : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+              }`}>
+                {t.traveler_type.replace(/_/g, ' ')}
+              </span>
+              <span className="text-[10px] text-gray-500 dark:text-slate-400">Qty {t.quantity}</span>
+              <span className="text-[10px] text-gray-500 dark:text-slate-400">{t.completed_steps}/{t.total_steps} steps</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <ClockIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{t.total_hours.toFixed(2)}h</span>
+              <span className="text-[10px] text-gray-400 dark:text-slate-500">({t.entries_count} entries)</span>
+            </div>
+          </div>
+          <div className="p-4">
+            {list.length > 0
+              ? renderTrack(list)
+              : <p className="text-xs text-gray-400 dark:text-slate-500 italic">No events on this traveler yet</p>}
+          </div>
+        </div>
+      ))}
+
+      {orphans.length > 0 && (
+        <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mb-3">Other events</p>
+          {renderTrack(orphans)}
+        </div>
+      )}
     </div>
   );
 }
