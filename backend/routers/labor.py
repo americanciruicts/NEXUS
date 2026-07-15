@@ -1728,9 +1728,11 @@ async def get_labor_by_category(
             "quantity": traveler.quantity if traveler else None,
             "work_center": entry.work_center,
             "category": entry_category or "Uncategorized",
+            "step_id": entry.step_id,
             "start_time": entry.start_time.isoformat() if entry.start_time else None,
             "end_time": entry.end_time.isoformat() if entry.end_time else None,
             "hours_worked": entry.hours_worked or 0,
+            "qty_completed": entry.qty_completed,
             "is_completed": entry.is_completed,
             "description": entry.description,
         })

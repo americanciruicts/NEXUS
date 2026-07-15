@@ -573,15 +573,18 @@ function ReportViewContent() {
             </div>
           </div>
 
-          {/* Last Step Summary - Single Traveler only */}
-          {type === 'single_traveler' && (() => {
-            const withEnd = travelerData.filter((e) => e && e.end_time);
+          {/* Last Step Summary — the most recently completed step on the
+              traveler(s) in scope, with every operator who worked it. Uses
+              whichever dataset this report type loaded. */}
+          {(() => {
+            const source = categoryData.length ? categoryData : (laborData.length ? laborData : travelerData);
+            const withEnd = source.filter((e) => e && e.end_time);
             if (withEnd.length === 0) return null;
             const lastEntry = withEnd.reduce((latest, e) =>
               new Date(e.end_time).getTime() > new Date(latest.end_time).getTime() ? e : latest
             );
             const lastStepId = lastEntry.step_id ?? null;
-            const matchEntries = travelerData.filter((e) =>
+            const matchEntries = source.filter((e) =>
               lastStepId != null ? e.step_id === lastStepId : e.work_center === lastEntry.work_center
             );
             const operators = Array.from(new Set(
