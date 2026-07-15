@@ -30,6 +30,16 @@ KOSH_DB_CONFIG = {
 }
 
 
+def _person_name(user) -> str:
+    """Display name for a user. `username` is an email address here, so the
+    timeline was reading 'jayt@americancircuits.com' where the rest of the app
+    shows 'Jay T'. Falls back to the username when no name is on record."""
+    if user is None:
+        return "Unknown"
+    name = f"{(user.first_name or '').strip()} {(user.last_name or '').strip()}".strip()
+    return name or (user.username or "Unknown")
+
+
 def get_kosh_connection():
     """Get a direct connection to the KOSH database."""
     try:
@@ -1052,7 +1062,7 @@ def get_job_timeline(job_number: str, db: Session = Depends(get_db), current_use
 
     for t in travelers:
         creator = db.query(User).filter(User.id == t.created_by).first()
-        creator_name = creator.username if creator else "Unknown"
+        creator_name = _person_name(creator)
 
         # Traveler created
         if t.created_at:
@@ -1098,7 +1108,7 @@ def get_job_timeline(job_number: str, db: Session = Depends(get_db), current_use
         )
         for le in labor_entries:
             operator = db.query(User).filter(User.id == le.employee_id).first()
-            op_name = operator.username if operator else "Unknown"
+            op_name = _person_name(operator)
 
             if le.start_time:
                 events.append({
