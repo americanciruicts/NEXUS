@@ -2617,7 +2617,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.routing-table tbody td:nth-child(7) { width: 48px !important; } /* ACC */
 
           table.routing-table thead th:nth-child(8),
-          table.routing-table tbody td:nth-child(8) { width: 55px !important; } /* SIGN */
+          table.routing-table tbody td:nth-child(8) { width: 100px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; white-space: normal !important; } /* SIGN — full first names, several operators may share a step */
 
           table.routing-table thead th:nth-child(9),
           table.routing-table tbody td:nth-child(9) { width: 55px !important; } /* DATE */
@@ -2642,7 +2642,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.editing-mode thead th:nth-child(8),
           table.editing-mode tbody td:nth-child(8) { width: 48px !important; } /* ACC */
           table.editing-mode thead th:nth-child(9),
-          table.editing-mode tbody td:nth-child(9) { width: 55px !important; } /* SIGN */
+          table.editing-mode tbody td:nth-child(9) { width: 100px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; white-space: normal !important; } /* SIGN */
           table.editing-mode thead th:nth-child(10),
           table.editing-mode tbody td:nth-child(10) { width: 55px !important; } /* DATE */
 

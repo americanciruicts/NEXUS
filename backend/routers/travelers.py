@@ -1629,11 +1629,9 @@ async def set_step_completion(
 
 
 def _signer_initial(first_name: Optional[str]) -> Optional[str]:
-    """Operator sign-off initial: first three letters of the first name, upper
-    case (Bharat -> BHA, Yullia -> YUL). Names shorter than three letters are
-    used whole."""
+    """Operator sign-off name: the first name as-is (Bharat, Yullia)."""
     cleaned = (first_name or "").strip()
-    return cleaned[:3].upper() if cleaned else None
+    return cleaned or None
 
 
 def _attach_labor_signoff(db: Session, traveler: Traveler, result: dict) -> None:
@@ -1681,11 +1679,11 @@ def _attach_labor_signoff(db: Session, traveler: Traveler, result: dict) -> None
 
     signers: dict = {}
     for r in sorted(signer_rows, key=lambda r: (r.first_at is None, r.first_at)):
-        initial = _signer_initial(r.first_name)
-        # Dedupe on the initial, not the user: two operators sharing a first name
-        # would otherwise sign the step "BHA, BHA".
-        if initial and initial not in signers.setdefault(r.step_id, []):
-            signers[r.step_id].append(initial)
+        name = _signer_initial(r.first_name)
+        # Dedupe on the name, not the user: two operators sharing a first name
+        # would otherwise sign the step "Bharat, Bharat".
+        if name and name not in signers.setdefault(r.step_id, []):
+            signers[r.step_id].append(name)
 
     # A step an admin ticked complete by hand carries no labor, so it would print
     # with an empty sign-off. Fall back to whoever overrode it (completed_by /
