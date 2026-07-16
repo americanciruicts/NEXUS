@@ -2588,8 +2588,19 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.editing-mode tbody td:nth-child(5),
           table.editing-mode tbody td:nth-child(5) span,
           table.editing-mode tbody td:nth-child(5) input {
-            font-size: 8px !important;
+            font-size: 9px !important;
             font-weight: normal !important;
+            white-space: nowrap !important;
+          }
+
+          /* DATE must never clip its year ("05/06/20"). Slightly smaller than the
+             other columns and nowrap, on a column widened to match. */
+          table.routing-table tbody td:nth-child(9),
+          table.routing-table tbody td:nth-child(9) span,
+          table.editing-mode tbody td:nth-child(10),
+          table.editing-mode tbody td:nth-child(10) span,
+          table.editing-mode tbody td:nth-child(10) input {
+            font-size: 7.5px !important;
             white-space: nowrap !important;
           }
 
@@ -2639,7 +2650,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.routing-table tbody td:nth-child(3) { width: 150px !important; } /* INSTRUCTIONS */
 
           table.routing-table thead th:nth-child(4),
-          table.routing-table tbody td:nth-child(4) { width: 48px !important; } /* TIME */
+          table.routing-table tbody td:nth-child(4) { width: 55px !important; } /* TIME */
 
           table.routing-table thead th:nth-child(5),
           table.routing-table tbody td:nth-child(5) { width: 48px !important; } /* QTY */
@@ -2654,7 +2665,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.routing-table tbody td:nth-child(8) { width: 100px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; white-space: normal !important; } /* SIGN — full first names, several operators may share a step */
 
           table.routing-table thead th:nth-child(9),
-          table.routing-table tbody td:nth-child(9) { width: 55px !important; } /* DATE */
+          table.routing-table tbody td:nth-child(9) { width: 70px !important; } /* DATE */
 
           /* Edit/Create mode: collapse hidden drag column and set correct column widths */
           table.editing-mode thead th.no-print,
@@ -2668,7 +2679,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.editing-mode thead th:nth-child(4),
           table.editing-mode tbody td:nth-child(4) { width: 150px !important; } /* INSTRUCTIONS */
           table.editing-mode thead th:nth-child(5),
-          table.editing-mode tbody td:nth-child(5) { width: 48px !important; } /* TIME */
+          table.editing-mode tbody td:nth-child(5) { width: 55px !important; } /* TIME */
           table.editing-mode thead th:nth-child(6),
           table.editing-mode tbody td:nth-child(6) { width: 48px !important; } /* QTY */
           table.editing-mode thead th:nth-child(7),
@@ -2678,7 +2689,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           table.editing-mode thead th:nth-child(9),
           table.editing-mode tbody td:nth-child(9) { width: 100px !important; word-wrap: break-word !important; overflow-wrap: break-word !important; white-space: normal !important; } /* SIGN */
           table.editing-mode thead th:nth-child(10),
-          table.editing-mode tbody td:nth-child(10) { width: 55px !important; } /* DATE */
+          table.editing-mode tbody td:nth-child(10) { width: 70px !important; } /* DATE */
 
           /* QR code alignment in work center column - view mode (col 2) and edit mode (col 3) */
           table.routing-table tbody td:nth-child(2) .flex,
