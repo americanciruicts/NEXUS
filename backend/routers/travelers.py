@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from typing import List, Optional
 import json
+import logging
 import re
 from datetime import datetime
 
@@ -17,6 +19,8 @@ from schemas.tracking_schemas import TrackingScanRequest, TrackingScanResponse, 
 from routers.auth import get_current_user, get_password_hash
 from services.email_service import send_approval_notification
 from services.notification_service import create_notification_for_admins
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)  # Don't auto-error on missing auth
@@ -93,17 +97,29 @@ def is_completed_status(status) -> bool:
 
 
 def step_percent_complete(status, completed_steps: int, total_steps: int) -> float:
-    """Step progress as displayed for a traveler.
+    """Step progress percentage as displayed for a traveler.
 
-    COMPLETED means the job shipped, so it always reads 100% no matter how many
-    steps carry a check — jobs ship with optional steps left unsigned, which
-    otherwise surfaces as a shipped job stuck at "4/13 = 30.8%". Only the
-    displayed percentage is forced; callers keep reporting the true
-    completed_steps / total_steps counts alongside it.
+    COMPLETED means the job shipped, and shipping is the terminal step, so the
+    job reads 100% no matter how many steps carry a check — jobs ship with
+    optional steps left unsigned, which otherwise surfaces as a shipped job
+    stuck at "4/13 = 30.8%".
     """
     if is_completed_status(status):
         return 100.0
     return round((completed_steps / total_steps) * 100, 1) if total_steps > 0 else 0.0
+
+
+def displayed_step_counts(status, completed_steps: int, total_steps: int) -> tuple:
+    """The completed/total pair as displayed, kept consistent with the percentage.
+
+    A COMPLETED traveler reads N/N rather than its raw signed count: showing
+    "100%" above "4/13" states two different things about the same job. The
+    stored ProcessStep.is_completed flags are untouched — this is presentation
+    only, so the underlying record of what was actually signed survives.
+    """
+    if is_completed_status(status):
+        return total_steps, total_steps
+    return completed_steps, total_steps
 
 async def get_user_or_system(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -624,8 +640,9 @@ async def get_travelers(
         steps = progress_steps_by_traveler.get(t.id, [])
         total = len(steps)
         completed = sum(1 for s in steps if s.is_completed)
-        data['total_steps'] = total
-        data['completed_steps'] = completed
+        shown_completed, shown_total = displayed_step_counts(t.status, completed, total)
+        data['total_steps'] = shown_total
+        data['completed_steps'] = shown_completed
         data['percent_complete'] = step_percent_complete(t.status, completed, total)
 
         # Department progress (computed from already-loaded steps — no extra queries)
@@ -1228,9 +1245,10 @@ async def get_dashboard_summary(
         # the qty rollups below still consider every step on the traveler.
         progress_steps = [s for s in steps
                           if counts_toward_progress(wc_dept_map.get(s.work_center_code, 'Other'))]
-        total_steps = len(progress_steps)
-        completed_steps = sum(1 for s in progress_steps if s.is_completed)
-        percent_complete = step_percent_complete(t.status, completed_steps, total_steps)
+        raw_total = len(progress_steps)
+        raw_completed = sum(1 for s in progress_steps if s.is_completed)
+        percent_complete = step_percent_complete(t.status, raw_completed, raw_total)
+        completed_steps, total_steps = displayed_step_counts(t.status, raw_completed, raw_total)
 
         # Current step = first incomplete step
         current_step_obj = next((s for s in steps if not s.is_completed), None)
@@ -1362,18 +1380,24 @@ async def get_department_progress(
 
             departments[individual_dept]['steps'].append(step_data)
 
-    # Calculate percentages
+    # Calculate percentages. A COMPLETED traveler resolves every department to
+    # N/N and 100% for the same reason the overall figure does: shipping is the
+    # terminal step, so the work is done even where a department's steps went
+    # unsigned. Otherwise the card contradicts the 100% shown right above it.
     for dept_data in departments.values():
         total = dept_data['total_steps']
         completed = dept_data['completed_steps']
-        dept_data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0
+        dept_data['percent_complete'] = step_percent_complete(traveler.status, completed, total)
+        dept_data['completed_steps'], dept_data['total_steps'] = displayed_step_counts(
+            traveler.status, completed, total)
 
     # Overall progress — hidden-department steps (Receiving) sit out of the math
     progress_steps = [s for s in steps
                       if counts_toward_progress(wc_dept_map.get(s.work_center_code, 'Other'))]
-    total_steps = len(progress_steps)
-    completed_steps = sum(1 for s in progress_steps if s.is_completed)
-    overall_percent = step_percent_complete(traveler.status, completed_steps, total_steps)
+    raw_total = len(progress_steps)
+    raw_completed = sum(1 for s in progress_steps if s.is_completed)
+    overall_percent = step_percent_complete(traveler.status, raw_completed, raw_total)
+    completed_steps, total_steps = displayed_step_counts(traveler.status, raw_completed, raw_total)
 
     # Labor progress for this traveler
     labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id == traveler_id).all()
@@ -1492,6 +1516,118 @@ async def get_traveler_by_job(
 
     return traveler
 
+class StepCompletionUpdate(BaseModel):
+    is_completed: bool
+
+
+@router.patch("/{traveler_id}/steps/{step_id}/completion")
+async def set_step_completion(
+    traveler_id: int,
+    step_id: int,
+    payload: StepCompletionUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Admin override for a single step's completion, driven from the traveler's
+    Department Progress card.
+
+    Steps normally complete as a side effect of closing a labor entry; this is
+    the manual path for work that was done but never clocked.
+
+    Status follows the same rule as the labor flow: SHIPPING is the terminal
+    step, so ticking it completes the traveler and unticking it reopens one that
+    was completed. No other step moves status — a mid-route step being marked
+    done says nothing about whether the job shipped.
+
+    completed_by / completed_at record who overrode it, which is also what the
+    traveler prints in the SIGN column for a step carrying no labor.
+    """
+    is_admin = current_user.role.value == 'ADMIN' if hasattr(current_user.role, 'value') else current_user.role == 'ADMIN'
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can change step completion",
+        )
+
+    step = db.query(ProcessStep).filter(
+        ProcessStep.id == step_id,
+        ProcessStep.traveler_id == traveler_id,
+    ).first()
+    if not step:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Step not found on this traveler",
+        )
+
+    was_completed = bool(step.is_completed)
+    if was_completed == payload.is_completed:
+        return {'step_id': step.id, 'is_completed': was_completed, 'changed': False}
+
+    step.is_completed = payload.is_completed
+    if payload.is_completed:
+        step.completed_by = current_user.id
+        step.completed_at = datetime.now()
+    else:
+        # Clearing a step drops the override marks too, so its sign-off falls
+        # back to whatever labor was actually logged against it.
+        step.completed_by = None
+        step.completed_at = None
+
+    db.add(AuditLog(
+        traveler_id=traveler_id,
+        user_id=current_user.id,
+        action="UPDATED",
+        field_changed=f"step_{step.step_number}_is_completed",
+        old_value=str(was_completed),
+        new_value=str(payload.is_completed),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get('user-agent'),
+    ))
+
+    # Shipping is the terminal step: ticking it means the job went out the door.
+    status_changed = None
+    if (step.operation or "").strip().upper() == "SHIPPING":
+        traveler = db.query(Traveler).filter(Traveler.id == traveler_id).first()
+        if traveler:
+            old_status = traveler.status.value if hasattr(traveler.status, 'value') else str(traveler.status)
+            if payload.is_completed and not is_completed_status(traveler.status):
+                traveler.status = TravelerStatus.COMPLETED
+                traveler.completed_at = datetime.now()
+                status_changed = f"{old_status} -> COMPLETED"
+            elif not payload.is_completed and is_completed_status(traveler.status):
+                # Reopening shipping reopens the job, so a mis-tick is undoable
+                # rather than permanently sealing the traveler as shipped.
+                traveler.status = TravelerStatus.IN_PROGRESS
+                traveler.completed_at = None
+                status_changed = f"{old_status} -> IN_PROGRESS"
+            if status_changed:
+                db.add(AuditLog(
+                    traveler_id=traveler_id,
+                    user_id=current_user.id,
+                    action="UPDATED",
+                    field_changed="status",
+                    old_value=old_status,
+                    new_value=traveler.status.value,
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get('user-agent'),
+                ))
+
+    db.commit()
+
+    logger.info(
+        "step completion override: traveler=%s step=%s (%s) %s -> %s by %s%s",
+        traveler_id, step.id, step.operation, was_completed, payload.is_completed,
+        current_user.username, f" | status {status_changed}" if status_changed else "",
+    )
+    return {
+        'step_id': step.id,
+        'is_completed': step.is_completed,
+        'changed': True,
+        'status_changed': status_changed,
+    }
+
+
 def _signer_initial(first_name: Optional[str]) -> Optional[str]:
     """Operator sign-off initial: first three letters of the first name, upper
     case (Bharat -> BHA, Yullia -> YUL). Names shorter than three letters are
@@ -1551,9 +1687,37 @@ def _attach_labor_signoff(db: Session, traveler: Traveler, result: dict) -> None
         if initial and initial not in signers.setdefault(r.step_id, []):
             signers[r.step_id].append(initial)
 
+    # A step an admin ticked complete by hand carries no labor, so it would print
+    # with an empty sign-off. Fall back to whoever overrode it (completed_by /
+    # completed_at) so the paper traveler still shows a signature and a date. No
+    # hours are invented — nobody clocked any.
+    override_by_step = {
+        s.id: (s.completed_by, s.completed_at)
+        for s in traveler.process_steps
+        if s.is_completed and s.completed_by and s.id not in signers
+    }
+    override_names = {}
+    override_ids = {uid for uid, _ in override_by_step.values()}
+    if override_ids:
+        override_names = {
+            u.id: u.first_name
+            for u in db.query(User).filter(User.id.in_(override_ids)).all()
+        }
+
     for step in steps:
         step_id = step.get("id")
         step["labor_signers"] = signers.get(step_id, [])
+
+        if step_id in override_by_step:
+            uid, when = override_by_step[step_id]
+            initial = _signer_initial(override_names.get(uid))
+            if initial:
+                step["labor_signers"] = [initial]
+            if when is not None:
+                step["labor_latest_date"] = (
+                    when.strftime("%Y-%m-%d") if hasattr(when, "strftime") else str(when)[:10]
+                )
+
         row = rollup.get(step_id)
         if not row:
             continue

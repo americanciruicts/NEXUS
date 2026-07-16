@@ -65,12 +65,24 @@ interface ProcessStep {
   laborLatestDate?: string | null;
 }
 
+// Labor hours as the floor reads them: a 10-minute step should say "10 min",
+// not "0.16". Under an hour reads in whole minutes; an hour or more reads as
+// hours plus any remaining minutes ("2h 15m", or plain "2h" when it lands even).
+function formatLaborTime(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  if (totalMinutes <= 0) return '0 min';
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 // The traveler's sign-off columns read from recorded labor whenever any exists;
 // the hand-typed value is only a fallback for steps nobody has clocked against.
 function signoffOf(step: ProcessStep) {
   return {
     sign: step.laborSigners?.length ? step.laborSigners.join(', ') : (step.sign || ''),
-    time: step.laborTotalHours != null ? step.laborTotalHours.toFixed(2) : (step.completedTime || ''),
+    time: step.laborTotalHours != null ? formatLaborTime(step.laborTotalHours) : (step.completedTime || ''),
     date: step.laborLatestDate || step.completedDate || '',
   };
 }
@@ -347,6 +359,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [dynamicWorkCenters, setDynamicWorkCenters] = useState<WorkCenterItem[]>([]);
 
   // Department progress state
+  interface DeptStep {
+    id: number;
+    step_number: number;
+    operation: string;
+    is_completed: boolean;
+    labor_hours?: number;
+    has_labor?: boolean;
+  }
   interface DeptProgress {
     department: string;
     total_steps: number;
@@ -355,6 +375,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     labor_hours?: number;
     steps_with_labor?: number;
     labor_percent?: number;
+    steps?: DeptStep[];
   }
   interface LaborOverall {
     total_hours: number;
@@ -365,6 +386,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     percent: number;
   }
   const [departmentProgress, setDepartmentProgress] = useState<DeptProgress[]>([]);
+  // Bumped after a step-completion override so the card refetches its numbers.
+  const [deptRefreshKey, setDeptRefreshKey] = useState(0);
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [savingStepId, setSavingStepId] = useState<number | null>(null);
   const [overallProgress, setOverallProgress] = useState({ total_steps: 0, completed_steps: 0, percent_complete: 0 });
   const [laborOverall, setLaborOverall] = useState<LaborOverall>({ total_hours: 0, entries_count: 0, active_entries: 0, steps_with_labor: 0, total_steps: 0, percent: 0 });
   const [categoryHours, setCategoryHours] = useState<Record<string, number>>({});
@@ -746,7 +771,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     if (travelerId && !createMode) {
       fetchTraveler();
     }
-  }, [travelerId, createMode]);
+  }, [travelerId, createMode, deptRefreshKey]);
 
   // Auto-refresh traveler data every 3 minutes (silent — no loading spinner)
   // Reduced from 60s to cut API load. QR codes rarely change.
@@ -808,6 +833,44 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
     // handlePrint is stable enough via closures over refs; we don't need it in deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createMode]);
+
+  const isAdminUser = user?.role === 'ADMIN';
+
+  // Admin override for a step nobody clocked. The backend is the authority on
+  // permission (403s non-admins) and on what the numbers become, so this just
+  // posts the change and refetches rather than adjusting counts locally — the
+  // same step can sit in two departments (VERIFY BOM is Engineering AND Prep),
+  // and guessing the new totals client-side would get those wrong.
+  const toggleStepCompletion = async (stepId: number, next: boolean) => {
+    if (!isAdminUser || !traveler?.travelerId) return;
+    setSavingStepId(stepId);
+    try {
+      const token = localStorage.getItem('nexus_token');
+      const res = await fetch(`${API_BASE_URL}/travelers/${traveler.travelerId}/steps/${stepId}/completion`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token || ''}` },
+        body: JSON.stringify({ is_completed: next }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        toast.error(detail?.detail || 'Could not update step');
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      setDeptRefreshKey(k => k + 1);
+      if (body?.status_changed) {
+        // Shipping moves the whole traveler, so say so rather than letting the
+        // status change happen silently behind a generic "step updated".
+        toast.success(`Shipping updated — traveler is now ${body.status_changed.split('-> ')[1]}`);
+      } else {
+        toast.success(next ? 'Step marked complete' : 'Step marked incomplete');
+      }
+    } catch {
+      toast.error('Could not update step');
+    } finally {
+      setSavingStepId(null);
+    }
+  };
 
   // Print is only safe once barcodes have finished fetching. Clicking before
   // barcode state lands caused pages to render without barcodes (see Alex's
@@ -3067,10 +3130,74 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       }`}>
                         {isComplete ? 'Complete' : isNotStarted ? 'Not Started' : 'In Progress'}
                       </span>
+
+                      {/* Admins can correct a department whose work was done but
+                          never clocked. Per-step rather than a typed fraction:
+                          "1/3" has to say WHICH step. */}
+                      {isAdminUser && (dept.steps?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedDept(expandedDept === dept.department ? null : dept.department)}
+                          className="no-print mt-1.5 w-full text-[8px] font-bold text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 underline underline-offset-2"
+                        >
+                          {expandedDept === dept.department ? 'Close' : 'Edit steps'}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
+
+              {/* Expanded editor, full width under the grid so long operation
+                  names stay readable instead of squeezing into a donut tile. */}
+              {isAdminUser && expandedDept && (() => {
+                const dept = departmentProgress.find(d => d.department === expandedDept);
+                if (!dept?.steps?.length) return null;
+                return (
+                  <div className="no-print mt-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold text-gray-700 dark:text-slate-200">
+                        {dept.department} — mark steps complete
+                      </span>
+                      <button type="button" onClick={() => setExpandedDept(null)}
+                        className="text-[10px] font-bold text-gray-400 hover:text-gray-700 dark:hover:text-slate-200">✕</button>
+                    </div>
+                    <div className="space-y-1">
+                      {dept.steps.map(s => (
+                        <label key={s.id}
+                          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/40 ${savingStepId === s.id ? 'opacity-50' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={s.is_completed}
+                            disabled={savingStepId === s.id}
+                            onChange={(e) => toggleStepCompletion(s.id, e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-gray-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 w-6 tabular-nums">{s.step_number}</span>
+                          <span className="text-[11px] text-gray-800 dark:text-slate-200 flex-1 truncate">{(s.operation || '').replace(/_/g, ' ')}</span>
+                          {s.has_labor && (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                              {formatLaborTime(s.labor_hours || 0)}
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[9px] leading-snug text-gray-400 dark:text-slate-500">
+                      A step ticked here is signed with your initials and today&apos;s date on the printed
+                      traveler, and logs an audit entry. Steps shared with another department
+                      (e.g. Engineering/Prep) update both.
+                    </p>
+                    {displayTraveler.status === 'COMPLETED' && (
+                      <p className="mt-1 text-[9px] leading-snug text-amber-600 dark:text-amber-400">
+                        This job is Completed, so the card above already reads 100% — shipping is done.
+                        Ticking here won&apos;t change those numbers; it records which steps were actually
+                        signed off.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
