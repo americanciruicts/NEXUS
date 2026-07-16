@@ -47,6 +47,14 @@ class ProcessStep(ProcessStepBase):
     completed_at: Optional[datetime] = None
     created_at: datetime
     sub_steps: List[SubStep] = []
+    # Sign-off values rolled up from labor_entries (summed hours, latest labor
+    # date, and one initial per operator who worked the step) . Derived at read
+    # time in get_traveler, so they track newly-logged labor without a write.
+    # Empty when no labor is logged against the step, in which case the manual
+    # completed_time/completed_date/sign stand.
+    labor_total_hours: Optional[float] = None
+    labor_latest_date: Optional[str] = None
+    labor_signers: List[str] = []
 
     class Config:
         from_attributes = True

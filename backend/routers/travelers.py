@@ -21,6 +21,90 @@ from services.notification_service import create_notification_for_admins
 router = APIRouter()
 security = HTTPBearer(auto_error=False)  # Don't auto-error on missing auth
 
+
+# Every department name the traveler recognises. This is a PARSING allow-list:
+# it is what lets a compound work-center department like "Receiving/Test" split
+# into its parts. Names must stay here even when hidden from the UI — dropping
+# one makes its compounds fail to split and surface as a literal
+# "Receiving/Test" department row.
+KNOWN_DEPTS = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
+               'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+
+# Departments kept out of the DEPTS breakdown and out of the step-progress math.
+# Receiving covers KITTING / INVENTORY / PCBA STOCK / RECEIVING: real work, but
+# not time-tracked, so counting it only dilutes the completion percentage. The
+# steps themselves still render on the traveler — this hides the department, not
+# the work.
+HIDDEN_DEPTS = {'Receiving'}
+
+
+def split_departments(dept: Optional[str]) -> List[str]:
+    """Split a work center's department string into individual department names.
+
+    "SMT/Soldering/Test" -> [SMT, Soldering, Test]. A plain known name passes
+    through as-is. Anything unrecognised is returned whole rather than guessed
+    at, so a typo shows up as itself instead of silently fragmenting.
+    """
+    if dept in KNOWN_DEPTS:
+        return [dept]
+    parts = [d.strip() for d in (dept or '').split('/') if d.strip()]
+    if len(parts) > 1 and all(p in KNOWN_DEPTS for p in parts):
+        return parts
+    return [dept] if dept else ['Other']
+
+
+def visible_departments(dept: Optional[str]) -> List[str]:
+    """A step's departments, minus the ones hidden from the traveler.
+
+    A step keeps counting as long as it has at least one visible department, so
+    "Receiving/Test" still counts under Test while plain "Receiving" drops out.
+    """
+    return [d for d in split_departments(dept) if d not in HIDDEN_DEPTS]
+
+
+def counts_toward_progress(dept: Optional[str]) -> bool:
+    """Whether a step belongs in the step-progress numerator/denominator."""
+    return bool(visible_departments(dept))
+
+
+# Work-center category -> the short label the traveler shows in its hours table.
+CATEGORY_SHORT_NAMES = {
+    'SMT hrs. Actual': 'SMT',
+    'HAND hrs. Actual': 'Hand',
+    'TH hrs. Actual': 'TH',
+    'AOI & Final Inspection, QC hrs. Actual': 'AOI',
+    'E-TEST hrs. Actual': 'E-Test',
+    'Labelling, Packaging, Shipping hrs. Actual': 'Labeling',
+}
+
+
+def short_category(cat: Optional[str]) -> str:
+    """Short label for a work-center category, falling back to its first word."""
+    if not cat:
+        return 'Other'
+    return CATEGORY_SHORT_NAMES.get(cat, cat.split(' ')[0].strip().rstrip(','))
+
+
+def is_completed_status(status) -> bool:
+    """True for a COMPLETED traveler, whether status arrives as the enum or a
+    plain string (both shapes reach the progress paths)."""
+    value = status.value if hasattr(status, 'value') else status
+    return str(value).upper() == 'COMPLETED'
+
+
+def step_percent_complete(status, completed_steps: int, total_steps: int) -> float:
+    """Step progress as displayed for a traveler.
+
+    COMPLETED means the job shipped, so it always reads 100% no matter how many
+    steps carry a check — jobs ship with optional steps left unsigned, which
+    otherwise surfaces as a shipped job stuck at "4/13 = 30.8%". Only the
+    displayed percentage is forced; callers keep reporting the true
+    completed_steps / total_steps counts alongside it.
+    """
+    if is_completed_status(status):
+        return 100.0
+    return round((completed_steps / total_steps) * 100, 1) if total_steps > 0 else 0.0
+
 async def get_user_or_system(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
@@ -489,44 +573,66 @@ async def get_travelers(
     # Bulk: work center -> department map (single query, cached)
     wc_dept_map = {wc.code: wc.department or 'Other' for wc in db.query(WorkCenter.code, WorkCenter.department).all()}
 
-    KNOWN_DEPTS = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
-                   'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
+    # Per-traveler steps that count toward progress (hidden departments dropped).
+    # Built before the labor rollup because the rollup's numerator has to be
+    # scoped to the same set of steps as its denominator.
+    progress_steps_by_traveler = {
+        t.id: [s for s in (t.process_steps or [])
+               if counts_toward_progress(wc_dept_map.get(s.work_center_code, 'Other'))]
+        for t in travelers
+    }
+    progress_step_ids = [s.id for steps in progress_steps_by_traveler.values() for s in steps]
 
-    # Bulk: labor stats per traveler (single query)
+    # Bulk: labor stats per traveler (single query). Hours and entry counts cover
+    # ALL labor on the job — kitting time was still worked and still belongs in
+    # the total.
     from sqlalchemy import case, literal_column, Integer
     labor_stats = db.query(
         LaborEntry.traveler_id,
         sqlfunc.sum(LaborEntry.hours_worked).label('total_hours'),
         sqlfunc.count(LaborEntry.id).label('entry_count'),
         sqlfunc.sum(case((LaborEntry.is_completed == False, 1), else_=0)).label('active_count'),
-        sqlfunc.count(sqlfunc.distinct(LaborEntry.step_id)).label('steps_with_labor'),
     ).filter(
         LaborEntry.traveler_id.in_(traveler_ids)
     ).group_by(LaborEntry.traveler_id).all()
 
     labor_map = {r.traveler_id: r for r in labor_stats}
 
+    # steps_with_labor is a progress ratio, so unlike the hour totals above it
+    # counts only steps in the progress set — otherwise a job with kitting labor
+    # reports more worked steps than it has steps, and percent exceeds 100.
+    labor_steps_map = {}
+    if progress_step_ids:
+        labor_steps_map = {
+            r.traveler_id: r.n
+            for r in db.query(
+                LaborEntry.traveler_id,
+                sqlfunc.count(sqlfunc.distinct(LaborEntry.step_id)).label('n'),
+            ).filter(
+                LaborEntry.traveler_id.in_(traveler_ids),
+                LaborEntry.step_id.in_(progress_step_ids),
+            ).group_by(LaborEntry.traveler_id).all()
+        }
+
     # Build results
     results = []
     for t in travelers:
         data = {c.name: getattr(t, c.name) for c in t.__table__.columns}
-        steps = t.process_steps if t.process_steps else []
+        all_steps = t.process_steps if t.process_steps else []
+        # Steps in a hidden department (Receiving) stay on the traveler but are
+        # left out of the progress math so they can't dilute the percentage.
+        steps = progress_steps_by_traveler.get(t.id, [])
         total = len(steps)
         completed = sum(1 for s in steps if s.is_completed)
         data['total_steps'] = total
         data['completed_steps'] = completed
-        data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0.0
+        data['percent_complete'] = step_percent_complete(t.status, completed, total)
 
         # Department progress (computed from already-loaded steps — no extra queries)
         dept_progress = {}
-        for step in steps:
+        for step in all_steps:
             dept = wc_dept_map.get(step.work_center_code, 'Other')
-            if dept in KNOWN_DEPTS:
-                split_depts = [dept]
-            else:
-                parts = [d.strip() for d in dept.split('/') if d.strip()]
-                split_depts = parts if all(p in KNOWN_DEPTS for p in parts) and len(parts) > 1 else [dept or 'Other']
-            for d in split_depts:
+            for d in visible_departments(dept):
                 if d not in dept_progress:
                     dept_progress[d] = {'total': 0, 'completed': 0}
                 dept_progress[d]['total'] += 1
@@ -543,13 +649,14 @@ async def get_travelers(
         ls = labor_map.get(t.id)
         if ls:
             total_hours = round(float(ls.total_hours or 0), 2)
+            steps_with_labor = labor_steps_map.get(t.id, 0)
             data['labor_progress'] = {
                 'total_hours': total_hours,
                 'entries_count': ls.entry_count or 0,
                 'active_entries': ls.active_count or 0,
-                'steps_with_labor': ls.steps_with_labor or 0,
+                'steps_with_labor': steps_with_labor,
                 'total_steps': total,
-                'percent': round((ls.steps_with_labor or 0) / total * 100, 1) if total > 0 else 0.0,
+                'percent': round(steps_with_labor / total * 100, 1) if total > 0 else 0.0,
             }
         else:
             data['labor_progress'] = {'total_hours': 0, 'entries_count': 0, 'active_entries': 0, 'steps_with_labor': 0, 'total_steps': total, 'percent': 0.0}
@@ -1117,9 +1224,13 @@ async def get_dashboard_summary(
     results = []
     for t in travelers:
         steps = sorted(t.process_steps, key=lambda s: s.step_number)
-        total_steps = len(steps)
-        completed_steps = sum(1 for s in steps if s.is_completed)
-        percent_complete = round((completed_steps / total_steps) * 100, 1) if total_steps > 0 else 0
+        # Progress ignores hidden-department steps (Receiving); current step and
+        # the qty rollups below still consider every step on the traveler.
+        progress_steps = [s for s in steps
+                          if counts_toward_progress(wc_dept_map.get(s.work_center_code, 'Other'))]
+        total_steps = len(progress_steps)
+        completed_steps = sum(1 for s in progress_steps if s.is_completed)
+        percent_complete = step_percent_complete(t.status, completed_steps, total_steps)
 
         # Current step = first incomplete step
         current_step_obj = next((s for s in steps if not s.is_completed), None)
@@ -1131,20 +1242,10 @@ async def get_dashboard_summary(
         qty_rejected = sum(s.rejected or 0 for s in steps)
 
         # Department progress
-        KNOWN_DEPTS_DASH = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
-                       'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
         dept_progress = {}
         for step in steps:
             dept = wc_dept_map.get(step.work_center_code, 'Other')
-            if dept in KNOWN_DEPTS_DASH:
-                split_depts = [dept]
-            else:
-                parts = [d.strip() for d in dept.split('/') if d.strip()]
-                if all(p in KNOWN_DEPTS_DASH for p in parts) and len(parts) > 1:
-                    split_depts = parts
-                else:
-                    split_depts = [dept] if dept else ['Other']
-            for individual_dept in split_depts:
+            for individual_dept in visible_departments(dept):
                 if individual_dept not in dept_progress:
                     dept_progress[individual_dept] = {'total': 0, 'completed': 0}
                 dept_progress[individual_dept]['total'] += 1
@@ -1230,18 +1331,9 @@ async def get_department_progress(
     departments = {}
     for step in steps:
         dept = wc_dept_map.get(step.work_center_code, 'Other')
-        # Handle multi-department assignments (e.g., "SMT/Soldering/Test", "Engineering/Prep")
-        # Each part gets its own department entry
-        KNOWN_DEPTS = {'Engineering', 'Prep', 'Receiving', 'TH', 'Test', 'Soldering', 'SMT',
-                       'ALL', 'Quality', 'Shipping', 'Coating', 'Cable', 'Purchasing', 'Other'}
-        if dept in KNOWN_DEPTS:
-            split_depts = [dept]
-        else:
-            parts = [d.strip() for d in dept.split('/') if d.strip()]
-            if all(p in KNOWN_DEPTS for p in parts) and len(parts) > 1:
-                split_depts = parts
-            else:
-                split_depts = [dept] if dept else ['Other']
+        # Multi-department work centers ("SMT/Soldering/Test") land in each of
+        # their departments; hidden ones (Receiving) are dropped here.
+        split_depts = visible_departments(dept)
 
         step_data = {
             'id': step.id,
@@ -1276,17 +1368,24 @@ async def get_department_progress(
         completed = dept_data['completed_steps']
         dept_data['percent_complete'] = round((completed / total) * 100, 1) if total > 0 else 0
 
-    # Overall progress
-    total_steps = len(steps)
-    completed_steps = sum(1 for s in steps if s.is_completed)
-    overall_percent = round((completed_steps / total_steps) * 100, 1) if total_steps > 0 else 0
+    # Overall progress — hidden-department steps (Receiving) sit out of the math
+    progress_steps = [s for s in steps
+                      if counts_toward_progress(wc_dept_map.get(s.work_center_code, 'Other'))]
+    total_steps = len(progress_steps)
+    completed_steps = sum(1 for s in progress_steps if s.is_completed)
+    overall_percent = step_percent_complete(traveler.status, completed_steps, total_steps)
 
     # Labor progress for this traveler
     labor_entries = db.query(LaborEntry).filter(LaborEntry.traveler_id == traveler_id).all()
     total_labor_hours = round(sum(le.hours_worked or 0 for le in labor_entries), 2)
     labor_entries_count = len(labor_entries)
     active_labor = sum(1 for le in labor_entries if not le.is_completed)
-    steps_with_labor = len(set(le.step_id for le in labor_entries if le.step_id))
+    # Numerator must match total_steps' denominator: KITTING carries labor but is
+    # no longer in the progress set, and counting it here would push labor_percent
+    # past 100%.
+    progress_step_ids = {s.id for s in progress_steps}
+    steps_with_labor = len({le.step_id for le in labor_entries
+                            if le.step_id in progress_step_ids})
     labor_percent = round((steps_with_labor / total_steps) * 100, 1) if total_steps > 0 else 0.0
 
     # Labor hours per department
@@ -1318,6 +1417,17 @@ async def get_department_progress(
     wc_code_name_map = {wc.code: wc.name for wc in work_centers if wc.name}
 
     category_hours: dict = {}
+
+    # Seed 0.00 for every category this job's steps actually cover. That is what
+    # lets the traveler tell "has a testing step, nobody has clocked it yet"
+    # (E-Test present at 0.00) apart from "this job has no testing at all"
+    # (E-Test absent, so the UI omits the row) — the table used to hardcode six
+    # rows and show both cases identically.
+    for step in steps:
+        cat = wc_category_map.get(step.work_center_code)
+        if cat:
+            category_hours.setdefault(short_category(cat), 0.0)
+
     for le in labor_entries:
         # Try to get category from work_center code or name
         cat = None
@@ -1333,18 +1443,7 @@ async def get_department_progress(
                 if step.id == le.step_id:
                     cat = wc_category_map.get(step.work_center_code)
                     break
-        if not cat:
-            cat = 'Other'
-        # Clean up category name to short form
-        CATEGORY_SHORT_NAMES = {
-            'SMT hrs. Actual': 'SMT',
-            'HAND hrs. Actual': 'Hand',
-            'TH hrs. Actual': 'TH',
-            'AOI & Final Inspection, QC hrs. Actual': 'AOI',
-            'E-TEST hrs. Actual': 'E-Test',
-            'Labelling, Packaging, Shipping hrs. Actual': 'Labeling',
-        }
-        cat_short = CATEGORY_SHORT_NAMES.get(cat, cat.split(' ')[0].strip().rstrip(',')) if cat else 'Other'
+        cat_short = short_category(cat)
         category_hours[cat_short] = round(category_hours.get(cat_short, 0) + (le.hours_worked or 0), 2)
 
     return {
@@ -1392,6 +1491,80 @@ async def get_traveler_by_job(
         )
 
     return traveler
+
+def _signer_initial(first_name: Optional[str]) -> Optional[str]:
+    """Operator sign-off initial: first three letters of the first name, upper
+    case (Bharat -> BHA, Yullia -> YUL). Names shorter than three letters are
+    used whole."""
+    cleaned = (first_name or "").strip()
+    return cleaned[:3].upper() if cleaned else None
+
+
+def _attach_labor_signoff(db: Session, traveler: Traveler, result: dict) -> None:
+    """Populate each step's sign-off values from recorded labor.
+
+    Rolls labor_entries up per step_id — summed hours_worked, the most recent
+    entry's timestamp, and an initial for every operator who logged against the
+    step — and writes them onto the serialized steps as labor_total_hours /
+    labor_latest_date / labor_signers. Joins on step_id rather than the
+    LaborEntry.work_center name string, which is fuzzy-matched from the operator's
+    description (see labor.py) and is not a reliable key.
+
+    Read-time derivation, not a write: the numbers pick up new labor on the next
+    fetch, and a step with no labor keeps whatever was entered by hand.
+    """
+    from sqlalchemy import func as sqlfunc
+
+    steps = result.get("process_steps") or []
+    step_ids = [s.id for s in traveler.process_steps]
+    if not step_ids or not steps:
+        return
+
+    rows = db.query(
+        LaborEntry.step_id,
+        sqlfunc.sum(LaborEntry.hours_worked).label("total_hours"),
+        sqlfunc.max(sqlfunc.coalesce(LaborEntry.end_time, LaborEntry.start_time)).label("latest"),
+    ).filter(
+        LaborEntry.step_id.in_(step_ids)
+    ).group_by(LaborEntry.step_id).all()
+    rollup = {r.step_id: r for r in rows}
+
+    # One row per (step, operator), ordered so the signatures read in the order
+    # people actually started working the step.
+    signer_rows = db.query(
+        LaborEntry.step_id,
+        User.first_name,
+        sqlfunc.min(LaborEntry.start_time).label("first_at"),
+    ).join(
+        User, User.id == LaborEntry.employee_id
+    ).filter(
+        LaborEntry.step_id.in_(step_ids)
+    ).group_by(
+        LaborEntry.step_id, User.id, User.first_name
+    ).all()
+
+    signers: dict = {}
+    for r in sorted(signer_rows, key=lambda r: (r.first_at is None, r.first_at)):
+        initial = _signer_initial(r.first_name)
+        # Dedupe on the initial, not the user: two operators sharing a first name
+        # would otherwise sign the step "BHA, BHA".
+        if initial and initial not in signers.setdefault(r.step_id, []):
+            signers[r.step_id].append(initial)
+
+    for step in steps:
+        step_id = step.get("id")
+        step["labor_signers"] = signers.get(step_id, [])
+        row = rollup.get(step_id)
+        if not row:
+            continue
+        step["labor_total_hours"] = round(float(row.total_hours or 0), 2)
+        latest = row.latest
+        if latest is not None:
+            # SQLite hands back a string here; Postgres a datetime.
+            step["labor_latest_date"] = (
+                latest.strftime("%Y-%m-%d") if hasattr(latest, "strftime") else str(latest)[:10]
+            )
+
 
 @router.get("/{traveler_id}")
 async def get_traveler(
@@ -1457,6 +1630,7 @@ async def get_traveler(
     from schemas.traveler_schemas import Traveler as TravelerSchema
     result = TravelerSchema.model_validate(traveler).model_dump()
     result["group_info"] = group_info
+    _attach_labor_signoff(db, traveler, result)
     return result
 
 @router.put("/{traveler_id}", response_model=TravelerSchema)

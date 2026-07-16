@@ -59,6 +59,20 @@ interface ProcessStep {
   completedTime?: string;
   status: string;
   assignee: string;
+  // Rolled up from labor entries by the backend (read-only, never saved back).
+  laborSigners?: string[];
+  laborTotalHours?: number | null;
+  laborLatestDate?: string | null;
+}
+
+// The traveler's sign-off columns read from recorded labor whenever any exists;
+// the hand-typed value is only a fallback for steps nobody has clocked against.
+function signoffOf(step: ProcessStep) {
+  return {
+    sign: step.laborSigners?.length ? step.laborSigners.join(', ') : (step.sign || ''),
+    time: step.laborTotalHours != null ? step.laborTotalHours.toFixed(2) : (step.completedTime || ''),
+    date: step.laborLatestDate || step.completedDate || '',
+  };
 }
 
 interface Specification {
@@ -501,6 +515,9 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               sign: String(step.sign || ''),
               completedDate: String(step.completed_date || ''),
               completedTime: String(step.completed_time || ''),
+              laborSigners: (step.labor_signers as string[]) || [],
+              laborTotalHours: step.labor_total_hours as number | null,
+              laborLatestDate: (step.labor_latest_date as string | null) || null,
               status: step.is_completed ? 'COMPLETED' : 'PENDING',
               assignee: ''
             })).sort((a: ProcessStep, b: ProcessStep) => Number(a.seq) - Number(b.seq)),
@@ -2466,6 +2483,30 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
              the table to the next page, leaving the title stranded. Instead:
              let the section and table flow, glue the title to the table, keep
              individual rows intact, and repeat the header on each page. */
+          /* Repeat the traveler header (job #, part/desc, barcode, dates) at the
+             top of every printed page, so a page separated on the floor can
+             still be identified. The header is a plain div sitting outside the
+             routing table, so it cannot ride the <thead> repeat the column
+             headers use below. Casting the document to a table in print only
+             makes the header a running header group, which the browser redraws
+             on each page. Screen is untouched (blocks stay blocks) and page 1 is
+             unchanged, because the header is still the first thing in flow.
+             Standard travelers only: RMA never gets .traveler-doc and keeps its
+             own landscape page1/page2 rules.
+             The blanket div page-break-inside:avoid rule above would pin these
+             wrappers to one page, so both opt back out to auto. */
+          .traveler-doc { display: table !important; width: 100% !important;
+                          page-break-inside: auto !important; break-inside: auto !important; }
+          .traveler-doc > .traveler-doc-header {
+            display: table-header-group !important;
+            page-break-inside: avoid !important; break-inside: avoid !important;
+            page-break-after: avoid !important; break-after: avoid !important;
+          }
+          .traveler-doc > .traveler-doc-body {
+            display: table-row-group !important;
+            page-break-inside: auto !important; break-inside: auto !important;
+          }
+
           .routing-section { page-break-inside: auto !important; break-inside: auto !important; }
           .routing-section > div:first-child { page-break-after: avoid !important; break-after: avoid !important; }
           .routing-table-wrap { page-break-before: avoid !important; break-before: avoid !important; page-break-inside: auto !important; break-inside: auto !important; }
@@ -2932,9 +2973,15 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                         'SMT': 'bg-blue-500', 'Hand': 'bg-orange-500', 'TH': 'bg-purple-500',
                         'AOI': 'bg-cyan-500', 'E-Test': 'bg-yellow-500', 'Labeling': 'bg-pink-500',
                       };
+                      // Only categories this job actually has — the backend sends a
+                      // 0.00 entry for every category its steps cover, so a testing
+                      // step with no hours yet still lists at 0.00 while a job with
+                      // no testing at all omits the row entirely. CATEGORY_ORDER is
+                      // display order, not a list of rows to force.
+                      const CATEGORY_ORDER = ['SMT', 'Hand', 'TH', 'AOI', 'E-Test', 'Labeling'];
                       const allCats = [
-                        ...['SMT', 'Hand', 'TH', 'AOI', 'E-Test', 'Labeling'].map(cat => ({ cat, hours: categoryHours[cat] || 0 })),
-                        ...Object.entries(categoryHours).filter(([cat]) => !['SMT', 'Hand', 'TH', 'AOI', 'E-Test', 'Labeling'].includes(cat)).map(([cat, hours]) => ({ cat, hours })),
+                        ...CATEGORY_ORDER.filter(cat => cat in categoryHours).map(cat => ({ cat, hours: categoryHours[cat] || 0 })),
+                        ...Object.entries(categoryHours).filter(([cat]) => !CATEGORY_ORDER.includes(cat)).map(([cat, hours]) => ({ cat, hours })),
                       ];
                       return allCats.map(({ cat, hours }) => {
                         const pct = grandTotal > 0 ? (hours / grandTotal) * 100 : 0;
@@ -3047,10 +3094,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
         {/* Main Traveler Form */}
         <div className={`bg-white dark:bg-slate-800 print:!bg-white shadow-lg border-2 border-black dark:border-slate-600 print:!border-black text-black dark:text-white print:!text-black ${isRmaType(displayTraveler.travelerType) ? 'rma-landscape-print' : ''}`} style={{fontFamily: 'Arial, Helvetica, sans-serif'}}>
-          <div>
+          {/* traveler-doc / -header / -body drive the repeating print header: in
+              print only, this becomes a table and the header a running header
+              group so it redraws atop every page (see @media print). RMA keeps
+              its own landscape page1/page2 rules and opts out. */}
+          <div className={isRmaType(displayTraveler.travelerType) ? undefined : 'traveler-doc'}>
           {/* Standard Header Section - hidden for RMA types */}
           {!isRmaType(displayTraveler.travelerType) && (
-          <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
+          <div className="traveler-doc-header bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
             {/* Mobile Layout - shown below md */}
             <div className="block md:hidden print:hidden mb-4">
               <div className="flex flex-col items-center justify-center mb-4">
@@ -3442,6 +3493,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
           </div>
           )}
+          {/* Everything below the header is the repeating table body group. */}
+          <div className="traveler-doc-body">
 
           {/* RMA Header - Word Document Layout */}
           {isRmaType(displayTraveler.travelerType) && (() => {
@@ -3717,6 +3770,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               <tbody>
                 {displayTraveler.steps.map((step, index) => {
                   const stepDndId = String(step.id ?? step.seq);
+                  const so = signoffOf(step);
                   return isEditing ? (
                   <SortableTableRow key={stepDndId} id={stepDndId}>
                     {({ dragHandleProps, style, ref }) => (
@@ -3819,7 +3873,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             style={{padding: '1px 2px'}}
                             placeholder="Hrs"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{step.completedTime || '\u00A0'}</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{so.time || '\u00A0'}</span>
                         </td>
                         <td className="border-r border-gray-300 dark:border-slate-600 px-0.5 py-0">
                           <input
@@ -3860,7 +3914,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             style={{padding: '1px 2px'}}
                             placeholder="Sign"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{step.sign || '\u00A0'}</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[10px] font-bold" style={{minHeight: '16px'}}>{so.sign || '\u00A0'}</span>
                         </td>
                         <td className="px-0.5 py-0">
                           <input
@@ -3871,7 +3925,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             style={{padding: '1px 1px'}}
                             placeholder="Date"
                           />
-                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[9px]" style={{minHeight: '16px'}}>{step.completedDate || '\u00A0'}</span>
+                          <span className="print-only inline-block w-full border-b border-gray-400 dark:border-slate-500 text-center text-[9px]" style={{minHeight: '16px'}}>{so.date || '\u00A0'}</span>
                         </td>
                   </tr>
                     )}
@@ -3909,7 +3963,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           </div>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.completedTime || '\u00A0'}</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{so.time || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
                           <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.quantity || '\u00A0'}</span>
@@ -3921,10 +3975,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.accepted || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm font-bold print:px-0.5 print:py-0.5 print:text-[10px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.sign || '\u00A0'}</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{so.sign || '\u00A0'}</span>
                         </td>
                         <td className="border-r-2 border-b-2 border-gray-400 dark:border-slate-500 px-0.5 py-1 text-center text-sm print:px-0.5 print:py-0.5 print:text-[9px]">
-                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{step.completedDate || '\u00A0'}</span>
+                          <span className="inline-block w-full border-b border-gray-400 dark:border-slate-500" style={{minHeight: '16px'}}>{so.date || '\u00A0'}</span>
                         </td>
                   </tr>
                   );
@@ -3962,6 +4016,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             <div className="routing-cards-mobile space-y-3 p-2">
               {displayTraveler.steps.map((step, index) => {
                 const mobileStepId = String(step.id ?? step.seq);
+                const so = signoffOf(step);
                 return isEditing ? (
                 <SortableMobileCard key={mobileStepId} id={mobileStepId}>
                   {({ dragHandleProps, style, ref }) => (
@@ -4100,7 +4155,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             placeholder="Sign"
                           />
                         ) : (
-                          <div className="text-sm font-bold text-center bg-purple-50 p-1.5 rounded">{step.sign || '-'}</div>
+                          <div className="text-sm font-bold text-center bg-purple-50 p-1.5 rounded">{so.sign || '-'}</div>
                         )}
                       </div>
                     </div>
@@ -4118,7 +4173,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             placeholder="Hrs"
                           />
                         ) : (
-                          <div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.completedTime || '-'}</div>
+                          <div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{so.time || '-'}</div>
                         )}
                       </div>
                       <div>
@@ -4132,7 +4187,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                             placeholder="Date"
                           />
                         ) : (
-                          <div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.completedDate || '-'}</div>
+                          <div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{so.date || '-'}</div>
                         )}
                       </div>
                     </div>
@@ -4178,7 +4233,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                       <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">QTY</label><div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.quantity || '-'}</div></div>
                       <div><label className="block text-xs font-bold text-red-700 mb-1">REJ</label><div className="text-sm text-center bg-red-50 p-1.5 rounded text-red-700">{step.rejected || '-'}</div></div>
                       <div><label className="block text-xs font-bold text-green-700 mb-1">ACC</label><div className="text-sm text-center bg-green-50 p-1.5 rounded text-green-700">{step.accepted || '-'}</div></div>
-                      <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">SIGN</label><div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{step.sign || '-'}</div></div>
+                      <div><label className="block text-xs font-bold text-gray-700 dark:text-slate-300 mb-1">SIGN</label><div className="text-sm text-center bg-gray-50 dark:bg-slate-900 p-1.5 rounded">{so.sign || '-'}</div></div>
                     </div>
                     {step.id && stepQRCodes[step.id] && (
                       <div className="flex justify-center pt-2 border-t border-gray-200 dark:border-slate-700">
@@ -4711,6 +4766,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               </div>
             </div>
           )}
+          </div>
           </div>
         </div>
       </div>
