@@ -77,13 +77,21 @@ function formatLaborTime(hours: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
+// US date for the sign-off column. The API sends ISO (YYYY-MM-DD) so it stays
+// sortable; the floor reads MM-DD-YYYY. Anything not ISO is a hand-typed value
+// and is left exactly as entered.
+function formatSignoffDate(dateStr: string): string {
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[2]}-${m[3]}-${m[1]}` : dateStr;
+}
+
 // The traveler's sign-off columns read from recorded labor whenever any exists;
 // the hand-typed value is only a fallback for steps nobody has clocked against.
 function signoffOf(step: ProcessStep) {
   return {
     sign: step.laborSigners?.length ? step.laborSigners.join(', ') : (step.sign || ''),
     time: step.laborTotalHours != null ? formatLaborTime(step.laborTotalHours) : (step.completedTime || ''),
-    date: step.laborLatestDate || step.completedDate || '',
+    date: formatSignoffDate(step.laborLatestDate || step.completedDate || ''),
   };
 }
 
