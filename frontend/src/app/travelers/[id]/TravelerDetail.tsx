@@ -2562,8 +2562,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
              makes the header a running header group, which the browser redraws
              on each page. Screen is untouched (blocks stay blocks) and page 1 is
              unchanged, because the header is still the first thing in flow.
-             Standard travelers only: RMA never gets .traveler-doc and keeps its
-             own landscape page1/page2 rules.
+             Applies to every traveler type. The standard and RMA headers are
+             mutually exclusive and both live in the header group, so whichever
+             one a traveler renders is the one that repeats — RMA keeps its own
+             landscape @page and page1/page2 rules on top of this.
              The blanket div page-break-inside:avoid rule above would pin these
              wrappers to one page, so both opt back out to auto. */
           .traveler-doc { display: table !important; width: 100% !important;
@@ -2576,6 +2578,30 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .traveler-doc > .traveler-doc-body {
             display: table-row-group !important;
             page-break-inside: auto !important; break-inside: auto !important;
+          }
+
+          /* TIME used to hold "0.16" and now holds "44h 41m", which at 10px bold
+             is wider than the 48px column. Shrink just this column's data — the
+             DATE column is deliberately left alone. */
+          table.routing-table tbody td:nth-child(4),
+          table.routing-table tbody td:nth-child(4) span,
+          table.editing-mode tbody td:nth-child(5),
+          table.editing-mode tbody td:nth-child(5) span,
+          table.editing-mode tbody td:nth-child(5) input {
+            font-size: 8px !important;
+            font-weight: normal !important;
+            white-space: nowrap !important;
+          }
+
+          /* SIGN holds first names now, not 3-letter initials. Bold at this size
+             reads worse and takes more width, so the data (not the header) is
+             set normal weight. */
+          table.routing-table tbody td:nth-child(8),
+          table.routing-table tbody td:nth-child(8) span,
+          table.editing-mode tbody td:nth-child(9),
+          table.editing-mode tbody td:nth-child(9) span,
+          table.editing-mode tbody td:nth-child(9) input {
+            font-weight: normal !important;
           }
 
           .routing-section { page-break-inside: auto !important; break-inside: auto !important; }
@@ -3233,10 +3259,13 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               print only, this becomes a table and the header a running header
               group so it redraws atop every page (see @media print). RMA keeps
               its own landscape page1/page2 rules and opts out. */}
-          <div className={isRmaType(displayTraveler.travelerType) ? undefined : 'traveler-doc'}>
+          <div className="traveler-doc">
+          {/* Both headers sit in the header group: only one renders for a given
+              traveler type, and whichever it is repeats on every printed page. */}
+          <div className="traveler-doc-header">
           {/* Standard Header Section - hidden for RMA types */}
           {!isRmaType(displayTraveler.travelerType) && (
-          <div className="traveler-doc-header bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
+          <div className="bg-gray-100 dark:bg-slate-900 print:!bg-gray-100 border-b-2 border-black dark:border-slate-600 print:!border-black p-4 print:p-2">
             {/* Mobile Layout - shown below md */}
             <div className="block md:hidden print:hidden mb-4">
               <div className="flex flex-col items-center justify-center mb-4">
@@ -3628,8 +3657,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
           </div>
           )}
-          {/* Everything below the header is the repeating table body group. */}
-          <div className="traveler-doc-body">
 
           {/* RMA Header - Word Document Layout */}
           {isRmaType(displayTraveler.travelerType) && (() => {
@@ -3798,6 +3825,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
           );
           })()}
+          </div>{/* /traveler-doc-header */}
+
+          {/* Everything below the headers is the repeating table body group. */}
+          <div className="traveler-doc-body">
 
           {/* Specifications Section */}
           <div className="border-b border-black dark:border-slate-600 print:break-inside-avoid">
