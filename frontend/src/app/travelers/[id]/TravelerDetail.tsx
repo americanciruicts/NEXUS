@@ -2606,12 +2606,14 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
 
           /* SIGN holds first names now, not 3-letter initials. Bold at this size
              reads worse and takes more width, so the data (not the header) is
-             set normal weight. */
+             set normal weight, at the same size as DATE — several operators can
+             share a step, and the smaller size keeps those names to fewer lines. */
           table.routing-table tbody td:nth-child(8),
           table.routing-table tbody td:nth-child(8) span,
           table.editing-mode tbody td:nth-child(9),
           table.editing-mode tbody td:nth-child(9) span,
           table.editing-mode tbody td:nth-child(9) input {
+            font-size: 7.5px !important;
             font-weight: normal !important;
           }
 
