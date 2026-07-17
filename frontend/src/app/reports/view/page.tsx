@@ -71,8 +71,22 @@ function ReportViewContent() {
         if (!response.ok) throw new Error(`Failed to fetch labor data (${response.status})`);
         let data = await response.json();
         if (type === 'single_traveler' && jobNumber) {
-          // jobNumber may arrive as the raw number or the full RMA label.
-          data = data.filter((entry: any) => entry.job_number === jobNumber || entry.job_display === jobNumber);
+          // jobNumber may arrive as the raw number or the full RMA label. Match
+          // as a substring (not ===) so "8770L" also finds "8770L-KANBAN" — the
+          // exact match silently dropped every KANBAN/variant traveler and left
+          // the report empty.
+          const jobSearch = jobNumber.toLowerCase();
+          data = data.filter((entry: any) => {
+            const job = `${entry.job_display || ''} ${entry.job_number || ''}`.toLowerCase();
+            return job.includes(jobSearch);
+          });
+          // A job number can span several travelers (one per work order). When a
+          // work order is given, narrow to that single traveler — otherwise the
+          // report merged all of them and displayed only the first.
+          if (workOrder && workOrder.trim()) {
+            const woSearch = workOrder.toLowerCase();
+            data = data.filter((entry: any) => (entry.work_order || '').toLowerCase().includes(woSearch));
+          }
         }
         // Apply date range filter
         data = filterByDateRange(data);

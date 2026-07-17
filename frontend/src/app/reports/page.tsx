@@ -75,8 +75,12 @@ export default function ReportsPage() {
           return;
         }
 
-        // Navigate to report page with job number
-        router.push(`/reports/view?type=single_traveler&jobNumber=${encodeURIComponent(jobNumber)}&startDate=${startDate}&endDate=${endDate}`);
+        // Navigate to report page with job number and (optional) work order.
+        // A single job number can carry several travelers — one per work order
+        // (e.g. 8770L has 24133-50/51/52 and 24090-22) — so the work order is
+        // what actually isolates one traveler. Without it the report collapsed
+        // every traveler on the job into one blob and showed only the first.
+        router.push(`/reports/view?type=single_traveler&jobNumber=${encodeURIComponent(jobNumber)}&workOrder=${encodeURIComponent(workOrder)}&startDate=${startDate}&endDate=${endDate}`);
         setLoading(false);
         return;
       } else if (reportType === 'all_travelers') {
@@ -453,15 +457,27 @@ export default function ReportsPage() {
           {/* Input Fields */}
           <div className="space-y-4">
             {reportType === 'single_traveler' && (
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
-                <input
-                  type="text"
-                  value={jobNumber}
-                  onChange={(e) => setJobNumber(e.target.value)}
-                  placeholder="e.g., 8744 PART"
-                  className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-semibold"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Job Number</label>
+                  <input
+                    type="text"
+                    value={jobNumber}
+                    onChange={(e) => setJobNumber(e.target.value)}
+                    placeholder="e.g., 8744 PART"
+                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-2">Work Order <span className="font-normal text-gray-500 dark:text-slate-400">(optional — isolates one traveler)</span></label>
+                  <input
+                    type="text"
+                    value={workOrder}
+                    onChange={(e) => setWorkOrder(e.target.value)}
+                    placeholder="e.g., 24133-50"
+                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-semibold"
+                  />
+                </div>
               </div>
             )}
 
