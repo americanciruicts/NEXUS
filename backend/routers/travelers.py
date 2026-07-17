@@ -656,9 +656,15 @@ async def get_travelers(
                 if step.is_completed:
                     dept_progress[d]['completed'] += 1
 
+        # Resolved through the same helpers as the detail view's department
+        # progress: a COMPLETED traveler reads N/N and 100% per department. Doing
+        # the raw math here instead left a shipped job showing 100% overall on the
+        # card while its own department chips underneath read 0%.
         data['department_progress'] = [
-            {'department': dept, 'total_steps': d['total'], 'completed_steps': d['completed'],
-             'percent_complete': round((d['completed'] / d['total']) * 100, 1) if d['total'] > 0 else 0}
+            {'department': dept,
+             'completed_steps': displayed_step_counts(t.status, d['completed'], d['total'])[0],
+             'total_steps': displayed_step_counts(t.status, d['completed'], d['total'])[1],
+             'percent_complete': step_percent_complete(t.status, d['completed'], d['total'])}
             for dept, d in dept_progress.items()
         ]
 

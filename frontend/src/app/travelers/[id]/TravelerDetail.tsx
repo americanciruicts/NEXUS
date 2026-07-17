@@ -260,7 +260,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const travelerId = createMode ? '' : (params?.id as string || '');
   const autoEdit = searchParams?.get('edit') === 'true';
 
@@ -275,6 +275,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   const [includeLaborHours, setIncludeLaborHours] = useState(true);
 
   const [traveler, setTraveler] = useState<Traveler | null>(null);
+  const [loadError, setLoadError] = useState<'auth' | 'notfound' | null>(null);
   const [isLoading, setIsLoading] = useState(!createMode);
   const [isEditing, setIsEditing] = useState(createMode);
   const [editedTraveler, setEditedTraveler] = useState<Traveler | null>(null);
@@ -647,8 +648,13 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               }
             }
           } catch { /* non-critical */ }
+        } else if (response.status === 401) {
+          // Not a missing traveler — a dead session. Saying "not found" here
+          // sent operators hunting for a data problem that didn't exist.
+          setLoadError('auth');
         } else {
           console.error('Failed to fetch traveler');
+          setLoadError('notfound');
         }
       } catch (error) {
         console.error('Error fetching traveler:', error);
@@ -2151,8 +2157,23 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
   if (!createMode && !traveler && !editedTraveler) {
     return (
       <Layout fullWidth>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-xl text-red-600">Traveler not found</div>
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          {loadError === 'auth' ? (
+            <>
+              <div className="text-xl text-red-600">Your session has expired</div>
+              <div className="text-sm text-gray-600 dark:text-slate-400">
+                This traveler is still here — you just need to sign in again.
+              </div>
+              <button
+                onClick={logout}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Log in again
+              </button>
+            </>
+          ) : (
+            <div className="text-xl text-red-600">Traveler not found</div>
+          )}
         </div>
       </Layout>
     );

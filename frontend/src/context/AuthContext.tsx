@@ -278,7 +278,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) return; // leave the session alone; the idle check owns logout
+        // A 401 here is terminal: refresh needs a live token, so a rejected
+        // renewal means this one is already past its hard expiry and no later
+        // tick can revive it. The idle check can't catch this — focus and
+        // visibilitychange stamp the clock forward, so a tab left open past the
+        // token's lifetime kept a dead token forever and every request 401'd
+        // while the UI still showed the operator as signed in.
+        if (res.status === 401) {
+          toast.warning('Your session has expired. Please log in again.');
+          logout();
+          return;
+        }
+        if (!res.ok) return; // 5xx or transient — the idle check owns logout
         const data = await res.json();
         if (data?.access_token) localStorage.setItem('nexus_token', data.access_token);
       } catch {
@@ -288,7 +299,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     renew();
     const id = setInterval(renew, TOKEN_REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [user]);
+  }, [user, logout]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
