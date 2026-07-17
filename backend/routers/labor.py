@@ -1699,16 +1699,20 @@ async def get_labor_by_category(
             if not entry_category or entry_category.lower() != category.lower():
                 continue
 
-        # Filter by job number
+        # Filter by job number. Strip the search term before comparing — inputs
+        # arrive with stray leading/trailing spaces (e.g. " 24133-50" from a
+        # copy-paste or QR scan), and comparing the un-stripped value against the
+        # clean stored value matched nothing, emptying the whole report.
         if job_number and job_number.strip():
-            job = traveler.job_number if traveler else ''
-            if not job or job_number.lower() not in job.lower():
+            job = (traveler.job_number if traveler else '') or ''
+            if job_number.strip().lower() not in job.lower():
                 continue
 
-        # Filter by work order
+        # Filter by work order (same strip — a leading space here was the actual
+        # cause of "No labor entries found" on jobs that clearly had labor).
         if work_order and work_order.strip():
-            wo = traveler.work_order_number if traveler else ''
-            if not wo or work_order.lower() not in wo.lower():
+            wo = (traveler.work_order_number if traveler else '') or ''
+            if work_order.strip().lower() not in wo.lower():
                 continue
 
         # Filter by date range

@@ -20,12 +20,16 @@ const REPORT_THEMES = {
 function ReportViewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Trim every filter term at the source: values arrive with stray leading/
+  // trailing spaces (e.g. " 24133-50" from a copy-paste or QR scan), and an
+  // untrimmed term failed every substring match — emptying the whole report.
+  const trimParam = (v: string | null) => (v == null ? v : v.trim());
   const type = searchParams.get('type') as keyof typeof REPORT_THEMES;
-  const jobNumber = searchParams.get('jobNumber');
-  const operatorName = searchParams.get('operatorName');
-  const workCenter = searchParams.get('workCenter');
-  const workOrder = searchParams.get('workOrder');
-  const categoryParam = searchParams.get('category');
+  const jobNumber = trimParam(searchParams.get('jobNumber'));
+  const operatorName = trimParam(searchParams.get('operatorName'));
+  const workCenter = trimParam(searchParams.get('workCenter'));
+  const workOrder = trimParam(searchParams.get('workOrder'));
+  const categoryParam = trimParam(searchParams.get('category'));
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
 
