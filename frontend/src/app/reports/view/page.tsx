@@ -588,6 +588,11 @@ function ReportViewContent() {
               {(type === 'single_category') && categoryParam && (
                 <div><strong>Category:</strong> <span className="text-gray-600 dark:text-slate-300">{categoryParam}</span></div>
               )}
+              {/* Date range — shown whenever one is applied, so an empty result
+                  reads as "outside this date range" instead of "no data". */}
+              {(startDate || endDate) && (
+                <div><strong>Date Range:</strong> <span className="text-amber-600 dark:text-amber-400 font-semibold">{startDate || '—'} to {endDate || '—'}</span></div>
+              )}
               <div><strong>Total Hours:</strong> <span className="text-green-600 dark:text-green-400 font-bold">{totalHours.toFixed(2)}</span></div>
             </div>
           </div>
@@ -1423,6 +1428,11 @@ function ReportViewContent() {
           {(type === 'single_category' || type === 'all_categories') && categoryData.length === 0 && !loading && (
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '14px' }}>
               No labor entries found for the selected criteria.
+              {(startDate || endDate) && (
+                <div style={{ marginTop: '10px', color: '#d97706', fontWeight: 600 }}>
+                  A date range is applied ({startDate || '—'} to {endDate || '—'}). Labor logged outside these dates is excluded — clear the dates to see everything.
+                </div>
+              )}
             </div>
           )}
 
