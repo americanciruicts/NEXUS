@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://dangerous-logo-examinations-indicating.trycloudflare.com/:path*"
+      "destination": "https://oils-specials-mask-wit.trycloudflare.com/:path*"
     },
     {
       "source": "/formsm/:path*",
