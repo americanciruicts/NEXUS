@@ -4548,9 +4548,12 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </div>
           )}
 
-          {/* Comments Section - for non-RMA types shown here; for RMA shown on page 2 */}
+          {/* Comments Section - for non-RMA types shown here; for RMA shown on page 2.
+              When there are no comments this whole block (plus the blank writing
+              space below) is hidden from print so the printout doesn't end on an
+              otherwise-empty trailing page — it stops at the From/To Stock / Ship Via row. */}
           {!isRmaType(displayTraveler.travelerType) && (
-          <div className="border-b-2 border-black dark:border-slate-600">
+          <div className={`border-b-2 border-black dark:border-slate-600 ${((isEditing ? editData.comments : displayTraveler.comments) || '').trim() ? '' : 'print:hidden'}`}>
             <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 px-3 py-2 print:px-1 print:py-0">
               <h2 className="font-bold text-sm text-purple-900 dark:text-purple-200 print:!text-black print:text-[9px] print-section-title">COMMENTS & NOTES</h2>
             </div>
@@ -4572,9 +4575,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           </div>
           )}
 
-          {/* Additional Instructions/Comments Space - not for RMA types */}
+          {/* Additional Instructions/Comments Space - not for RMA types.
+              Hidden from print when there are no comments (see note above) so this
+              near-full-page blank box doesn't create an empty trailing page. */}
           {!isRmaType(displayTraveler.travelerType) && (
-          <div className="border-b-2 border-black dark:border-slate-600">
+          <div className={`border-b-2 border-black dark:border-slate-600 ${((isEditing ? editData.comments : displayTraveler.comments) || '').trim() ? '' : 'print:hidden'}`}>
             <div className="bg-gray-50 dark:bg-slate-900 p-3 min-h-[120px] print:min-h-[750px] text-sm print:p-1">
               <div className="text-gray-400 dark:text-slate-500 text-xs print:text-[8px]">Additional Instructions/Comments:</div>
             </div>
