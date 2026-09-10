@@ -2760,23 +2760,27 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             min-height: 0 !important;
           }
           /* COMMENTS & NOTES stays on the routing page, directly under the
-             routing table, and is capped so it fits in whatever is left of
-             that page instead of running on and pushing a page of its own.
-             It is kept whole (never split mid-sentence across pages). */
+             routing table, and closes it out: it always prints, so even a
+             router with no comment gets writing space between the routing
+             table and the unit tables. Floored so that space is real and
+             capped so a long comment cannot push a page of its own; kept
+             whole rather than split mid-sentence across pages. */
           .rma-landscape-print .rma-page2-content .rma-comments-block {
             page-break-inside: avoid !important; break-inside: avoid !important;
           }
           .rma-landscape-print .rma-page2-content .rma-comments-block .bg-purple-50 {
-            min-height: 0 !important;
+            min-height: 0.9in !important;
             max-height: 1.5in !important;
             overflow: hidden !important;
           }
-          /* The unit tables always open a new page — UNIT ORIGINAL JOB
-             INFORMATION on RMA_DIFF, UNIT SERIAL NUMBER TRACKING on the other
-             RMA and Modification routers — so they start clean at the top of
-             the page instead of picking up under the comments. More specific
-             than the "everything in page2 is auto" rule above, so it wins. */
-          .rma-landscape-print .rma-page2-content .rma-unit-tables {
+          /* Every unit table opens a page of its own — UNIT ORIGINAL JOB
+             INFORMATION (RMA_DIFF) and UNIT SERIAL NUMBER TRACKING — so each
+             starts clean at the top instead of picking up under whatever came
+             before it. The break sits on the tables themselves, not on the
+             wrapper, so no empty page is emitted ahead of the first one. More
+             specific than the "everything in page2 is auto" rule above, so it
+             wins. */
+          .rma-landscape-print .rma-page2-content .rma-unit-tables > div {
             page-break-before: always !important; break-before: page !important;
           }
           /* RMA barcode in print — keep bars crisp for laser scanners.
@@ -5000,11 +5004,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
               the end of the routing table with nothing in between. */}
           {isRmaType(displayTraveler.travelerType) && (
           <div className="rma-page2-content">
-            {/* With no comments the box is dropped from print entirely, so the
-                unit tracking table follows the routing table directly. When
-                there IS a comment the box is only as tall as its text — no
-                blank filler below it. Screen view unchanged. */}
-            <div className={`rma-comments-block border-b-2 border-black dark:border-slate-600 ${((isEditing ? editData.comments : displayTraveler.comments) || '').trim() ? '' : 'print:hidden'}`}>
+            {/* Always printed, comment or not: it closes out the routing page
+                and leaves writing space between the routing table and the unit
+                tables. Height is floored and capped in the print CSS. */}
+            <div className="rma-comments-block border-b-2 border-black dark:border-slate-600">
               <div className="bg-purple-200 dark:bg-purple-900/50 print:!bg-purple-200 px-3 py-2 print:px-1 print:py-0">
                 <h2 className="font-bold text-sm text-purple-900 dark:text-purple-200 print:!text-black print:text-[9px]">COMMENTS & NOTES</h2>
               </div>
@@ -5019,11 +5022,11 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                 )}
               </div>
             </div>
-            {/* Unit tables always begin on a fresh printed page (see the
+            {/* Each unit table begins its own printed page (see the
                 .rma-unit-tables print rule): the routing table and the
-                comments own the routing page, and UNIT ORIGINAL JOB
-                INFORMATION / UNIT SERIAL NUMBER TRACKING start at the top of
-                the next one on every RMA and Modification router. */}
+                comments own the routing page, then UNIT ORIGINAL JOB
+                INFORMATION and UNIT SERIAL NUMBER TRACKING each start at the
+                top of a page of their own. */}
             <div className={(displayTraveler.travelerType === 'RMA_DIFF' || displayTraveler.includeSnTable !== false) ? 'rma-unit-tables' : ''}>
             {/* On RMA_DIFF, the per-unit original job info table comes first.
                 Same component as the tracking table below, so it gets the same
