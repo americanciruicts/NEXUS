@@ -2759,18 +2759,18 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           .rma-landscape-print .rma-page2-content .bg-purple-50 {
             min-height: 0 !important;
           }
-          /* COMMENTS & NOTES stays on the routing page, directly under the
-             routing table, and closes it out: it always prints, so even a
-             router with no comment gets writing space between the routing
-             table and the unit tables. Floored so that space is real and
-             capped so a long comment cannot push a page of its own; kept
-             whole rather than split mid-sentence across pages. */
+          /* The space left under the routing table IS the comment section:
+             COMMENTS & NOTES always prints, headed and boxed, so that gap is
+             labelled writing space rather than blank paper — comment or no
+             comment. Floored at 1.8in so it fills most of what the routing
+             table leaves, capped at 2.4in so a long comment cannot push a
+             page of its own, and kept whole rather than split mid-sentence. */
           .rma-landscape-print .rma-page2-content .rma-comments-block {
             page-break-inside: avoid !important; break-inside: avoid !important;
           }
           .rma-landscape-print .rma-page2-content .rma-comments-block .bg-purple-50 {
-            min-height: 0.9in !important;
-            max-height: 1.5in !important;
+            min-height: 1.8in !important;
+            max-height: 2.4in !important;
             overflow: hidden !important;
           }
           /* Every unit table opens a page of its own — UNIT ORIGINAL JOB
