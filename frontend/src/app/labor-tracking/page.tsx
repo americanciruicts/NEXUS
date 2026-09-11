@@ -211,6 +211,17 @@ export default function LaborTrackingPage() {
   // get confused and labor lands on the wrong WO. Cleared whenever the job
   // number or work center is edited manually so stale scan data can't leak.
   const scannedTravelerIdRef = useRef<number | null>(null);
+  // How that pin was made. A WC QR scan names one exact traveler and is
+  // trusted as-is. A dropdown pick is not: two travelers on one job_number
+  // (two RMAs on the same job, WO breakouts) sit one above the other with
+  // near-identical labels, and a whole shift of TROUBLESHOOTING once landed
+  // on a just-created RMA nobody was holding because its row was on top.
+  // Starting from a pick on an ambiguous job therefore goes through an
+  // explicit chooser (travelerChoice) before anything is written.
+  const pinSourceRef = useRef<'scan' | 'pick' | null>(null);
+  // The chooser: every traveler on the typed job, the one currently pinned,
+  // and the validated form values the start needs once a card is clicked.
+  const [travelerChoice, setTravelerChoice] = useState<{ matches: any[]; pickedId: number | null; jobNumber: string; workCenter: string; operatorName: string } | null>(null);
   // The WO that the scanned QR resolved to. Shown in the form so the operator
   // can visually confirm the scan picked the correct breakout before hitting
   // Start. Cleared alongside scannedTravelerIdRef.
@@ -390,6 +401,7 @@ export default function LaborTrackingPage() {
         const scanData = await scanResp.json();
         if (typeof scanData.traveler_id === 'number') {
           scannedTravelerIdRef.current = scanData.traveler_id;
+          pinSourceRef.current = 'scan';
         }
         setScannedWorkOrder(scanData.work_order || null);
         setNewEntry(prev => ({
@@ -568,6 +580,7 @@ export default function LaborTrackingPage() {
     // Any manual edit of the job number invalidates a previously-scanned
     // traveler_id — the operator may now mean a different traveler entirely.
     scannedTravelerIdRef.current = null;
+    pinSourceRef.current = null;
     setScannedWorkOrder(null);
     // The field carries the display label (possibly a full RMA label, typed or
     // scanned); job_number stays the real lookup key.
@@ -592,6 +605,7 @@ export default function LaborTrackingPage() {
       typeof option.traveler_id === 'number' ? option.traveler_id :
       typeof option.id === 'number' ? option.id : null;
     scannedTravelerIdRef.current = pickedTravelerId;
+    pinSourceRef.current = pickedTravelerId != null ? 'pick' : null;
     setScannedWorkOrder(option.work_order_number || null);
     setNewEntry(prev => ({ ...prev, job_number: jobNum, job_display: option.job_display || option.value || jobNum, work_center: '', step_id: undefined }));
     const steps = await fetchWorkCentersByJob(jobNum, '', pickedTravelerId);
@@ -923,13 +937,9 @@ export default function LaborTrackingPage() {
       } else if (matchesByJob.length === 1) {
         traveler = matchesByJob[0];
       } else if (matchesByJob.length > 1) {
-        // Ambiguous manual entry — don't guess. Force the operator to scan the
-        // WC QR (which pins traveler_id) so labor lands on the correct WO.
-        toast.error(
-          `Job ${jobNumber} has ${matchesByJob.length} open travelers (different WOs). ` +
-          `Scan the Work Center QR on the correct traveler to continue.`
-        );
-        workCenterAutocompleteRef.current?.select();
+        // Ambiguous typed entry with nothing pinned — don't guess. Put every
+        // traveler on this job in front of the operator to pick from.
+        setTravelerChoice({ matches: matchesByJob, pickedId: null, jobNumber, workCenter, operatorName });
         return;
       }
 
@@ -939,6 +949,54 @@ export default function LaborTrackingPage() {
         return;
       }
 
+      // A pin that came from the dropdown (not a WC QR scan) on a job with
+      // more than one traveler is exactly how hours ended up on the wrong RMA.
+      // Make the operator confirm which traveler they are holding — the
+      // chooser shows status and whether this work center is already done on
+      // each — before the entry is written.
+      if (matchesByJob.length > 1 && pinSourceRef.current !== 'scan') {
+        setTravelerChoice({ matches: matchesByJob, pickedId: traveler.id, jobNumber, workCenter, operatorName });
+        return;
+      }
+
+      await launchStart(traveler, workCenter, operatorName, newEntry.step_id);
+    } catch (error) {
+      console.error('Error starting timer:', error);
+      toast.error('Error starting timer');
+    }
+  };
+
+  // The step the form holds was read off the pinned traveler. When the start
+  // is redirected to a different traveler on the same job, carry the work
+  // center across by matching operation on that traveler's own steps; if it
+  // has no such step the backend falls back to matching the description.
+  const resolveStepFor = (traveler: any, workCenter: string, stepId?: number): number | undefined => {
+    const steps: any[] = Array.isArray(traveler?.process_steps) ? traveler.process_steps : [];
+    if (stepId && steps.some(st => st.id === stepId)) return stepId;
+    const wc = workCenter.trim().toUpperCase();
+    const match = steps.find(st => (st.operation || '').trim().toUpperCase() === wc)
+      || steps.find(st => (st.work_center_code || '').trim().toUpperCase() === wc);
+    return match ? match.id : undefined;
+  };
+
+  // Chooser card clicked: start on that traveler with the form values the
+  // chooser captured at validation time.
+  const startOnChosenTraveler = async (traveler: any) => {
+    const choice = travelerChoice;
+    if (!choice) return;
+    setTravelerChoice(null);
+    const stepId = resolveStepFor(traveler, choice.workCenter, newEntry.step_id);
+    scannedTravelerIdRef.current = traveler.id;
+    pinSourceRef.current = 'scan'; // explicit, informed pick — trusted like a scan from here on
+    setScannedWorkOrder(traveler.work_order_number || null);
+    setNewEntry(prev => ({ ...prev, job_display: traveler.job_display || prev.job_display, step_id: stepId }));
+    await launchStart(traveler, choice.workCenter, choice.operatorName, stepId);
+  };
+
+  // Second half of the start: the traveler is settled, write the entry.
+  const launchStart = async (traveler: any, workCenter: string, operatorName: string, stepId?: number) => {
+    try {
+      const token = localStorage.getItem('nexus_token');
       const description = `${workCenter} - ${operatorName}`;
       // Use current system time when Start button is clicked
       const now = new Date();
@@ -950,8 +1008,8 @@ export default function LaborTrackingPage() {
       };
 
       // Pass step_id if selected from work center dropdown
-      if (newEntry.step_id) {
-        requestBody.step_id = newEntry.step_id;
+      if (stepId) {
+        requestBody.step_id = stepId;
       }
 
       // Admin can assign entry to another user
@@ -986,18 +1044,19 @@ export default function LaborTrackingPage() {
         // Scan is now consumed by an active timer; reset so a later manual
         // start doesn't accidentally inherit this traveler_id.
         scannedTravelerIdRef.current = null;
+        pinSourceRef.current = null;
         setScannedWorkOrder(null);
-        lastStartedWorkCenterRef.current = newEntry.work_center; // display name e.g. "FEEDER LOAD"
+        lastStartedWorkCenterRef.current = workCenter; // display name e.g. "FEEDER LOAD"
         lastStartedTravelerIdRef.current = traveler.id;
         // Find the matching work center code from job steps for QR auto-stop matching
         const matchingStep = jobWorkCenterOptions.find((s: any) =>
-          s.value === newEntry.work_center || s.operation === newEntry.work_center || s.step_id === newEntry.step_id
+          s.value === workCenter || s.operation === workCenter || s.step_id === stepId
         );
-        lastStartedWorkCenterCodeRef.current = matchingStep?.work_center_code || matchingStep?.value || newEntry.work_center;
-        lastStartedStepIdRef.current = newEntry.step_id;
+        lastStartedWorkCenterCodeRef.current = matchingStep?.work_center_code || matchingStep?.value || workCenter;
+        lastStartedStepIdRef.current = stepId;
         // Mirror to dedicated kitting timer subsystem (silent / fire-and-forget)
         // so we get the rich session log without interfering with labor tracking.
-        mirrorKittingTimer('start', traveler.id, newEntry.work_center);
+        mirrorKittingTimer('start', traveler.id, workCenter);
         toast.success('Timer started!');
         fetchLaborEntries();
       } else {
@@ -1973,6 +2032,7 @@ export default function LaborTrackingPage() {
                           // travelers share a job — different WO breakouts).
                           if (typeof scanData.traveler_id === 'number') {
                             scannedTravelerIdRef.current = scanData.traveler_id;
+                            pinSourceRef.current = 'scan';
                           }
                           setScannedWorkOrder(scanData.work_order || null);
                           // Auto-fill job number from DB
@@ -2946,6 +3006,68 @@ export default function LaborTrackingPage() {
           </div>
         </Modal>
       )}
+
+      {/* Which traveler? — shown when the typed/picked job has more than
+          one traveler and no WC QR was scanned. Nothing is written until a
+          card is clicked. */}
+      <Modal
+        isOpen={travelerChoice !== null}
+        onClose={() => setTravelerChoice(null)}
+        title="Which traveler are you working on?"
+      >
+        {travelerChoice && (
+          <div className="space-y-3">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg p-3">
+              <p className="text-sm text-amber-900 dark:text-amber-200 font-medium">
+                Job {travelerChoice.jobNumber} has {travelerChoice.matches.length} travelers. Check the RMA number printed on the traveler in your hand and pick that one.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {travelerChoice.matches.map((t: any) => {
+                const wc = travelerChoice.workCenter.trim().toUpperCase();
+                const steps: any[] = Array.isArray(t.process_steps) ? t.process_steps : [];
+                const step = steps.find(st => (st.operation || '').trim().toUpperCase() === wc)
+                  || steps.find(st => (st.work_center_code || '').trim().toUpperCase() === wc);
+                const statusLabel: Record<string, string> = { IN_PROGRESS: 'IN PROGRESS', CREATED: 'NOT STARTED', DRAFT: 'DRAFT', ON_HOLD: 'ON HOLD', COMPLETED: 'COMPLETED' };
+                const statusCls = t.status === 'IN_PROGRESS'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200'
+                  : t.status === 'COMPLETED'
+                    ? 'bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-slate-200'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200';
+                const isPicked = travelerChoice.pickedId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => startOnChosenTraveler(t)}
+                    className={`w-full text-left rounded-lg border-2 p-3 transition-colors hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 ${isPicked ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-900/10' : 'border-gray-300 dark:border-slate-600'}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <span className="font-bold text-gray-900 dark:text-slate-100">{t.job_display || t.job_number}</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${statusCls}`}>{statusLabel[t.status] || t.status}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-600 dark:text-slate-400 flex flex-wrap gap-x-3">
+                      {t.work_order_number && <span>WO {t.work_order_number}</span>}
+                      {t.created_at && <span>created {new Date(t.created_at).toLocaleDateString()}</span>}
+                      {isPicked && <span className="text-blue-700 dark:text-blue-300">selected in dropdown</span>}
+                    </div>
+                    <div className="mt-1 text-xs">
+                      {step
+                        ? (step.is_completed
+                            ? <span className="text-amber-700 dark:text-amber-300">{travelerChoice.workCenter}: already marked complete on this traveler</span>
+                            : <span className="text-green-700 dark:text-green-300">{travelerChoice.workCenter}: open on this traveler</span>)
+                        : <span className="text-gray-500 dark:text-slate-400">{travelerChoice.workCenter}: no such step on this traveler</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setTravelerChoice(null)} className="px-4 py-2 text-sm rounded border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700">Cancel</button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       {entryToDelete && (

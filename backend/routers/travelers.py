@@ -1197,11 +1197,19 @@ async def get_all_work_orders_for_job(
     if not travelers:
         return []
 
+    from utils.job_display import rma_job_display
+
     results = []
     for traveler in travelers:
         results.append({
             "id": traveler.id,
             "job_number": traveler.job_number,
+            # Combined "<rma> RMA JOB NO <job>" label and the bare RMA number, so
+            # a caller holding several travelers on one job_number (an RMA and
+            # the job it reworks, or two RMAs on the same job) can tell them
+            # apart and match a scanned/typed label to the exact traveler.
+            "rma_number": (traveler.rma_number or "").strip() or None,
+            "job_display": rma_job_display(traveler),
             "work_order_number": traveler.work_order_number,
             "po_number": traveler.po_number,
             "traveler_type": traveler.traveler_type.value if hasattr(traveler.traveler_type, 'value') else str(traveler.traveler_type),

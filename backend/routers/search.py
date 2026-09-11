@@ -241,6 +241,33 @@ async def autocomplete_job_numbers(
     # Order by most recently created first, then by job number
     travelers = query.order_by(Traveler.created_at.desc()).limit(limit).all()
 
+    # When several travelers share one job_number (two RMAs on the same job,
+    # WO breakouts), the one already being worked belongs above one that was
+    # only just created. Newest-first put a freshly created RMA on top of the
+    # in-progress RMA the operator was actually holding, and its hours landed
+    # on the wrong traveler. Reorder within each duplicate group only; the
+    # group keeps its place in the list.
+    def _status_of(t):
+        return t.status.value if hasattr(t.status, 'value') else str(t.status or '')
+    _STATUS_RANK = {'IN_PROGRESS': 0, 'ON_HOLD': 1, 'CREATED': 2, 'DRAFT': 3, 'COMPLETED': 4}
+    by_job: dict = {}
+    for t in travelers:
+        by_job.setdefault(t.job_number, []).append(t)
+    for group in by_job.values():
+        if len(group) > 1:
+            group.sort(key=lambda t: _STATUS_RANK.get(_status_of(t), 5))
+    seen: dict = {}
+    ordered = []
+    for t in travelers:
+        group = by_job[t.job_number]
+        idx = seen.get(t.job_number, 0)
+        ordered.append(group[idx])
+        seen[t.job_number] = idx + 1
+    travelers = ordered
+    duplicated_jobs = {j for j, g in by_job.items() if len(g) > 1}
+    _STATUS_LABEL = {'IN_PROGRESS': 'IN PROGRESS', 'CREATED': 'NOT STARTED', 'DRAFT': 'DRAFT',
+                     'ON_HOLD': 'ON HOLD', 'COMPLETED': 'COMPLETED', 'CANCELLED': 'CANCELLED', 'ARCHIVED': 'ARCHIVED'}
+
     # Surface the work order in the dropdown label so an operator can pick the
     # correct breakout when a single job_number maps to multiple travelers.
     # Without this, `value` (the job_number) and the visible row look identical
@@ -257,6 +284,10 @@ async def autocomplete_job_numbers(
         label = f"{job_display}"
         if wo:
             label += f" / WO {wo}"
+        # Only rows that have a same-job twin get the status tag — that is the
+        # one detail that separates them at a glance.
+        if t.job_number in duplicated_jobs:
+            label += f" [{_STATUS_LABEL.get(_status_of(t), _status_of(t))}]"
         if desc_short:
             label += f" - {desc_short}"
         out.append({
