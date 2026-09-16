@@ -177,6 +177,7 @@ class Traveler(Base):
     from_stock = Column(String(100))  # From Stock location
     to_stock = Column(String(100))  # To Stock location
     ship_via = Column(String(100))  # Shipping method
+    ship_qty = Column(String(50))  # Quantity shipped, free text like the rest of the row
     comments = Column(Text)  # Comments section
     start_date = Column(String(20))  # Start date (user-entered)
     due_date = Column(String(20))  # Due date

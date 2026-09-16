@@ -194,6 +194,7 @@ interface LookupTraveler {
   from_stock?: string;
   to_stock?: string;
   ship_via?: string;
+  ship_qty?: string;
   comments?: string;
   due_date?: string;
   ship_date?: string;
@@ -223,6 +224,7 @@ interface Traveler {
   fromStock: string;
   toStock: string;
   shipVia: string;
+  shipQty: string;
   comments: string;
   steps: ProcessStep[];
   laborEntries: LaborEntry[];
@@ -784,6 +786,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             fromStock: String(data.from_stock || ''),
             toStock: String(data.to_stock || ''),
             shipVia: String(data.ship_via || ''),
+            shipQty: String(data.ship_qty || ''),
             comments: String(data.comments || ''),
             travelerType: String(data.traveler_type || 'PCB_ASSEMBLY'),
             isActive: Boolean(data.is_active),
@@ -1280,6 +1283,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         from_stock: editedTraveler.fromStock || '',
         to_stock: editedTraveler.toStock || '',
         ship_via: editedTraveler.shipVia || '',
+        ship_qty: editedTraveler.shipQty || '',
         comments: editedTraveler.comments || '',
         is_active: editedTraveler.isActive !== undefined ? editedTraveler.isActive : true,
         include_labor_hours: editedTraveler.includeLaborHours !== undefined ? editedTraveler.includeLaborHours : false,
@@ -1809,6 +1813,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       fromStock: '',
       toStock: '',
       shipVia: '',
+      shipQty: '',
       comments: '',
       steps: defaultSteps,
       laborEntries: Array.from({ length: 20 }, (_, i) => ({
@@ -1935,6 +1940,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       from_stock: editedTraveler.fromStock || '',
       to_stock: editedTraveler.toStock || '',
       ship_via: editedTraveler.shipVia || '',
+      ship_qty: editedTraveler.shipQty || '',
       comments: editedTraveler.comments || '',
       start_date: editedTraveler.createdAt || '',
       due_date: editedTraveler.dueDate || '',
@@ -2123,6 +2129,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
       from_stock: editedTraveler.fromStock || '',
       to_stock: editedTraveler.toStock || '',
       ship_via: editedTraveler.shipVia || '',
+      ship_qty: editedTraveler.shipQty || '',
       comments: editedTraveler.comments || '',
       start_date: editedTraveler.createdAt || '',
       due_date: editedTraveler.dueDate || '',
@@ -2321,6 +2328,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         fromStock: data.from_stock || '',
         toStock: data.to_stock || '',
         shipVia: data.ship_via || '',
+        shipQty: data.ship_qty || '',
         comments: data.comments || '',
         steps: steps,
         laborEntries: Array.from({ length: 20 }, (_, i) => ({
@@ -4228,6 +4236,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                           <span className="font-bold text-black dark:text-white min-w-[85px] print:min-w-[65px]">Ship VIA:</span>
                           {isEditing ? <input type="text" value={editData.shipVia} onChange={(e) => updateField('shipVia', e.target.value)} className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : <span className="flex-1 border-b border-gray-300 dark:border-slate-600 min-h-[20px] text-black dark:text-white">{displayTraveler.shipVia || ''}</span>}
                         </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-black dark:text-white min-w-[85px] print:min-w-[65px]">Ship Qty:</span>
+                          {isEditing ? <input type="text" value={editData.shipQty} onChange={(e) => updateField('shipQty', e.target.value)} className="flex-1 border border-gray-300 dark:border-slate-600 rounded px-2 py-1 text-sm text-black dark:text-white" /> : <span className="flex-1 border-b border-gray-300 dark:border-slate-600 min-h-[20px] text-black dark:text-white">{displayTraveler.shipQty || ''}</span>}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -4943,7 +4955,7 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
             </DndContext>
 
             {/* Bottom Info - hidden for RMA types (already in RMA header) */}
-            <div className={`bg-gray-50 dark:bg-slate-900 px-2 sm:px-3 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px] print:!grid-cols-3 ${isRmaType(displayTraveler.travelerType) ? 'hidden' : ''}`}>
+            <div className={`bg-gray-50 dark:bg-slate-900 px-2 sm:px-3 py-3 grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-3 text-sm border-t border-gray-300 dark:border-slate-600 print:px-2 print:py-1 print:gap-2 print:text-[9px] print:!grid-cols-4 ${isRmaType(displayTraveler.travelerType) ? 'hidden' : ''}`}>
               <div className="flex flex-row items-baseline gap-1 print:gap-0.5">
                 <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">From Stock:</span>
                 {isEditing ? (
@@ -4993,6 +5005,23 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
                   </>
                 ) : (
                   <span className="flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{displayTraveler.shipVia || '-'}</span>
+                )}
+              </div>
+              <div className="flex flex-row items-baseline gap-1">
+                <span className="font-bold min-w-[85px] print:min-w-[60px] print:text-[9px] text-black dark:text-white">Ship Qty:</span>
+                {isEditing ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editData.shipQty}
+                      onChange={(e) => updateField('shipQty', e.target.value)}
+                      className="flex-1 border border-gray-300 dark:border-slate-600 rounded bg-transparent px-2 py-1 screen-only text-black dark:text-white"
+                      style={{outline: 'none'}}
+                    />
+                    <span className="print-only flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{editData.shipQty || '-'}</span>
+                  </>
+                ) : (
+                  <span className="flex-1 px-1 break-words print:text-[9px] text-black dark:text-white">{displayTraveler.shipQty || '-'}</span>
                 )}
               </div>
             </div>

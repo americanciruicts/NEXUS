@@ -141,6 +141,7 @@ class TravelerBase(BaseModel):
     from_stock: Optional[str] = Field(None, max_length=100)
     to_stock: Optional[str] = Field(None, max_length=100)
     ship_via: Optional[str] = Field(None, max_length=100)
+    ship_qty: Optional[str] = Field(None, max_length=50)
     comments: Optional[str] = None
     start_date: Optional[str] = Field(None, max_length=20)
     due_date: Optional[str] = Field(None, max_length=20)
@@ -198,6 +199,7 @@ class TravelerUpdate(BaseModel):
     from_stock: Optional[str] = Field(None, max_length=100)
     to_stock: Optional[str] = Field(None, max_length=100)
     ship_via: Optional[str] = Field(None, max_length=100)
+    ship_qty: Optional[str] = Field(None, max_length=50)
     comments: Optional[str] = None
     start_date: Optional[str] = Field(None, max_length=20)
     due_date: Optional[str] = Field(None, max_length=20)

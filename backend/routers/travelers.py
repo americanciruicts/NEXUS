@@ -458,6 +458,7 @@ async def create_traveler(
             from_stock=traveler_data.from_stock,
             to_stock=traveler_data.to_stock,
             ship_via=traveler_data.ship_via,
+            ship_qty=traveler_data.ship_qty,
             comments=traveler_data.comments,
             start_date=traveler_data.start_date if traveler_data.start_date else datetime.now().strftime('%Y-%m-%d'),
             due_date=traveler_data.due_date,
@@ -793,6 +794,7 @@ async def get_latest_revision_traveler(
         "from_stock": traveler.from_stock,
         "to_stock": traveler.to_stock,
         "ship_via": traveler.ship_via,
+        "ship_qty": traveler.ship_qty,
         "comments": traveler.comments,
         "start_date": traveler.start_date,
         "due_date": traveler.due_date,
@@ -1231,6 +1233,7 @@ async def get_all_work_orders_for_job(
             "from_stock": traveler.from_stock,
             "to_stock": traveler.to_stock,
             "ship_via": traveler.ship_via,
+            "ship_qty": traveler.ship_qty,
             "comments": traveler.comments,
             "start_date": traveler.start_date,
             "due_date": traveler.due_date,
@@ -1308,6 +1311,7 @@ async def get_traveler_by_job_number(
         "from_stock": traveler.from_stock,
         "to_stock": traveler.to_stock,
         "ship_via": traveler.ship_via,
+        "ship_qty": traveler.ship_qty,
         "comments": traveler.comments,
         "start_date": traveler.start_date,
         "due_date": traveler.due_date,
@@ -2006,6 +2010,7 @@ async def update_traveler(
     traveler.from_stock = traveler_data.from_stock
     traveler.to_stock = traveler_data.to_stock
     traveler.ship_via = traveler_data.ship_via
+    traveler.ship_qty = traveler_data.ship_qty
     traveler.comments = traveler_data.comments
     if traveler_data.start_date:
         traveler.start_date = traveler_data.start_date

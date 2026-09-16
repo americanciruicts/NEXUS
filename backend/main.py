@@ -396,6 +396,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Warning: Could not auto-migrate department column: {e}")
 
+    # Auto-migrate: ship_qty on travelers — sits with From Stock / To Stock /
+    # Ship Via in the traveler footer.
+    try:
+        from sqlalchemy import text, inspect as sa_inspect_sq
+        with engine.connect() as conn:
+            insp = sa_inspect_sq(engine)
+            trav_cols = [c['name'] for c in insp.get_columns('travelers')]
+            if 'ship_qty' not in trav_cols:
+                conn.execute(text("ALTER TABLE travelers ADD COLUMN ship_qty VARCHAR(50)"))
+                conn.commit()
+                print("Added 'ship_qty' column to travelers table")
+    except Exception as e:
+        print(f"Warning: Could not auto-migrate ship_qty column: {e}")
+
     # Auto-migrate: add qty_completed column to labor_entries if missing
     try:
         from sqlalchemy import text, inspect as sa_inspect2
