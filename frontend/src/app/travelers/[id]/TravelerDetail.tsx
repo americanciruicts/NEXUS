@@ -165,11 +165,13 @@ const ASSY_TYPE_OPTIONS = [
   'PCB',
   'PCBA',
   'Multilevel PCBA with Final Assy',
+  'PCBA with Final Assy',
   'CBL Assy',
   'Box Assy, Hardware Assy',
   'PCBA with CBL Assy',
   'PCBA with Box Assy',
   'PCBA with CBL Assy & Box Assy',
+  'PCBA with Final Assy, CBL Assy and Box Assy',
 ];
 
 // Shape returned by /travelers/by-job-number/... — a traveler to auto-fill from
