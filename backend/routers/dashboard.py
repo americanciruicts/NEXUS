@@ -10,8 +10,11 @@ from models import (
 )
 from routers.auth import get_current_user
 from schemas.dashboard_schemas import DashboardStats
-from utils.job_display import format_job_display
+from utils.job_display import format_job_display, kosh_job_candidates
+from utils.work_center_lookup import build_department_resolver
+from utils.kosh_inventory import inventory_readiness, shortage_lines, required_qty
 import time as _time
+from collections import OrderedDict, defaultdict
 
 router = APIRouter()
 
@@ -46,7 +49,7 @@ async def get_dashboard_stats(
     else:
         start_dt = end_dt - timedelta(days=7)
 
-    # Date range strings for due_date/ship_date filtering (stored as strings YYYY-MM-DD)
+    # Normalised range, used as the response cache key.
     start_date_str = start_dt.strftime("%Y-%m-%d")
     end_date_str = end_dt.strftime("%Y-%m-%d")
 
@@ -56,30 +59,41 @@ async def get_dashboard_stats(
     if _cached and _time.time() - _cached[0] < _STATS_TTL:
         return _cached[1]
 
-    # Filter for travelers whose due_date or ship_date falls in the range (or have no dates set)
-    date_range_filter = or_(
-        and_(Traveler.due_date.isnot(None), Traveler.due_date >= start_date_str, Traveler.due_date <= end_date_str),
-        and_(Traveler.ship_date.isnot(None), Traveler.ship_date >= start_date_str, Traveler.ship_date <= end_date_str),
-        and_(Traveler.due_date.is_(None), Traveler.ship_date.is_(None))
-    )
-
-    # Status Distribution
+    # The traveler metrics below are keyed off real timestamps (created_at /
+    # completed_at), not the free-text due_date/ship_date strings.
+    #
+    # The previous filter matched travelers whose due_date or ship_date fell in
+    # the range, OR whose dates were both NULL. Two things went wrong with it:
+    # 25 travelers store '' rather than NULL, so `due_date IS NOT NULL` was true
+    # while `'' >= '2026-09-16'` was false and the NULL fallback did not catch
+    # them either — they could not appear in ANY date range. And on the default
+    # 7-day view the filter matched 9 of 323 travelers, while the Labor Hours
+    # tile beside it covered every entry in the window, so the two halves of the
+    # same header described different populations.
+    #
+    # Status Distribution is current state, like the On Hold tile next to it,
+    # and the tiles link straight to /travelers?status=... — so it is not date
+    # windowed at all. Created/completed counts use their own timestamps.
     status_counts = db.query(
         Traveler.status,
         func.count(Traveler.id).label('count')
     ).filter(
-        date_range_filter,
         Traveler.is_active == True
     ).group_by(Traveler.status).all()
 
     status_distribution = {str(status.value): count for status, count in status_counts}
 
     # Labor Analytics
+    #
+    # Keyed on start_time, matching the trends further down. These used to key
+    # on created_at while the charts keyed on start_time, so the KPI tile and
+    # the chart under it disagreed whenever an entry was back-dated or spanned
+    # midnight (32 entries have start_time and created_at on different days).
     labor_entries = db.query(
         func.coalesce(func.sum(LaborEntry.hours_worked), 0).label('total_hours')
     ).filter(
-        LaborEntry.created_at >= start_dt,
-        LaborEntry.created_at <= end_dt,
+        LaborEntry.start_time >= start_dt,
+        LaborEntry.start_time <= end_dt,
         LaborEntry.hours_worked > 0,
         LaborEntry.end_time.isnot(None)
     ).first()
@@ -91,8 +105,8 @@ async def get_dashboard_stats(
         LaborEntry.work_center,
         func.sum(LaborEntry.hours_worked).label('hours')
     ).filter(
-        LaborEntry.created_at >= start_dt,
-        LaborEntry.created_at <= end_dt,
+        LaborEntry.start_time >= start_dt,
+        LaborEntry.start_time <= end_dt,
         LaborEntry.work_center.isnot(None),
         LaborEntry.hours_worked > 0,
         LaborEntry.end_time.isnot(None)
@@ -105,7 +119,6 @@ async def get_dashboard_stats(
 
     # Labor trend by work center (daily/weekly aggregation) with job number details
     days_diff = (end_dt - start_dt).days
-    from collections import OrderedDict
 
     if days_diff <= 31:
         # Get aggregated totals by date + work center
@@ -212,14 +225,16 @@ async def get_dashboard_stats(
 
         labor_trend = list(date_map.values())
 
-    # Production Metrics - filtered by due_date/ship_date
+    # Production Metrics — actually within the selected window.
     travelers_created = db.query(func.count(Traveler.id)).filter(
-        date_range_filter
+        Traveler.created_at >= start_dt,
+        Traveler.created_at <= end_dt,
     ).scalar() or 0
 
     travelers_completed = db.query(func.count(Traveler.id)).filter(
-        date_range_filter,
-        Traveler.status == TravelerStatus.COMPLETED
+        Traveler.completed_at >= start_dt,
+        Traveler.completed_at <= end_dt,
+        Traveler.status == TravelerStatus.COMPLETED,
     ).scalar() or 0
 
     completion_rate = (travelers_completed / travelers_created * 100) if travelers_created > 0 else 0.0
@@ -230,7 +245,8 @@ async def get_dashboard_stats(
             func.extract('epoch', Traveler.completed_at - Traveler.created_at) / 3600
         ).label('avg_hours')
     ).filter(
-        date_range_filter,
+        Traveler.completed_at >= start_dt,
+        Traveler.completed_at <= end_dt,
         Traveler.status == TravelerStatus.COMPLETED,
         Traveler.completed_at.isnot(None)
     ).first()
@@ -247,8 +263,8 @@ async def get_dashboard_stats(
         User.username,
         func.sum(LaborEntry.hours_worked).label('hours')
     ).join(LaborEntry, LaborEntry.employee_id == User.id).filter(
-        LaborEntry.created_at >= start_dt,
-        LaborEntry.created_at <= end_dt,
+        LaborEntry.start_time >= start_dt,
+        LaborEntry.start_time <= end_dt,
         LaborEntry.hours_worked > 0,
         LaborEntry.end_time.isnot(None)
     ).group_by(User.id, User.first_name, User.last_name, User.username).order_by(
@@ -282,44 +298,36 @@ async def get_dashboard_stats(
         Traveler.is_active == True
     ).scalar() or 0
 
-    # Department trend: labor hours grouped by date + department
-    # Join labor_entries with work_centers to get department
-    from collections import OrderedDict
-    if days_diff <= 31:
-        dept_trend_data = db.query(
-            func.date(LaborEntry.start_time).label('date'),
-            WorkCenter.department,
-            func.sum(LaborEntry.hours_worked).label('hours')
-        ).outerjoin(
-            WorkCenter,
-            func.upper(func.trim(LaborEntry.work_center)) == func.upper(func.trim(WorkCenter.name))
-        ).filter(
-            LaborEntry.start_time >= start_dt,
-            LaborEntry.start_time <= end_dt,
-            LaborEntry.hours_worked > 0,
-            LaborEntry.end_time.isnot(None)
-        ).group_by(func.date(LaborEntry.start_time), WorkCenter.department).order_by(func.date(LaborEntry.start_time)).all()
-    else:
-        dept_trend_data = db.query(
-            func.date_trunc('week', LaborEntry.start_time).label('date'),
-            WorkCenter.department,
-            func.sum(LaborEntry.hours_worked).label('hours')
-        ).outerjoin(
-            WorkCenter,
-            func.upper(func.trim(LaborEntry.work_center)) == func.upper(func.trim(WorkCenter.name))
-        ).filter(
-            LaborEntry.start_time >= start_dt,
-            LaborEntry.start_time <= end_dt,
-            LaborEntry.hours_worked > 0,
-            LaborEntry.end_time.isnot(None)
-        ).group_by(func.date_trunc('week', LaborEntry.start_time), WorkCenter.department).order_by(func.date_trunc('week', LaborEntry.start_time)).all()
+    # Department trend: labor hours grouped by date + department.
+    #
+    # Deliberately NOT joined to work_centers in SQL. That table holds one row
+    # per (name, traveler_type) — 231 active rows for 106 names — so joining on
+    # name multiplied every labor row and sum(hours_worked) came out ~2.8x too
+    # high (4,251h reported against an actual 1,523h over 30 days). Hours are
+    # aggregated on labor_entries alone, then attributed to a department in
+    # Python via the unique work-centre code. See utils.work_center_lookup.
+    dept_resolver = build_department_resolver(db)
+
+    _bucket = (
+        func.date(LaborEntry.start_time) if days_diff <= 31
+        else func.date_trunc('week', LaborEntry.start_time)
+    )
+    dept_trend_data = db.query(
+        _bucket.label('date'),
+        LaborEntry.step_id,
+        LaborEntry.work_center,
+        func.sum(LaborEntry.hours_worked).label('hours')
+    ).filter(
+        LaborEntry.start_time >= start_dt,
+        LaborEntry.start_time <= end_dt,
+        LaborEntry.hours_worked > 0,
+        LaborEntry.end_time.isnot(None)
+    ).group_by(_bucket, LaborEntry.step_id, LaborEntry.work_center).order_by(_bucket).all()
 
     dept_date_map = OrderedDict()
-    for date_val, dept, hours in dept_trend_data:
+    for date_val, step_id, wc_name, hours in dept_trend_data:
         date_str = date_val.strftime("%b %d") if date_val else ""
-        dept_name = dept or "Unknown"
-        # Normalize multi-department strings (e.g. "Engineering/Prep" → "Engineering")
-        dept_name = dept_name.split('/')[0].strip()
+        dept_name = dept_resolver.for_entry(step_id, wc_name)
         if date_str not in dept_date_map:
             dept_date_map[date_str] = {"date": date_str}
         dept_date_map[date_str][dept_name] = round(
@@ -335,14 +343,29 @@ async def get_dashboard_stats(
             Traveler.is_active == True
         ).all()
 
+        # Latest activity per traveler, in two grouped queries rather than two
+        # per traveler.
+        last_labor_by_traveler = dict(
+            db.query(LaborEntry.traveler_id, func.max(LaborEntry.start_time))
+            .group_by(LaborEntry.traveler_id).all()
+        )
+        last_scan_by_traveler = dict(
+            db.query(TravelerTrackingLog.traveler_id, func.max(TravelerTrackingLog.scanned_at))
+            .group_by(TravelerTrackingLog.traveler_id).all()
+        )
+        # Most recent WORK_CENTER scan per traveler, likewise.
+        last_wc_by_traveler = {}
+        for wc_traveler_id, wc_value in db.query(
+            TravelerTrackingLog.traveler_id, TravelerTrackingLog.work_center
+        ).filter(
+            TravelerTrackingLog.scan_type == "WORK_CENTER"
+        ).order_by(TravelerTrackingLog.scanned_at.asc()).all():
+            last_wc_by_traveler[wc_traveler_id] = wc_value
+
         for t in in_progress:
             # Find latest activity: most recent labor entry or tracking scan
-            latest_labor = db.query(func.max(LaborEntry.start_time)).filter(
-                LaborEntry.traveler_id == t.id
-            ).scalar()
-            latest_scan = db.query(func.max(TravelerTrackingLog.scanned_at)).filter(
-                TravelerTrackingLog.traveler_id == t.id
-            ).scalar()
+            latest_labor = last_labor_by_traveler.get(t.id)
+            latest_scan = last_scan_by_traveler.get(t.id)
 
             latest_activity = max(filter(None, [latest_labor, latest_scan]), default=None)
             if not latest_activity:
@@ -357,20 +380,9 @@ async def get_dashboard_stats(
 
             # Consider "stuck" if idle > 48 hours (2 business days)
             if idle_hours > 48:
-                # Find current work center from latest scan
-                current_wc_scan = db.query(TravelerTrackingLog).filter(
-                    TravelerTrackingLog.traveler_id == t.id,
-                    TravelerTrackingLog.scan_type == "WORK_CENTER"
-                ).order_by(TravelerTrackingLog.scanned_at.desc()).first()
-
-                # Get department from work center
-                dept = None
-                wc_name = current_wc_scan.work_center if current_wc_scan else None
-                if wc_name:
-                    wc_obj = db.query(WorkCenter).filter(
-                        func.upper(func.trim(WorkCenter.name)) == wc_name.upper().strip()
-                    ).first()
-                    dept = wc_obj.department if wc_obj else None
+                # Current work center from the latest scan (pre-fetched above)
+                wc_name = last_wc_by_traveler.get(t.id)
+                dept = dept_resolver.for_name(wc_name) if wc_name else None
 
                 stuck_travelers.append({
                     "id": t.id,
@@ -393,17 +405,14 @@ async def get_dashboard_stats(
 
     # Forecast: in-progress travelers with due dates, step-level estimates, buffer, headcount
     forecast = []
-    # One shared KOSH connection for the whole loop (previously opened once PER
-    # traveler — the dominant dashboard latency cause). Reused across all jobs.
+    # One shared KOSH connection, used for two batched queries covering every
+    # job (see utils.kosh_inventory) rather than per-traveler round trips.
     kosh_conn = None
-    kosh_cur = None
     try:
         from routers.jobs import get_kosh_connection
         kosh_conn = get_kosh_connection()
-        kosh_cur = kosh_conn.cursor()
     except Exception:
         kosh_conn = None
-        kosh_cur = None
 
     # Approximate hours per operation type (PCB assembly industry averages)
     OPERATION_ESTIMATES = {
@@ -456,46 +465,72 @@ async def get_dashboard_stats(
             Traveler.status.in_([TravelerStatus.IN_PROGRESS, TravelerStatus.CREATED, TravelerStatus.DRAFT, TravelerStatus.ON_HOLD]),
         ).all()
 
+        # Two KOSH queries for every job, instead of up to four per traveler.
+        kosh_readiness = inventory_readiness(
+            kosh_conn, [t.job_number for t in forecast_travelers]
+        )
+
+        # Everything the loop needs, pre-fetched in four grouped queries rather
+        # than four per traveler (1,056 round trips across 264 open jobs).
+        forecast_ids = [t.id for t in forecast_travelers]
+
+        steps_by_traveler = defaultdict(list)
+        for step in db.query(ProcessStep).filter(
+            ProcessStep.traveler_id.in_(forecast_ids)
+        ).order_by(ProcessStep.step_number).all() if forecast_ids else []:
+            steps_by_traveler[step.traveler_id].append(step)
+
+        step_labor_by_traveler = defaultdict(dict)
+        step_operators_by_traveler = defaultdict(dict)
+        for tid, step_id, hours, operators in db.query(
+            LaborEntry.traveler_id,
+            LaborEntry.step_id,
+            func.sum(LaborEntry.hours_worked),
+            func.count(func.distinct(LaborEntry.employee_id)),
+        ).filter(
+            LaborEntry.traveler_id.in_(forecast_ids),
+            LaborEntry.hours_worked > 0,
+            LaborEntry.end_time.isnot(None),
+        ).group_by(LaborEntry.traveler_id, LaborEntry.step_id).all() if forecast_ids else []:
+            if step_id:
+                step_labor_by_traveler[tid][step_id] = float(hours)
+                step_operators_by_traveler[tid][step_id] = int(operators or 0)
+
+        operators_by_traveler = dict(
+            db.query(
+                LaborEntry.traveler_id,
+                func.count(func.distinct(LaborEntry.employee_id)),
+            ).filter(
+                LaborEntry.traveler_id.in_(forecast_ids),
+                LaborEntry.hours_worked > 0,
+            ).group_by(LaborEntry.traveler_id).all()
+        ) if forecast_ids else {}
+
+        active_operators_by_traveler = dict(
+            db.query(
+                LaborEntry.traveler_id,
+                func.count(func.distinct(LaborEntry.employee_id)),
+            ).filter(
+                LaborEntry.traveler_id.in_(forecast_ids),
+                LaborEntry.is_completed == False,
+                LaborEntry.end_time.is_(None),
+            ).group_by(LaborEntry.traveler_id).all()
+        ) if forecast_ids else {}
+
         for t in forecast_travelers:
-            steps = db.query(ProcessStep).filter(
-                ProcessStep.traveler_id == t.id
-            ).order_by(ProcessStep.step_number).all()
+            steps = steps_by_traveler.get(t.id, [])
 
             # Actual hours + actual distinct operators per step (from labor entries)
-            step_labor = {}
-            step_operators = {}
-            labor_rows = db.query(
-                LaborEntry.step_id,
-                func.sum(LaborEntry.hours_worked).label('hours'),
-                func.count(func.distinct(LaborEntry.employee_id)).label('operators'),
-            ).filter(
-                LaborEntry.traveler_id == t.id,
-                LaborEntry.hours_worked > 0,
-                LaborEntry.end_time.isnot(None)
-            ).group_by(LaborEntry.step_id).all()
-            for row in labor_rows:
-                if row.step_id:
-                    step_labor[row.step_id] = float(row.hours)
-                    step_operators[row.step_id] = int(row.operators or 0)
+            step_labor = step_labor_by_traveler.get(t.id, {})
+            step_operators = step_operators_by_traveler.get(t.id, {})
 
             total_actual = sum(step_labor.values())
 
             # Distinct operators who have logged labor on this traveler (any step)
-            total_operators_actual = db.query(
-                func.count(func.distinct(LaborEntry.employee_id))
-            ).filter(
-                LaborEntry.traveler_id == t.id,
-                LaborEntry.hours_worked > 0,
-            ).scalar() or 0
+            total_operators_actual = operators_by_traveler.get(t.id, 0) or 0
 
             # Operators currently active on this traveler (open labor entries)
-            active_operators_now = db.query(
-                func.count(func.distinct(LaborEntry.employee_id))
-            ).filter(
-                LaborEntry.traveler_id == t.id,
-                LaborEntry.is_completed == False,
-                LaborEntry.end_time.is_(None),
-            ).scalar() or 0
+            active_operators_now = active_operators_by_traveler.get(t.id, 0) or 0
 
             # Days until due
             try:
@@ -559,68 +594,13 @@ async def get_dashboard_stats(
 
             percent_complete = round(total_completed_steps / total_steps * 100, 1) if total_steps > 0 else 0
 
-            # ── KOSH inventory check for this job ──
-            inventory_ready = None  # None = no KOSH job found
-            total_bom_lines = 0
-            lines_with_stock = 0
-            shortage_lines = 0
-            kosh_job_status = None
-            try:
-                if kosh_cur is None:
-                    raise RuntimeError("KOSH unavailable")
-                # Strip L/M suffixes to get base job number for KOSH lookup
-                base_job = t.job_number.rstrip('LM') if t.job_number else t.job_number
-
-                kosh_cur.execute('SELECT order_qty, status FROM warehouse."tblJob" WHERE job_number = %s', (t.job_number,))
-                kosh_job = kosh_cur.fetchone()
-                kosh_job_number = t.job_number
-                if not kosh_job:
-                    kosh_cur.execute('SELECT order_qty, status FROM warehouse."tblJob" WHERE job_number = %s', (base_job,))
-                    kosh_job = kosh_cur.fetchone()
-                    if kosh_job:
-                        kosh_job_number = base_job
-
-                if kosh_job:
-                    kosh_order_qty = int(kosh_job[0] or 1)
-                    kosh_job_status = kosh_job[1]
-
-                    kosh_cur.execute("""
-                        WITH bom_items AS (
-                            SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
-                            FROM warehouse."tblBOM" b
-                            WHERE b.job = %s
-                            ORDER BY b.aci_pn, b.line
-                        )
-                        SELECT
-                            bi.aci_pn,
-                            CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per_board,
-                            COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
-                        FROM bom_items bi
-                        LEFT JOIN warehouse."tblWhse_Inventory" w
-                            ON bi.aci_pn = w.item OR bi.mpn = w.mpn
-                        GROUP BY bi.aci_pn, bi.qty
-                    """, (kosh_job_number,))
-                    bom_rows = kosh_cur.fetchall()
-                    total_bom_lines = len(bom_rows)
-                    for row in bom_rows:
-                        req = int(row[1] or 0) * kosh_order_qty
-                        oh = int(row[2] or 0)
-                        if oh >= req:
-                            lines_with_stock += 1
-                        else:
-                            shortage_lines += 1
-
-                    inventory_ready = shortage_lines == 0 and total_bom_lines > 0
-            except Exception:
-                # A failed KOSH query aborts the transaction on the shared
-                # connection; without a rollback every subsequent traveler in
-                # this loop would silently fail too. Roll back so the next
-                # iteration starts clean.
-                if kosh_conn is not None:
-                    try:
-                        kosh_conn.rollback()
-                    except Exception:
-                        pass
+            # ── KOSH inventory check for this job (batched up front) ──
+            readiness = kosh_readiness.get(t.job_number)
+            inventory_ready = readiness["inventory_ready"] if readiness else None
+            total_bom_lines = readiness["total_bom_lines"] if readiness else 0
+            lines_with_stock = readiness["lines_with_stock"] if readiness else 0
+            shortage_lines = readiness["shortage_lines"] if readiness else 0
+            kosh_job_status = readiness["kosh_job_status"] if readiness else None
 
             # On-track: combine due date + inventory readiness
             if percent_complete >= 100:
@@ -689,7 +669,8 @@ async def get_dashboard_stats(
 
     # Real-time Operations
     active_labor_entries = db.query(func.count(LaborEntry.id)).filter(
-        LaborEntry.is_completed == False
+        LaborEntry.is_completed == False,
+        LaborEntry.end_time.is_(None),
     ).scalar() or 0
 
     _result = DashboardStats(
@@ -726,7 +707,6 @@ async def get_dashboard_insights(
     busiest work centers, idle operators, KOSH inventory insights, rejection rates,
     bottlenecks, due date heatmap, overdue aging, throughput/labor/cycle trends."""
     import math
-    from collections import defaultdict
 
     _cached = _stats_cache.get("__insights__")
     if _cached and _time.time() - _cached[0] < _STATS_TTL:
@@ -745,7 +725,7 @@ async def get_dashboard_insights(
         ).join(LaborEntry, LaborEntry.employee_id == User.id).filter(
             LaborEntry.hours_worked > 0,
             LaborEntry.end_time.isnot(None),
-            LaborEntry.created_at >= now - timedelta(days=30)
+            LaborEntry.start_time >= now - timedelta(days=30)
         ).group_by(User.id).order_by(func.sum(LaborEntry.hours_worked).desc()).limit(15).all()
 
         OPERATION_ESTIMATES = {
@@ -757,17 +737,22 @@ async def get_dashboard_insights(
         }
 
         for emp in employees:
-            # Get their completed steps to estimate expected hours
-            completed_steps = db.query(ProcessStep.operation).join(
+            # DISTINCT step: the estimate is per step worked, not per timer
+            # session. Without it a step clocked in five sittings counted its
+            # estimate five times — entries average 1.93 per step and run as
+            # high as 38, so efficiency read ~193% where it should read ~100%.
+            worked_steps = db.query(
+                ProcessStep.id, ProcessStep.operation
+            ).join(
                 LaborEntry, LaborEntry.step_id == ProcessStep.id
             ).filter(
                 LaborEntry.employee_id == emp.id,
                 LaborEntry.end_time.isnot(None),
-                LaborEntry.created_at >= now - timedelta(days=30)
-            ).all()
+                LaborEntry.start_time >= now - timedelta(days=30)
+            ).distinct().all()
             est_hours = sum(
-                next((v for k, v in OPERATION_ESTIMATES.items() if k in (s.operation or '').upper()), 1.0)
-                for s in completed_steps
+                next((v for k, v in OPERATION_ESTIMATES.items() if k in (op or '').upper()), 1.0)
+                for _step_id, op in worked_steps
             )
             actual = float(emp.actual_hours or 0)
             efficiency = round((est_hours / actual * 100), 1) if actual > 0 else 0
@@ -832,42 +817,24 @@ async def get_dashboard_insights(
 
         shortage_items_map = defaultdict(lambda: {"jobs": [], "total_short": 0})
 
+        # One query for every job's BOM instead of one per job (each of which
+        # was a 16s-class nested loop). See utils.kosh_inventory.
+        order_qty_by_job = {kj[0]: int(kj[1] or 1) for kj in kosh_jobs}
+        lines_by_job = shortage_lines(kosh_conn, list(order_qty_by_job))
+
         for kj in kosh_jobs:
             job_num, order_qty_raw, customer, desc, status, total_parts = kj
-            order_qty = int(order_qty_raw or 1)
+            order_qty = order_qty_by_job[job_num]
 
-            try:
-                kosh_cur.execute("""
-                    WITH bom_items AS (
-                        SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty, b."DESC"
-                        FROM warehouse."tblBOM" b WHERE b.job = %s
-                        ORDER BY b.aci_pn, b.line
-                    )
-                    SELECT bi.aci_pn, bi."DESC",
-                        CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
-                        COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
-                    FROM bom_items bi
-                    LEFT JOIN warehouse."tblWhse_Inventory" w ON bi.aci_pn = w.item OR bi.mpn = w.mpn
-                    GROUP BY bi.aci_pn, bi."DESC", bi.qty
-                """, (job_num,))
-                parts = kosh_cur.fetchall()
-            except Exception:
-                # Don't let one bad job abort the shared transaction and wipe
-                # out shortage insights for every remaining job.
-                try:
-                    kosh_conn.rollback()
-                except Exception:
-                    pass
-                continue
             short_count = 0
-            for p in parts:
-                req = int(p[2] or 0) * order_qty
-                oh = int(p[3] or 0)
+            for aci_pn, part_desc, qty_per_board, on_hand in lines_by_job.get(job_num, []):
+                req = required_qty(qty_per_board, order_qty)
+                oh = int(on_hand or 0)
                 if oh < req:
                     short_count += 1
-                    shortage_items_map[p[0]]["jobs"].append(job_num)
-                    shortage_items_map[p[0]]["total_short"] += (req - oh)
-                    shortage_items_map[p[0]]["description"] = p[1] or ""
+                    shortage_items_map[aci_pn]["jobs"].append(job_num)
+                    shortage_items_map[aci_pn]["total_short"] += (req - oh)
+                    shortage_items_map[aci_pn]["description"] = part_desc or ""
 
             if short_count > 0:
                 jobs_waiting_on_parts.append({
@@ -923,14 +890,24 @@ async def get_dashboard_insights(
     bottlenecks = []
     try:
         # Steps with most travelers waiting (not completed, not the last step)
+        # count(DISTINCT ...) because the outer join to labor_entries repeats a
+        # step once per timer session on it, and only live travelers count —
+        # 98 incomplete steps sit on COMPLETED/ARCHIVED travelers and were being
+        # reported as work queued on the floor.
         pending_by_op = db.query(
             ProcessStep.operation,
-            func.count(ProcessStep.id).label('pending_count'),
+            func.count(func.distinct(ProcessStep.id)).label('pending_count'),
             func.avg(LaborEntry.hours_worked).label('avg_hours')
+        ).join(
+            Traveler, Traveler.id == ProcessStep.traveler_id
         ).outerjoin(LaborEntry, LaborEntry.step_id == ProcessStep.id).filter(
-            ProcessStep.is_completed == False
+            ProcessStep.is_completed == False,
+            Traveler.is_active == True,
+            Traveler.status.in_([
+                TravelerStatus.CREATED, TravelerStatus.IN_PROGRESS, TravelerStatus.ON_HOLD
+            ]),
         ).group_by(ProcessStep.operation).order_by(
-            func.count(ProcessStep.id).desc()
+            func.count(func.distinct(ProcessStep.id)).desc()
         ).limit(10).all()
 
         for b in pending_by_op:
@@ -944,8 +921,10 @@ async def get_dashboard_insights(
 
     # ─── 8. DUE DATE HEATMAP ────────────────────────────────────────────────
     due_date_heatmap = {"overdue": 0, "today": 0, "this_week": 0, "next_week": 0, "later": 0, "no_date": 0}
+    active_travelers = []
     try:
         active_travelers = db.query(Traveler).filter(
+            Traveler.is_active == True,
             Traveler.status.in_([TravelerStatus.IN_PROGRESS, TravelerStatus.CREATED])
         ).all()
         for t in active_travelers:

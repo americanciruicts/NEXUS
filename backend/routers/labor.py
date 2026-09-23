@@ -1,9 +1,11 @@
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as dt_time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pydantic import BaseModel, model_validator
 
 from database import get_db
@@ -14,6 +16,132 @@ from services.notification_service import create_notification_for_admins
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# The shop floor runs on plant-local time, but the containers (and every
+# timestamp column) run in UTC. Auto-stop is a *local* shift rule — "close any
+# timer left running from a previous day at 5 PM that day" — so it has to be
+# evaluated in plant time. Computing it in UTC stamped 17:00 UTC = 12:00 PM
+# Central, which closed entries in the middle of the shift and, for anyone who
+# had started after noon local, produced an end_time BEFORE the start_time that
+# then clamped to hours_worked = 0 and silently erased a real afternoon of work.
+PLANT_TZ = ZoneInfo(os.getenv("PLANT_TIMEZONE", "America/Chicago"))
+SHIFT_END_HOUR = int(os.getenv("SHIFT_END_HOUR", "17"))
+
+
+def _to_plant_local(dt: datetime) -> datetime:
+    """Interpret a stored timestamp as UTC if it is naive, then convert to plant time."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(PLANT_TZ)
+
+
+def shift_end_close_values(db: Session, le: LaborEntry, *, close_open_pauses: bool = False):
+    """Return (end_time_utc, hours_worked) for closing `le` at shift end.
+
+    The single source of truth for "what should this entry have been closed at".
+    auto_stop_stale_entries() uses it live; the one-off repair of the rows the
+    old UTC-based rule damaged uses it too, so the backfill cannot compute
+    anything the running code would not.
+
+    Returns None when the entry started at or after shift end on its own date —
+    there is no defensible end time, and inventing one is exactly what produced
+    the zero-hour rows.
+
+    `close_open_pauses` stamps a resumed_at on pauses left open, so they stop
+    accruing. The repair path leaves that off: it is reconstructing history, not
+    ending a live shift.
+    """
+    start_local = _to_plant_local(le.start_time)
+    end_local = datetime.combine(
+        start_local.date(), dt_time(hour=SHIFT_END_HOUR), tzinfo=PLANT_TZ
+    )
+    if end_local <= start_local:
+        logger.warning(
+            "Shift-end close skipped labor entry %s: start %s is at/after shift end %s",
+            le.id, start_local.isoformat(), end_local.isoformat(),
+        )
+        return None
+
+    intervals = []
+    for p in db.query(PauseLog).filter(PauseLog.labor_entry_id == le.id).all():
+        if not p.paused_at:
+            continue
+        p_start = _to_plant_local(p.paused_at)
+        # An unresumed pause is treated as lasting until shift end, not until
+        # "now" — the operator went home, they were not on break for three days.
+        p_end = _to_plant_local(p.resumed_at) if p.resumed_at else end_local
+        # Clip the pause to the entry's own worked window.
+        overlap_start = max(p_start, start_local)
+        overlap_end = min(p_end, end_local)
+        if overlap_end > overlap_start:
+            intervals.append((overlap_start, overlap_end))
+        if p.resumed_at is None and close_open_pauses:
+            p.resumed_at = end_local.astimezone(timezone.utc)
+            p.duration_seconds = max((overlap_end - overlap_start).total_seconds(), 0)
+
+    # Merge overlapping pauses before subtracting. Concurrent pause rows do occur
+    # (double-tap, or a second pause opened before the first was resumed);
+    # summing them raw subtracts the same wall-clock twice and can exceed the
+    # shift itself, which lands back at zero hours.
+    pause_secs = 0.0
+    merged_end = None
+    for iv_start, iv_end in sorted(intervals):
+        if merged_end is None or iv_start > merged_end:
+            pause_secs += (iv_end - iv_start).total_seconds()
+            merged_end = iv_end
+        elif iv_end > merged_end:
+            pause_secs += (iv_end - merged_end).total_seconds()
+            merged_end = iv_end
+
+    worked_secs = (end_local - start_local).total_seconds() - pause_secs
+    return end_local.astimezone(timezone.utc), round(max(worked_secs, 0) / 3600, 2)
+
+
+def auto_stop_stale_entries(db: Session, *, commit: bool = True) -> int:
+    """Close timers left running from a previous plant-local day at shift end.
+
+    Single implementation shared by every auto-stop caller so they cannot drift
+    apart again. Rules:
+      * Only runs at/after shift end in plant-local time.
+      * Only touches entries whose start date (plant-local) is before today.
+      * end_time is shift end on the entry's OWN start date, in plant time,
+        stored back as UTC.
+      * Pause time is subtracted, but only the part of each pause that actually
+        overlaps [start, shift end]. A pause left open when the operator went
+        home keeps accruing overnight (rows exist with 16-90h of "pause"), so
+        subtracting raw duration_seconds would drive a full shift to zero — the
+        same erasure this function was fixed to stop. An open pause is also
+        closed at shift end so it cannot keep growing.
+      * An entry that started at/after shift end has no defensible end time, so
+        it is left open for review rather than written down as zero hours. The
+        forgotten-clock-out anomaly report already surfaces those.
+    """
+    now_local = datetime.now(PLANT_TZ)
+    if now_local.hour < SHIFT_END_HOUR:
+        return 0
+
+    running = db.query(LaborEntry).filter(
+        LaborEntry.is_completed == False,
+        LaborEntry.end_time.is_(None),
+        LaborEntry.start_time.isnot(None),
+    ).all()
+
+    stopped = 0
+    for le in running:
+        if _to_plant_local(le.start_time).date() >= now_local.date():
+            continue  # still today's shift — leave it running
+
+        values = shift_end_close_values(db, le, close_open_pauses=True)
+        if values is None:
+            continue
+
+        le.end_time, le.hours_worked = values
+        le.is_completed = True
+        stopped += 1
+
+    if stopped and commit:
+        db.commit()
+    return stopped
 
 
 def get_pause_data(db: Session, entry_id: int):
@@ -1295,27 +1423,8 @@ async def get_labor_init(
         }
         entries.append(entry_dict)
 
-    # 3. Auto-stop check (5pm)
-    auto_stopped = 0
-    now = datetime.now()
-    if now.hour >= 17:
-        running = db.query(LaborEntry).filter(LaborEntry.is_completed == False, LaborEntry.end_time.is_(None)).all()
-        for le in running:
-            if le.start_time and le.start_time.replace(tzinfo=None).date() < now.date():
-                end_dt = datetime.combine(le.start_time.replace(tzinfo=None).date(), datetime.strptime("17:00", "%H:%M").time())
-                if le.start_time.tzinfo is not None:
-                    end_dt = end_dt.replace(tzinfo=le.start_time.tzinfo)
-                le.end_time = end_dt
-                le.is_completed = True
-                if le.start_time:
-                    start_naive = le.start_time.replace(tzinfo=None)
-                    end_naive = le.end_time.replace(tzinfo=None) if le.end_time else start_naive
-                    diff = (end_naive - start_naive).total_seconds()
-                    pause_secs = sum(p.duration_seconds or 0 for p in db.query(PauseLog).filter(PauseLog.labor_entry_id == le.id).all())
-                    le.hours_worked = round(max(diff - pause_secs, 0) / 3600, 2)
-                auto_stopped += 1
-        if auto_stopped > 0:
-            db.commit()
+    # 3. Auto-stop check (shift end, plant-local)
+    auto_stopped = auto_stop_stale_entries(db)
 
     return {
         "active_entry": active_entry,
@@ -1453,34 +1562,18 @@ async def auto_stop_entries_at_5pm(
             detail="Only administrators can trigger auto-stop"
         )
 
-    # Get all active (uncompleted) entries
-    active_entries = db.query(LaborEntry).filter(
-        (LaborEntry.end_time.is_(None)) &
-        (LaborEntry.is_completed == False)
-    ).all()
-
-    # Set end time to 5pm (17:00) of today
-    today = datetime.now().date()
-    end_time_5pm = datetime.combine(today, datetime.strptime("17:00:00", "%H:%M:%S").time())
-
-    completed_count = 0
-    for entry in active_entries:
-        # Only auto-stop if entry started before 5pm
-        if entry.start_time < end_time_5pm:
-            entry.end_time = end_time_5pm
-            entry.is_completed = True
-            # Calculate hours worked
-            time_diff = end_time_5pm - entry.start_time
-            entry.hours_worked = round(time_diff.total_seconds() / 3600, 2)
-            update_step_and_traveler_progress(db, entry)
-            completed_count += 1
-
-    db.commit()
+    # Delegates to the shared helper so this path cannot drift from the one
+    # /labor/init runs. The previous inline version built a naive 5pm, compared
+    # it against tz-aware start_time (TypeError), skipped pause subtraction, and
+    # marked steps/travelers COMPLETED — a forgotten clock-out is not a finished
+    # step, so auto-stop deliberately does not touch step or traveler progress.
+    completed_count = auto_stop_stale_entries(db)
 
     return {
-        "message": f"Auto-stopped {completed_count} active entries at 5pm",
+        "message": f"Auto-stopped {completed_count} stale entries at shift end",
         "completed_count": completed_count,
-        "end_time": end_time_5pm.isoformat()
+        "shift_end_hour": SHIFT_END_HOUR,
+        "plant_time": datetime.now(PLANT_TZ).isoformat(),
     }
 
 @router.get("/check-auto-stop")
@@ -1488,47 +1581,25 @@ async def check_and_auto_stop(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Check if it's past 5pm and auto-stop any active entries from today
-    This should be called when page loads to ensure entries are auto-stopped"""
+    """Check if it's past shift end (plant-local) and auto-stop stale entries.
 
-    now = datetime.now()
-    today = now.date()
-    five_pm = datetime.combine(today, datetime.strptime("17:00:00", "%H:%M:%S").time())
-
-    # Only process if current time is past 5pm
-    if now < five_pm:
-        return {
-            "message": "Not yet 5pm, no auto-stop performed",
-            "current_time": now.isoformat(),
-            "cutoff_time": five_pm.isoformat(),
-            "completed_count": 0
-        }
-
-    # Get all active entries that started today (or earlier) and before 5pm
-    active_entries = db.query(LaborEntry).filter(
-        (LaborEntry.end_time.is_(None)) &
-        (LaborEntry.is_completed == False) &
-        (LaborEntry.start_time < five_pm)
-    ).all()
-
-    completed_count = 0
-    for entry in active_entries:
-        entry.end_time = five_pm
-        entry.is_completed = True
-        # Calculate hours worked
-        time_diff = five_pm - entry.start_time
-        entry.hours_worked = round(time_diff.total_seconds() / 3600, 2)
-        update_step_and_traveler_progress(db, entry)
-        completed_count += 1
-
-    if completed_count > 0:
-        db.commit()
+    Called when the labor-tracking page loads. Delegates to the shared helper,
+    which is the same code path /labor/init runs, so the two cannot disagree.
+    """
+    now_local = datetime.now(PLANT_TZ)
+    completed_count = auto_stop_stale_entries(db)
 
     return {
-        "message": f"Auto-stopped {completed_count} entries at 5pm cutoff",
-        "current_time": now.isoformat(),
-        "cutoff_time": five_pm.isoformat(),
-        "completed_count": completed_count
+        "message": (
+            f"Auto-stopped {completed_count} entries at shift-end cutoff"
+            if now_local.hour >= SHIFT_END_HOUR
+            else f"Not yet {SHIFT_END_HOUR}:00 plant time, no auto-stop performed"
+        ),
+        "current_time": now_local.isoformat(),
+        "cutoff_time": now_local.replace(
+            hour=SHIFT_END_HOUR, minute=0, second=0, microsecond=0
+        ).isoformat(),
+        "completed_count": completed_count,
     }
 
 @router.get("/summary")

@@ -21,8 +21,11 @@ import {
 // ─── Types ─────────────────────────────────────────────────────────
 interface AdvancedData {
   on_time_delivery: {
-    weeks: { week: string; shipped: number; on_time: number; late: number; rate: number }[];
-    overall_rate: number; total_shipped: number; total_on_time: number;
+    // `measurable` = jobs that carry a due date and so can be scored at all.
+    // `rate` is null for a week with nothing measurable — undated jobs used to
+    // be counted as on time, which quietly propped the percentage up.
+    weeks: { week: string; shipped: number; measurable: number; no_due_date: number; on_time: number; late: number; rate: number | null }[];
+    overall_rate: number | null; total_shipped: number; total_on_time: number;
   };
   predictive_late_alerts: {
     traveler_id: number; job_number: string; part_description: string;
@@ -58,7 +61,7 @@ interface AdvancedData {
     previous_cycle_days: number | null; variance_hours: number; variance_pct: number;
   }[];
   kitting_enhanced: {
-    priority_queue: { traveler_id: number; job_number: string; customer_name: string; priority: string; due_date: string | null; days_until_due: number | null }[];
+    priority_queue: { traveler_id: number; job_number: string; customer_name: string; priority: string; priority_rank: number; due_date: string | null; days_until_due: number | null }[];
     kit_to_production_avg_hours: number;
     operator_efficiency: { name: string; total_hours: number; entries: number; avg_per_kit: number; team_avg: number; efficiency: number }[];
   };
@@ -136,7 +139,10 @@ export default function AdvancedAnalytics() {
 
   const sc = data.daily_scorecard;
   const otd = data.on_time_delivery;
-  const maxOtdShipped = Math.max(...otd.weeks.map(w => w.shipped), 1);
+  // Bars are drawn from `measurable` (jobs with a due date), which is what the
+  // on-time/late split is computed over.
+  const maxOtdShipped = Math.max(...otd.weeks.map(w => w.measurable), 1);
+  const totalOtdShipped = otd.weeks.reduce((sum, w) => sum + w.shipped, 0);
   const yieldData = data.yield_trend.filter(y => y.yield_pct !== null);
   const maxYieldTotal = Math.max(...data.yield_trend.map(y => y.total), 1);
 
@@ -166,20 +172,21 @@ export default function AdvancedAnalytics() {
       {/* ═══ ON-TIME DELIVERY ═══ */}
       <Card icon={ClockIcon} title="On-Time Delivery" iconColor="text-blue-300"
         gradient="from-blue-600 via-blue-700 to-indigo-800"
-        badge={<span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{otd.overall_rate}%</span>}
+        badge={<span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{otd.overall_rate === null ? '—' : `${otd.overall_rate}%`}</span>}
         defaultOpen={true}>
         <div className="grid grid-cols-3 gap-2 mb-3">
-          <Stat label="Overall Rate" value={`${otd.overall_rate}%`} color={otd.overall_rate >= 90 ? 'text-green-600' : otd.overall_rate >= 70 ? 'text-amber-600' : 'text-red-600'} />
-          <Stat label="Total Shipped" value={otd.total_shipped} color="text-blue-600" />
+          <Stat label="Overall Rate" value={otd.overall_rate === null ? '—' : `${otd.overall_rate}%`}
+            color={otd.overall_rate === null ? 'text-gray-400' : otd.overall_rate >= 90 ? 'text-green-600' : otd.overall_rate >= 70 ? 'text-amber-600' : 'text-red-600'} />
+          <Stat label="Scored / Shipped" value={`${otd.total_shipped} of ${totalOtdShipped}`} color="text-blue-600" />
           <Stat label="Late" value={otd.total_shipped - otd.total_on_time} color="text-red-600" />
         </div>
         <div className="flex items-end gap-1 h-24">
           {otd.weeks.map(w => (
             <div key={w.week} className="flex-1 flex flex-col items-center justify-end h-full">
-              <span className="text-[8px] font-bold text-gray-500 mb-0.5">{w.shipped > 0 ? `${w.rate}%` : ''}</span>
-              <div className="w-full flex flex-col justify-end" style={{ height: `${Math.max((w.shipped / maxOtdShipped) * 100, 4)}%` }}>
-                <div className="bg-green-500 rounded-t" style={{ height: `${w.shipped > 0 ? (w.on_time / w.shipped) * 100 : 0}%`, minHeight: w.on_time > 0 ? '2px' : '0' }} />
-                <div className="bg-red-400" style={{ height: `${w.shipped > 0 ? (w.late / w.shipped) * 100 : 0}%`, minHeight: w.late > 0 ? '2px' : '0' }} />
+              <span className="text-[8px] font-bold text-gray-500 mb-0.5">{w.rate === null ? '' : `${w.rate}%`}</span>
+              <div className="w-full flex flex-col justify-end" style={{ height: `${Math.max((w.measurable / maxOtdShipped) * 100, 4)}%` }}>
+                <div className="bg-green-500 rounded-t" style={{ height: `${w.measurable > 0 ? (w.on_time / w.measurable) * 100 : 0}%`, minHeight: w.on_time > 0 ? '2px' : '0' }} />
+                <div className="bg-red-400" style={{ height: `${w.measurable > 0 ? (w.late / w.measurable) * 100 : 0}%`, minHeight: w.late > 0 ? '2px' : '0' }} />
               </div>
               <span className="text-[7px] text-gray-400 mt-0.5">{w.week}</span>
             </div>
@@ -453,7 +460,7 @@ export default function AdvancedAnalytics() {
             <div className="space-y-0.5 max-h-40 overflow-y-auto">
               {data.kitting_enhanced.priority_queue.slice(0, 10).map((q, i) => (
                 <div key={q.traveler_id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-slate-700 text-[11px]">
-                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${q.priority === 'HIGH' ? 'bg-red-500' : i < 3 ? 'bg-amber-500' : 'bg-gray-400'}`}>{i + 1}</span>
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${q.priority === 'URGENT' ? 'bg-red-600' : q.priority === 'HIGH' ? 'bg-red-500' : q.priority === 'PREMIUM' ? 'bg-orange-500' : i < 3 ? 'bg-amber-500' : 'bg-gray-400'}`}>{i + 1}</span>
                   <Link href={`/travelers/${q.traveler_id}`} className="font-semibold text-blue-600 hover:underline">{q.job_number}</Link>
                   <span className="text-gray-500 truncate flex-1">{q.customer_name}</span>
                   {q.days_until_due !== null && (

@@ -11,6 +11,9 @@ from models import (
     TravelerStatus, TravelerTrackingLog, PauseLog, UserRole
 )
 from routers.auth import get_current_user
+from utils.job_display import kosh_job_candidates
+from utils.work_center_lookup import build_department_resolver
+from utils.kosh_inventory import inventory_readiness
 import time as _time
 
 router = APIRouter()
@@ -137,6 +140,13 @@ async def get_analytics(
     severity_order = {"high": 0, "medium": 1, "low": 2}
     anomalies.sort(key=lambda x: severity_order.get(x["severity"], 3))
 
+    # Every process step, grouped by traveler. Loaded once and shared by the
+    # heatmap, est-vs-actual and yield sections below, each of which used to
+    # re-query steps per traveler.
+    steps_by_traveler = defaultdict(list)
+    for step in db.query(ProcessStep).all():
+        steps_by_traveler[step.traveler_id].append(step)
+
     # ========== 2. DUE DATE HEATMAP ==========
     due_date_data = []
     active_travelers = db.query(Traveler).filter(
@@ -153,8 +163,9 @@ async def get_analytics(
             continue
 
         # Get progress
-        total_steps = db.query(func.count(ProcessStep.id)).filter(ProcessStep.traveler_id == t.id).scalar() or 0
-        completed_steps = db.query(func.count(ProcessStep.id)).filter(ProcessStep.traveler_id == t.id, ProcessStep.is_completed == True).scalar() or 0
+        t_steps = steps_by_traveler.get(t.id, [])
+        total_steps = len(t_steps)
+        completed_steps = sum(1 for step in t_steps if step.is_completed)
         pct = round(completed_steps / total_steps * 100) if total_steps > 0 else 0
 
         if days_until < 0:
@@ -187,23 +198,42 @@ async def get_analytics(
     due_date_data.sort(key=lambda x: x["days_until"])
 
     # ========== 3. EST VS ACTUAL TIME ==========
+    #
+    # Steps and labor totals are loaded in bulk. This loop used to issue one
+    # query per traveler plus one per step — ~3,300 round trips, which was most
+    # of this endpoint's runtime even though each query itself was trivial.
     est_vs_actual = []
     travelers_with_labor = db.query(Traveler).filter(
         Traveler.is_active == True,
         Traveler.status.in_([TravelerStatus.IN_PROGRESS, TravelerStatus.COMPLETED])
     ).all()
 
+    hours_by_traveler = dict(
+        db.query(
+            LaborEntry.traveler_id,
+            func.coalesce(func.sum(LaborEntry.hours_worked), 0),
+        ).filter(
+            LaborEntry.end_time.isnot(None),
+            LaborEntry.hours_worked > 0,
+        ).group_by(LaborEntry.traveler_id).all()
+    )
+    hours_by_step = dict(
+        db.query(
+            LaborEntry.step_id,
+            func.coalesce(func.sum(LaborEntry.hours_worked), 0),
+        ).filter(
+            LaborEntry.step_id.isnot(None),
+            LaborEntry.end_time.isnot(None),
+            LaborEntry.hours_worked > 0,
+        ).group_by(LaborEntry.step_id).all()
+    )
+
     for t in travelers_with_labor:
-        steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == t.id).all()
+        steps = steps_by_traveler.get(t.id, [])
         if not steps:
             continue
 
-        # Actual hours
-        actual_total = db.query(func.coalesce(func.sum(LaborEntry.hours_worked), 0)).filter(
-            LaborEntry.traveler_id == t.id,
-            LaborEntry.end_time.isnot(None),
-            LaborEntry.hours_worked > 0
-        ).scalar() or 0
+        actual_total = hours_by_traveler.get(t.id, 0) or 0
 
         if actual_total == 0 and t.status != TravelerStatus.COMPLETED:
             continue  # Skip travelers with no labor logged yet
@@ -214,12 +244,7 @@ async def get_analytics(
         for s in steps:
             est_h = estimate_hours(s.operation)
             est_total += est_h
-            # Actual for this step
-            step_actual = db.query(func.coalesce(func.sum(LaborEntry.hours_worked), 0)).filter(
-                LaborEntry.step_id == s.id,
-                LaborEntry.end_time.isnot(None),
-                LaborEntry.hours_worked > 0
-            ).scalar() or 0
+            step_actual = hours_by_step.get(s.id, 0) or 0
 
             if step_actual > 0 or s.is_completed:
                 variance = round(float(step_actual) - est_h, 2)
@@ -251,6 +276,7 @@ async def get_analytics(
     est_vs_actual = est_vs_actual[:30]
 
     # ========== 4. YIELD DASHBOARD ==========
+    dept_resolver = build_department_resolver(db)
     yield_data = []
     # Get travelers with accepted/rejected quantities
     travelers_yield = db.query(Traveler).filter(
@@ -260,7 +286,7 @@ async def get_analytics(
     department_yield = defaultdict(lambda: {"accepted": 0, "rejected": 0, "total_qty": 0, "travelers": 0})
 
     for t in travelers_yield:
-        steps = db.query(ProcessStep).filter(ProcessStep.traveler_id == t.id).all()
+        steps = steps_by_traveler.get(t.id, [])
         total_accepted = sum(s.accepted or 0 for s in steps)
         total_rejected = sum(s.rejected or 0 for s in steps)
 
@@ -280,15 +306,23 @@ async def get_analytics(
             "status": t.status.value,
         })
 
-        # Aggregate by department from step work centers
+        # Aggregate by department from step work centers. work_centers.code is
+        # unique, so this lookup cannot fan out the way name matching does;
+        # dept_resolver just saves a query per step.
+        counted_depts = set()
         for s in steps:
             if (s.accepted or 0) + (s.rejected or 0) > 0:
-                wc = db.query(WorkCenter).filter(WorkCenter.code == s.work_center_code).first()
-                dept = wc.department if wc else "Unknown"
+                # s.id is the process-step id, which is what the resolver maps
+                # to a unique work-centre code; unmapped falls back to Unknown.
+                dept = dept_resolver.for_entry(s.id, None)
                 department_yield[dept]["accepted"] += s.accepted or 0
                 department_yield[dept]["rejected"] += s.rejected or 0
-                department_yield[dept]["total_qty"] += t.quantity
-                department_yield[dept]["travelers"] += 1
+                # Per traveler, not per step — quantity and the traveler count
+                # were previously re-added for every inspected step.
+                if dept not in counted_depts:
+                    department_yield[dept]["total_qty"] += t.quantity or 0
+                    department_yield[dept]["travelers"] += 1
+                    counted_depts.add(dept)
 
     dept_yield_list = []
     for dept, data in department_yield.items():
@@ -430,10 +464,13 @@ async def get_analytics(
             LaborEntry.is_completed == False
         ).scalar() or 0
 
-        # Count travelers currently at this WC (waiting)
-        waiting = db.query(func.count(Traveler.id)).join(
+        # Count travelers currently at this WC (waiting). DISTINCT because a
+        # traveler scanned into the same work centre five times joined to five
+        # rows and was counted five times over.
+        waiting = db.query(func.count(func.distinct(Traveler.id))).join(
             TravelerTrackingLog, TravelerTrackingLog.traveler_id == Traveler.id
         ).filter(
+            Traveler.is_active == True,
             Traveler.status == TravelerStatus.IN_PROGRESS,
             TravelerTrackingLog.work_center == wc
         ).scalar() or 0
@@ -649,70 +686,28 @@ async def get_analytics(
 
         # Look up parts shortage per active kitting job from KOSH (live, no cache,
         # so when KOSH inventory updates the status auto-refreshes here)
+        # Batched: two KOSH queries for every kitting job, not two per job.
         kosh_shortage_map = {}
         kosh_status_map = {}
+        kosh_conn = None
         try:
             from routers.jobs import get_kosh_connection
             kosh_conn = get_kosh_connection()
-            kosh_cur = kosh_conn.cursor()
             unique_jobs = list({t.job_number for _, t in active_kit_steps if t.job_number})
-            for jn in unique_jobs:
-                try:
-                    base = jn.rstrip('LM') if jn else jn
-                    kosh_job = None
-                    kosh_jn = jn
-                    for try_jn in (jn, base) if base != jn else (jn,):
-                        kosh_cur.execute(
-                            'SELECT order_qty, status FROM warehouse."tblJob" WHERE job_number = %s',
-                            (try_jn,),
-                        )
-                        row = kosh_cur.fetchone()
-                        if row:
-                            kosh_job = row
-                            kosh_jn = try_jn
-                            break
-                    if not kosh_job:
-                        continue
-                    order_qty = int(kosh_job[0] or 1)
-                    kosh_status_map[jn] = kosh_job[1]
-                    kosh_cur.execute(
-                        """
-                        WITH bom_items AS (
-                            SELECT DISTINCT ON (b.aci_pn) b.aci_pn, b.mpn, b.qty
-                            FROM warehouse."tblBOM" b
-                            WHERE b.job = %s
-                            ORDER BY b.aci_pn, b.line
-                        )
-                        SELECT
-                            CAST(COALESCE(NULLIF(bi.qty, ''), '0') AS INTEGER) as qty_per,
-                            COALESCE(SUM(CASE WHEN w.loc_to != 'MFG Floor' THEN w.onhandqty ELSE 0 END), 0) as on_hand
-                        FROM bom_items bi
-                        LEFT JOIN warehouse."tblWhse_Inventory" w
-                            ON bi.aci_pn = w.item OR bi.mpn = w.mpn
-                        GROUP BY bi.aci_pn, bi.qty
-                        """,
-                        (kosh_jn,),
-                    )
-                    bom_rows = kosh_cur.fetchall()
-                    total = len(bom_rows)
-                    short = 0
-                    for r in bom_rows:
-                        req = int(r[0] or 0) * order_qty
-                        oh = int(r[1] or 0)
-                        if oh < req:
-                            short += 1
-                    kosh_shortage_map[jn] = {"total": total, "short": short}
-                except Exception:
-                    # One bad job shouldn't abort the shared transaction and
-                    # wipe kitting shortage data for every other job.
-                    try:
-                        kosh_conn.rollback()
-                    except Exception:
-                        pass
-                    continue
-            kosh_conn.close()
+            for job_number, readiness in inventory_readiness(kosh_conn, unique_jobs).items():
+                kosh_status_map[job_number] = readiness["kosh_job_status"]
+                kosh_shortage_map[job_number] = {
+                    "total": readiness["total_bom_lines"],
+                    "short": readiness["shortage_lines"],
+                }
         except Exception as kosh_err:
             print(f"Kitting KOSH lookup error: {kosh_err}")
+        finally:
+            if kosh_conn is not None:
+                try:
+                    kosh_conn.close()
+                except Exception:
+                    pass
 
         active_kitting = []
         for step, t in active_kit_steps:

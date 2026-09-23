@@ -48,3 +48,41 @@ def extract_job_number(scanned: str) -> str:
     if scanned and _MARKER in scanned:
         return scanned.split(_MARKER, 1)[1].strip()
     return scanned
+
+
+def kosh_job_candidates(job_number):
+    """Job-number forms to try against KOSH's warehouse."tblJob", best first.
+
+    NEXUS job numbers carry a work descriptor about 59% of the time —
+    "8666L CABLE", "5477 ASSY", "8573ML ASSY" — which is the filing convention
+    on the floor. KOSH stores the bare number ("8666L"). Callers used to try the
+    raw value and then `rstrip('LM')`, but rstrip does nothing to a string
+    ending in "CABLE" or "ASSY", so the lookup silently missed: of 264 open
+    travelers only 83 resolved, against 189 that resolve once the descriptor is
+    dropped. A miss reads as "no shortage data", which is indistinguishable from
+    "no shortage" on the dashboard.
+
+    Order matters — the exact value wins, then the leading token, then the token
+    with a trailing L/M revision suffix removed. Returns unique values only.
+    """
+    if not job_number:
+        return []
+
+    raw = job_number.strip()
+    candidates = [raw]
+
+    leading = raw.split()[0] if raw.split() else raw
+    candidates.append(leading)
+    # Only strip the L/M suffix off something that still ends in a digit
+    # afterwards, so "8666L" -> "8666" is tried but "ASSY" -> "" is not.
+    stripped = leading.rstrip('LM')
+    if stripped and stripped[-1].isdigit():
+        candidates.append(stripped)
+
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
+    return unique

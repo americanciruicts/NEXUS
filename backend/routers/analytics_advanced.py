@@ -28,6 +28,7 @@ from models import (
     KittingTimerSession,
 )
 from routers.auth import get_current_user
+from utils.work_center_lookup import distinct_active_work_centers
 
 router = APIRouter()
 
@@ -35,6 +36,9 @@ router = APIRouter()
 DEFAULT_LABOR_RATE = 35.0  # $/hr — used for cost estimates
 WORK_HOURS_PER_DAY = 8
 WORK_DAYS_PER_WEEK = 5
+
+# Lower sorts first. Mirrors models.Priority; anything unrecognised is NORMAL.
+PRIORITY_RANK = {"URGENT": 0, "HIGH": 1, "PREMIUM": 2, "NORMAL": 3, "LOW": 4}
 
 OPERATION_ESTIMATES = {
     "KITTING": 1.5, "FEEDER LOAD": 1.0, "SMT SET UP": 1.5,
@@ -100,29 +104,37 @@ async def get_advanced_analytics(
                 Traveler.completed_at.isnot(None),
             ).all()
 
-            shipped = len(completed)
+            # Only jobs that carry a due date can be scored. Counting the
+            # undated ones as on time (and 25 travelers store '' for due_date)
+            # inflated the rate with jobs nobody had measured.
+            measurable = 0
             on_time = 0
             for t in completed:
-                if t.due_date:
-                    try:
-                        due = datetime.strptime(t.due_date, "%Y-%m-%d").date()
-                        shipped_date = t.completed_at.date() if t.completed_at else None
-                        if shipped_date and shipped_date <= due:
-                            on_time += 1
-                    except Exception:
-                        pass
-                else:
-                    on_time += 1  # no due date = can't be late
+                if not (t.due_date or "").strip():
+                    continue
+                try:
+                    due = datetime.strptime(t.due_date.strip(), "%Y-%m-%d").date()
+                except Exception:
+                    continue
+                shipped_date = t.completed_at.date() if t.completed_at else None
+                if not shipped_date:
+                    continue
+                measurable += 1
+                if shipped_date <= due:
+                    on_time += 1
 
-            total_shipped_all += shipped
+            shipped = len(completed)
+            total_shipped_all += measurable
             total_on_time_all += on_time
-            rate = round(on_time / shipped * 100, 1) if shipped > 0 else 100.0
+            rate = round(on_time / measurable * 100, 1) if measurable > 0 else None
 
             on_time_delivery["weeks"].append({
                 "week": week_start.strftime("%m/%d"),
                 "shipped": shipped,
+                "measurable": measurable,
+                "no_due_date": shipped - measurable,
                 "on_time": on_time,
-                "late": shipped - on_time,
+                "late": measurable - on_time,
                 "rate": rate,
             })
 
@@ -130,7 +142,7 @@ async def get_advanced_analytics(
         on_time_delivery["total_on_time"] = total_on_time_all
         on_time_delivery["overall_rate"] = round(
             total_on_time_all / total_shipped_all * 100, 1
-        ) if total_shipped_all > 0 else 100.0
+        ) if total_shipped_all > 0 else None
     except Exception as e:
         print(f"on_time_delivery error: {e}")
 
@@ -485,7 +497,10 @@ async def get_advanced_analytics(
     # ═══════════════════════════════════════════════════════════════════
     floor_status = []
     try:
-        work_centers = db.query(WorkCenter).filter(WorkCenter.is_active == True).all()
+        # Collapsed to one row per name: the raw table carries one row per
+        # (name, traveler_type), so this heatmap rendered SHIPPING seven times
+        # with identical numbers in every tile.
+        work_centers = distinct_active_work_centers(db)
         for wc in work_centers:
             active_entries = db.query(func.count(LaborEntry.id)).filter(
                 LaborEntry.work_center == wc.name,
@@ -493,10 +508,18 @@ async def get_advanced_analytics(
                 LaborEntry.is_completed == False,
             ).scalar() or 0
 
-            # Blocked = has travelers waiting but no active labor
-            waiting_travelers = db.query(func.count(ProcessStep.id)).filter(
+            # Blocked = has travelers waiting but no active labor. Restricted
+            # to live travelers — 98 incomplete steps belong to COMPLETED or
+            # ARCHIVED jobs and are not queued work.
+            waiting_travelers = db.query(func.count(ProcessStep.id)).join(
+                Traveler, Traveler.id == ProcessStep.traveler_id
+            ).filter(
                 ProcessStep.operation == wc.name,
                 ProcessStep.is_completed == False,
+                Traveler.is_active == True,
+                Traveler.status.in_([
+                    TravelerStatus.CREATED, TravelerStatus.IN_PROGRESS, TravelerStatus.ON_HOLD
+                ]),
             ).scalar() or 0
 
             # Hours logged today
@@ -627,21 +650,25 @@ async def get_advanced_analytics(
                 except Exception:
                     pass
 
-            priority_val = 0 if str(t.priority) == "Priority.HIGH" else 1
+            # Compared str(enum) against "Priority.HIGH", so URGENT and PREMIUM
+            # jobs were relabelled NORMAL and sorted to the back of the queue.
+            priority_name = t.priority.value if t.priority else "NORMAL"
+            priority_rank = PRIORITY_RANK.get(priority_name, PRIORITY_RANK["NORMAL"])
 
             kitting_enhanced["priority_queue"].append({
                 "traveler_id": t.id,
                 "job_number": t.job_number,
                 "customer_name": t.customer_name or "",
                 "part_description": t.part_description or "",
-                "priority": "HIGH" if priority_val == 0 else "NORMAL",
+                "priority": priority_name,
+                "priority_rank": priority_rank,
                 "due_date": t.due_date,
                 "days_until_due": days_until,
                 "urgency_score": urgency_score,
             })
 
         kitting_enhanced["priority_queue"].sort(key=lambda x: (
-            1 if x["priority"] == "NORMAL" else 0,
+            x["priority_rank"],
             x["urgency_score"],
         ))
 
