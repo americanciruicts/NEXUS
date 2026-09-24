@@ -15,6 +15,8 @@ interface InsightsData {
   jobs_waiting_on_parts: Array<{ job_number: string; customer: string; description: string; status: string; total_parts: number; short_parts: number; order_qty: number }>;
   top_shortages: Array<{ aci_pn: string; description: string; short_qty: number; affected_jobs: number; jobs: string[] }>;
   rejection_rates: Array<{ work_center: string; total_qty: number; rejected: number; accepted: number; rejection_rate: number }>;
+  /** Echo of the applied Range picker window, for the cards it drives. */
+  range?: { start_date: string; end_date: string; label: string; applies_to: string[] };
   bottlenecks: Array<{ work_center: string; waiting_count: number; avg_hours: number }>;
   due_date_heatmap: { overdue: number; today: number; this_week: number; next_week: number; later: number; no_date: number };
   overdue_aging: Array<{ job_number: string; part_description: string; customer_name: string; due_date: string; days_overdue: number; status: string }>;
@@ -42,7 +44,7 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
       {/* Row 1: Operator Efficiency + Active Work Centers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Operator Efficiency */}
-        <Card icon={UserGroupIcon} title="Operator Efficiency" iconColor="text-cyan-300" subtitle="Last 30 days">
+        <Card icon={UserGroupIcon} title="Operator Efficiency" iconColor="text-cyan-300" subtitle={data.range?.label || 'Selected range'}>
           <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
             {data.operator_efficiency.length === 0 ? (
               <p className="text-sm text-gray-500 text-center py-4">No data</p>
@@ -63,7 +65,7 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
         </Card>
 
         {/* Busiest Work Centers */}
-        <Card icon={FireIcon} title="Active Right Now" iconColor="text-amber-300" subtitle="Live work centers">
+        <Card icon={FireIcon} title="Active Right Now" iconColor="text-amber-300" subtitle="Live now — not affected by Range">
           {data.busiest_work_centers.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-4">No active work</p>
           ) : (
@@ -103,7 +105,7 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
         </Card>
 
         {/* Top Shortage Items */}
-        <Card icon={ExclamationTriangleIcon} title="Top Shortage Parts" iconColor="text-amber-300" subtitle="Parts holding up the most jobs">
+        <Card icon={ExclamationTriangleIcon} title="Top Shortage Parts" iconColor="text-amber-300" subtitle="Current stock — not affected by Range">
           {data.top_shortages.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-4">No shortage data</p>
           ) : (
@@ -142,7 +144,7 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
         </Card>
 
         {/* Bottlenecks */}
-        <Card icon={BoltIcon} title="Bottlenecks" iconColor="text-red-300" subtitle="Steps with most travelers waiting">
+        <Card icon={BoltIcon} title="Bottlenecks" iconColor="text-red-300" subtitle="Open work now — not affected by Range">
           {data.bottlenecks.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-4">No bottlenecks detected</p>
           ) : (
@@ -163,7 +165,7 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
       {/* Row 5: Trends — Labor Hours + Throughput */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Labor Hours Trend */}
-        <Card icon={ChartBarIcon} title="Labor Hours (14 days)" iconColor="text-emerald-300" subtitle="Daily hours logged">
+        <Card icon={ChartBarIcon} title="Labor Hours" iconColor="text-emerald-300" subtitle="Last 14 days — not affected by Range">
           <div className="flex items-end gap-1 h-[120px]">
             {laborTrend.map((d) => (
               <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full">
@@ -179,7 +181,7 @@ export default function InsightsSection({ data: rawData }: { data?: Record<strin
         </Card>
 
         {/* Throughput Trend */}
-        <Card icon={ArrowTrendingUpIcon} title="Throughput (8 weeks)" iconColor="text-cyan-300" subtitle="Created vs Completed">
+        <Card icon={ArrowTrendingUpIcon} title="Throughput" iconColor="text-cyan-300" subtitle="Last 8 weeks — not affected by Range">
           <div className="flex items-end gap-2 h-[120px]">
             {throughputTrend.map((d) => (
               <div key={d.week} className="flex-1 flex flex-col items-center justify-end h-full gap-0.5">

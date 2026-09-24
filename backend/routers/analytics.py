@@ -13,6 +13,7 @@ from models import (
 from routers.auth import get_current_user
 from utils.job_display import kosh_job_candidates
 from utils.work_center_lookup import build_department_resolver
+from utils.date_range import parse_range, range_key, describe, FIXED_WINDOWS
 from utils.kosh_inventory import inventory_readiness
 import time as _time
 
@@ -51,13 +52,23 @@ def estimate_hours(operation: str) -> float:
 
 @router.get("/all")
 async def get_analytics(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """All analytics data in one call: anomalies, due date heatmap, est vs actual,
-    yield, daily summary, bottlenecks, operator scorecards."""
+    yield, daily summary, bottlenecks, operator scorecards.
 
-    _cached = _analytics_cache.get("all")
+    The Range picker drives the windowed figures (short/long labor anomalies,
+    est-vs-actual, yield, bottlenecks, operator scorecards, kitting totals).
+    Live state, today's summary and the fixed-length kitting trends keep their
+    own window and declare it in `fixed_windows`.
+    """
+    range_start, range_end = parse_range(start_date, end_date)
+
+    _cache_key = ("all",) + range_key(range_start, range_end)
+    _cached = _analytics_cache.get(_cache_key)
     if _cached and _time.time() - _cached[0] < _ANALYTICS_TTL:
         return _cached[1]
 
@@ -95,7 +106,8 @@ async def get_analytics(
         LaborEntry.end_time.isnot(None),
         LaborEntry.hours_worked < 0.034,  # ~2 min
         LaborEntry.hours_worked > 0,
-        LaborEntry.created_at > now - timedelta(days=7)
+        LaborEntry.start_time >= range_start,
+        LaborEntry.start_time <= range_end,
     ).limit(20).all()
 
     for entry in short_entries:
@@ -118,7 +130,8 @@ async def get_analytics(
     long_entries = db.query(LaborEntry).filter(
         LaborEntry.end_time.isnot(None),
         LaborEntry.hours_worked > 10,
-        LaborEntry.created_at > now - timedelta(days=7)
+        LaborEntry.start_time >= range_start,
+        LaborEntry.start_time <= range_end,
     ).limit(20).all()
 
     for entry in long_entries:
@@ -215,6 +228,8 @@ async def get_analytics(
         ).filter(
             LaborEntry.end_time.isnot(None),
             LaborEntry.hours_worked > 0,
+            LaborEntry.start_time >= range_start,
+            LaborEntry.start_time <= range_end,
         ).group_by(LaborEntry.traveler_id).all()
     )
     hours_by_step = dict(
@@ -225,6 +240,8 @@ async def get_analytics(
             LaborEntry.step_id.isnot(None),
             LaborEntry.end_time.isnot(None),
             LaborEntry.hours_worked > 0,
+            LaborEntry.start_time >= range_start,
+            LaborEntry.start_time <= range_end,
         ).group_by(LaborEntry.step_id).all()
     )
 
@@ -440,8 +457,10 @@ async def get_analytics(
     # ========== 6. BOTTLENECK DETECTION ==========
     bottlenecks = []
 
-    # Average time per work center (from completed entries in last 30 days)
-    thirty_days_ago = now - timedelta(days=30)
+    # Average time per work center, over the selected range.
+    # thirty_days_ago is kept as the range start so every "last 30 days" figure
+    # below now follows the picker instead of a hardcoded month.
+    thirty_days_ago = range_start
     wc_stats = db.query(
         LaborEntry.work_center,
         func.avg(LaborEntry.hours_worked).label("avg_hours"),
@@ -451,7 +470,8 @@ async def get_analytics(
     ).filter(
         LaborEntry.end_time.isnot(None),
         LaborEntry.hours_worked > 0,
-        LaborEntry.created_at > thirty_days_ago,
+        LaborEntry.start_time >= thirty_days_ago,
+        LaborEntry.start_time <= range_end,
         LaborEntry.work_center.isnot(None)
     ).group_by(LaborEntry.work_center).having(func.count(LaborEntry.id) >= 2).all()
 
@@ -502,7 +522,8 @@ async def get_analytics(
         func.avg(LaborEntry.hours_worked).label("avg_hours_per_entry"),
         func.count(case((LaborEntry.end_time.isnot(None), 1))).label("completed_entries"),
     ).join(LaborEntry, LaborEntry.employee_id == User.id).filter(
-        LaborEntry.created_at > thirty_days_ago,
+        LaborEntry.start_time >= thirty_days_ago,
+        LaborEntry.start_time <= range_end,
         LaborEntry.hours_worked > 0
     ).group_by(User.id, User.first_name, User.last_name, User.username).all()
 
@@ -513,7 +534,8 @@ async def get_analytics(
             func.coalesce(func.sum(PauseLog.duration_seconds), 0).label("total_pause_seconds")
         ).join(LaborEntry, PauseLog.labor_entry_id == LaborEntry.id).filter(
             LaborEntry.employee_id == uid,
-            LaborEntry.created_at > thirty_days_ago
+            LaborEntry.start_time >= thirty_days_ago,
+            LaborEntry.start_time <= range_end
         ).first()
 
         total_pauses = pause_stats.total_pauses if pause_stats else 0
@@ -523,19 +545,22 @@ async def get_analytics(
         # Steps completed by this operator
         steps_done = db.query(func.count(ProcessStep.id)).filter(
             ProcessStep.completed_by == uid,
-            ProcessStep.completed_at > thirty_days_ago
+            ProcessStep.completed_at >= thirty_days_ago,
+            ProcessStep.completed_at <= range_end
         ).scalar() or 0
 
         # Unique jobs worked
         unique_jobs = db.query(func.count(func.distinct(LaborEntry.traveler_id))).filter(
             LaborEntry.employee_id == uid,
-            LaborEntry.created_at > thirty_days_ago
+            LaborEntry.start_time >= thirty_days_ago,
+            LaborEntry.start_time <= range_end
         ).scalar() or 0
 
         # Active days (days with at least one entry)
         active_days = db.query(func.count(func.distinct(func.date(LaborEntry.start_time)))).filter(
             LaborEntry.employee_id == uid,
-            LaborEntry.created_at > thirty_days_ago
+            LaborEntry.start_time >= thirty_days_ago,
+            LaborEntry.start_time <= range_end
         ).scalar() or 0
 
         avg_hours_per_day = round(float(total_hours) / active_days, 2) if active_days > 0 else 0
@@ -609,7 +634,8 @@ async def get_analytics(
                 LaborEntry.step_id.in_(kitting_step_ids),
                 PauseLog.reason == "WAITING_PARTS",
                 PauseLog.resumed_at.isnot(None),
-                PauseLog.paused_at > thirty_days_ago,
+                PauseLog.paused_at >= thirty_days_ago,
+                PauseLog.paused_at <= range_end,
             ).all()
             durations = [float(r[0] or 0) for r in waiting_rows]
             waiting_total_secs = sum(durations)
@@ -649,7 +675,8 @@ async def get_analytics(
                 func.coalesce(func.sum(LaborEntry.hours_worked), 0)
             ).filter(
                 LaborEntry.step_id.in_(kitting_step_ids),
-                LaborEntry.created_at > thirty_days_ago,
+                LaborEntry.start_time >= thirty_days_ago,
+                LaborEntry.start_time <= range_end,
                 LaborEntry.hours_worked > 0,
             ).scalar() or 0
 
@@ -664,7 +691,8 @@ async def get_analytics(
                 LaborEntry.step_id.in_(kitting_step_ids),
                 LaborEntry.end_time.isnot(None),
                 LaborEntry.hours_worked > 0,
-                LaborEntry.created_at > thirty_days_ago,
+                LaborEntry.start_time >= thirty_days_ago,
+                LaborEntry.start_time <= range_end,
             ).first()
             if row:
                 avg_kit_hours = float(row.avg_h or 0)
@@ -852,6 +880,16 @@ async def get_analytics(
         "bottlenecks": bottlenecks,
         "operator_scorecards": scorecards,
         "kitting_analytics": kitting_analytics,
+        "range": {
+            "start_date": range_start.strftime("%Y-%m-%d"),
+            "end_date": range_end.strftime("%Y-%m-%d"),
+            "label": describe(range_start, range_end),
+            "applies_to": [
+                "anomalies", "est_vs_actual", "yield_data", "department_yield",
+                "bottlenecks", "operator_scorecards", "kitting_summary",
+            ],
+        },
+        "fixed_windows": FIXED_WINDOWS,
     }
-    _analytics_cache["all"] = (_time.time(), _result)
+    _analytics_cache[_cache_key] = (_time.time(), _result)
     return _result

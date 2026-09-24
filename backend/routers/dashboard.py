@@ -13,6 +13,7 @@ from schemas.dashboard_schemas import DashboardStats
 from utils.job_display import format_job_display, kosh_job_candidates
 from utils.work_center_lookup import build_department_resolver
 from utils.kosh_inventory import inventory_readiness, shortage_lines, required_qty
+from utils.date_range import parse_range, range_key, describe, FIXED_WINDOWS
 import time as _time
 from collections import OrderedDict, defaultdict
 
@@ -700,15 +701,25 @@ async def get_dashboard_stats(
 
 @router.get("/insights")
 async def get_dashboard_insights(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """All-in-one insights endpoint for dashboard cards. Returns operator efficiency,
     busiest work centers, idle operators, KOSH inventory insights, rejection rates,
-    bottlenecks, due date heatmap, overdue aging, throughput/labor/cycle trends."""
+    bottlenecks, due date heatmap, overdue aging, throughput/labor/cycle trends.
+
+    The Range picker drives the genuinely windowed figures (operator efficiency,
+    rejection rates). Live state and the fixed-length trend charts keep their own
+    window and declare it in `fixed_windows` so the UI can say so on the card.
+    """
     import math
 
-    _cached = _stats_cache.get("__insights__")
+    range_start, range_end = parse_range(start_date, end_date)
+
+    _cache_key = ("__insights__",) + range_key(range_start, range_end)
+    _cached = _stats_cache.get(_cache_key)
     if _cached and _time.time() - _cached[0] < _STATS_TTL:
         return _cached[1]
 
@@ -725,7 +736,8 @@ async def get_dashboard_insights(
         ).join(LaborEntry, LaborEntry.employee_id == User.id).filter(
             LaborEntry.hours_worked > 0,
             LaborEntry.end_time.isnot(None),
-            LaborEntry.start_time >= now - timedelta(days=30)
+            LaborEntry.start_time >= range_start,
+            LaborEntry.start_time <= range_end,
         ).group_by(User.id).order_by(func.sum(LaborEntry.hours_worked).desc()).limit(15).all()
 
         OPERATION_ESTIMATES = {
@@ -748,7 +760,8 @@ async def get_dashboard_insights(
             ).filter(
                 LaborEntry.employee_id == emp.id,
                 LaborEntry.end_time.isnot(None),
-                LaborEntry.start_time >= now - timedelta(days=30)
+                LaborEntry.start_time >= range_start,
+                LaborEntry.start_time <= range_end,
             ).distinct().all()
             est_hours = sum(
                 next((v for k, v in OPERATION_ESTIMATES.items() if k in (op or '').upper()), 1.0)
@@ -862,13 +875,17 @@ async def get_dashboard_insights(
     # ─── 6. REJECTION RATE PER WORK CENTER ───────────────────────────────────
     rejection_rates = []
     try:
+        # Windowed by when the step was signed off. This previously aggregated
+        # every step ever recorded, so the card never changed.
         steps_with_qty = db.query(
             ProcessStep.operation,
             func.sum(ProcessStep.quantity).label('total_qty'),
             func.sum(ProcessStep.rejected).label('total_rejected'),
             func.sum(ProcessStep.accepted).label('total_accepted'),
         ).filter(
-            ProcessStep.quantity > 0
+            ProcessStep.quantity > 0,
+            ProcessStep.completed_at >= range_start,
+            ProcessStep.completed_at <= range_end,
         ).group_by(ProcessStep.operation).all()
 
         for s in steps_with_qty:
@@ -1031,6 +1048,13 @@ async def get_dashboard_insights(
         "overdue_aging": overdue_aging,
         "throughput_trend": throughput_trend,
         "labor_hours_trend": labor_hours_trend,
+        "range": {
+            "start_date": range_start.strftime("%Y-%m-%d"),
+            "end_date": range_end.strftime("%Y-%m-%d"),
+            "label": describe(range_start, range_end),
+            "applies_to": ["operator_efficiency", "rejection_rates"],
+        },
+        "fixed_windows": FIXED_WINDOWS,
     }
-    _stats_cache["__insights__"] = (_time.time(), _result)
+    _stats_cache[_cache_key] = (_time.time(), _result)
     return _result

@@ -29,6 +29,7 @@ from models import (
 )
 from routers.auth import get_current_user
 from utils.work_center_lookup import distinct_active_work_centers
+from utils.date_range import parse_range, describe, FIXED_WINDOWS
 
 router = APIRouter()
 
@@ -79,9 +80,18 @@ def _weekday_hours(start_date, end_date) -> float:
 
 @router.get("/advanced")
 async def get_advanced_analytics(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """The Range picker drives operator efficiency by work centre, rejection
+    root cause and labor costs. On-time delivery and first-pass yield are
+    12-week trends, capacity planning looks 2 weeks ahead and the scorecard is
+    today's — those keep their own window and declare it in `fixed_windows`.
+    """
+    range_start, range_end = parse_range(start_date, end_date)
+
     now = datetime.now(timezone.utc)
     today = now.date()
 
@@ -251,7 +261,7 @@ async def get_advanced_analytics(
     # ═══════════════════════════════════════════════════════════════════
     operator_by_wc = []
     try:
-        thirty_ago = now - timedelta(days=30)
+        thirty_ago = range_start
         rows = db.query(
             User.id, User.first_name, User.last_name, User.username,
             LaborEntry.work_center,
@@ -261,7 +271,8 @@ async def get_advanced_analytics(
         ).join(LaborEntry, LaborEntry.employee_id == User.id).filter(
             LaborEntry.hours_worked > 0,
             LaborEntry.end_time.isnot(None),
-            LaborEntry.created_at > thirty_ago,
+            LaborEntry.start_time >= thirty_ago,
+            LaborEntry.start_time <= range_end,
             LaborEntry.work_center.isnot(None),
         ).group_by(User.id, User.first_name, User.last_name, User.username, LaborEntry.work_center).all()
 
@@ -455,6 +466,8 @@ async def get_advanced_analytics(
             func.count(ProcessStep.id).label("step_count"),
         ).filter(
             ProcessStep.rejected > 0,
+            ProcessStep.completed_at >= range_start,
+            ProcessStep.completed_at <= range_end,
         ).group_by(ProcessStep.operation).order_by(
             func.sum(ProcessStep.rejected).desc()
         ).limit(15).all()
@@ -476,6 +489,8 @@ async def get_advanced_analytics(
             func.count(func.distinct(Traveler.id)).label("job_count"),
         ).join(ProcessStep, ProcessStep.traveler_id == Traveler.id).filter(
             ProcessStep.rejected > 0,
+            ProcessStep.completed_at >= range_start,
+            ProcessStep.completed_at <= range_end,
             Traveler.customer_name.isnot(None),
         ).group_by(Traveler.customer_name).order_by(
             func.sum(ProcessStep.rejected).desc()
@@ -711,8 +726,8 @@ async def get_advanced_analytics(
                 sum(handoff_times) / len(handoff_times), 1
             )
 
-        # Kitting operator efficiency
-        thirty_ago = now - timedelta(days=30)
+        # Kitting operator efficiency, over the selected range
+        thirty_ago = range_start
         kit_step_ids = [r[0] for r in db.query(ProcessStep.id).filter(
             func.upper(ProcessStep.operation).like('%KIT%')
         ).all()]
@@ -727,7 +742,8 @@ async def get_advanced_analytics(
                 LaborEntry.step_id.in_(kit_step_ids),
                 LaborEntry.hours_worked > 0,
                 LaborEntry.end_time.isnot(None),
-                LaborEntry.created_at > thirty_ago,
+                LaborEntry.start_time >= thirty_ago,
+                LaborEntry.start_time <= range_end,
             ).group_by(User.id, User.first_name, User.last_name, User.username).all()
 
             team_avg = None
@@ -761,7 +777,8 @@ async def get_advanced_analytics(
             func.sum(LaborEntry.hours_worked).label("total_hours"),
         ).join(LaborEntry, LaborEntry.traveler_id == Traveler.id).filter(
             LaborEntry.hours_worked > 0,
-            LaborEntry.created_at > now - timedelta(days=60),
+            LaborEntry.start_time >= range_start,
+            LaborEntry.start_time <= range_end,
         ).group_by(
             Traveler.id, Traveler.job_number, Traveler.part_description,
             Traveler.customer_name, Traveler.status,
@@ -799,4 +816,14 @@ async def get_advanced_analytics(
         "build_comparisons": build_comparisons,
         "kitting_enhanced": kitting_enhanced,
         "labor_costs": labor_costs,
+        "range": {
+            "start_date": range_start.strftime("%Y-%m-%d"),
+            "end_date": range_end.strftime("%Y-%m-%d"),
+            "label": describe(range_start, range_end),
+            "applies_to": [
+                "operator_efficiency_by_wc", "rejection_root_cause",
+                "labor_costs", "kitting_enhanced.operator_efficiency",
+            ],
+        },
+        "fixed_windows": FIXED_WINDOWS,
     }

@@ -126,11 +126,16 @@ interface AnalyticsData {
   yield_data: YieldItem[]; department_yield: DeptYield[]; daily_summary: DailySummary;
   bottlenecks: Bottleneck[]; operator_scorecards: OperatorScorecard[];
   kitting_analytics?: KittingAnalytics;
+  /** Echo of the applied Range picker window, for the sections it drives. */
+  range?: { start_date: string; end_date: string; label: string; applies_to: string[] };
 }
 
-function Section({ title, icon, badge, children, defaultOpen = false, headerGradient }: {
+function Section({ title, icon, badge, children, defaultOpen = false, headerGradient, window: sectionWindow }: {
   title: string; icon: React.ReactNode; badge?: React.ReactNode;
   children: React.ReactNode; defaultOpen?: boolean; headerGradient?: string;
+  /** The section's own time window. Set it on sections the Range picker does
+   *  NOT drive, so it is obvious why changing the range leaves them alone. */
+  window?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const hasGradient = !!headerGradient;
@@ -150,6 +155,11 @@ function Section({ title, icon, badge, children, defaultOpen = false, headerGrad
         <div className="flex items-center gap-2 relative z-10">
           {icon}
           <h2 className={`text-xs font-bold ${hasGradient ? 'text-white' : 'text-gray-800 dark:text-slate-200'}`}>{title}</h2>
+          {sectionWindow && (
+            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+              hasGradient ? 'text-white/70 bg-white/10' : 'text-gray-500 bg-gray-100 dark:bg-slate-700 dark:text-slate-300'
+            }`}>{sectionWindow}</span>
+          )}
           {badge}
         </div>
         {open
@@ -259,7 +269,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </div>
 
       {/* 1. DAILY SUMMARY */}
-      <Section title="Daily Summary" icon={<DocumentChartBarIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Daily Summary" window="today" icon={<DocumentChartBarIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-indigo-600 via-indigo-700 to-purple-800"
         badge={<span className="text-[10px] font-bold text-indigo-200/80">{daily_summary.hours_logged}h logged today</span>} defaultOpen={true}>
         <div className="p-3">
@@ -319,7 +329,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </Section>
 
       {/* 2. LABOR ANOMALIES */}
-      <Section title="Labor Anomaly Detection" icon={<ExclamationTriangleIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Labor Anomaly Detection" window={data.range?.label} icon={<ExclamationTriangleIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-red-600 via-red-700 to-rose-800"
         badge={anomalies.length > 0 ? (
           <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{anomalies.length} issues</span>
@@ -360,7 +370,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </Section>
 
       {/* 3. DUE DATE HEATMAP */}
-      <Section title="Due Date Heatmap" icon={<CalendarDaysIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Due Date Heatmap" window="open jobs now" icon={<CalendarDaysIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-amber-600 via-amber-700 to-orange-800"
         badge={<span className="text-[10px] font-bold text-amber-200/80">{due_date_heatmap.filter(d => d.urgency === 'overdue').length} overdue, {due_date_heatmap.filter(d => ['due_today', 'critical'].includes(d.urgency)).length} critical</span>}>
         <div className="p-3">
@@ -418,7 +428,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </Section>
 
       {/* 4. EST VS ACTUAL */}
-      <Section title="Estimated vs Actual Time" icon={<ClockIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Estimated vs Actual Time" window={data.range?.label} icon={<ClockIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-purple-600 via-purple-700 to-violet-800"
         badge={<span className="text-[10px] font-bold text-purple-200/80">{est_vs_actual.filter(e => e.variance_hours > 0).length} over, {est_vs_actual.filter(e => e.variance_hours < 0).length} under</span>}>
         <div className="p-3">
@@ -475,7 +485,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </Section>
 
       {/* 5. YIELD */}
-      <Section title="Yield Dashboard" icon={<CheckBadgeIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Yield Dashboard" window={data.range?.label} icon={<CheckBadgeIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-emerald-600 via-emerald-700 to-green-800"
         badge={<span className="text-[10px] font-bold text-emerald-200/80">{yield_data.length} travelers</span>}
         defaultOpen={yield_data.length > 0}>
@@ -526,7 +536,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </Section>
 
       {/* 6. BOTTLENECKS */}
-      <Section title="Bottleneck Detection" icon={<FunnelIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Bottleneck Detection" window={data.range?.label} icon={<FunnelIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-rose-600 via-rose-700 to-pink-800"
         badge={<span className="text-[10px] font-bold text-rose-200/80">{bottlenecks.length} work centers (30d)</span>}>
         <div className="p-3">
@@ -566,7 +576,7 @@ export default function AnalyticsSection({ data: rawData }: { data?: Record<stri
       </Section>
 
       {/* 7. OPERATOR SCORECARD */}
-      <Section title="Operator Scorecard" icon={<UserGroupIcon className="w-3.5 h-3.5 text-white" />}
+      <Section title="Operator Scorecard" window={data.range?.label} icon={<UserGroupIcon className="w-3.5 h-3.5 text-white" />}
         headerGradient="from-cyan-600 via-cyan-700 to-teal-800"
         badge={<span className="text-[10px] font-bold text-cyan-200/80">{operator_scorecards.length} operators (30d)</span>}>
         <div className="p-3">

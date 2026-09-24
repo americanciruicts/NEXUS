@@ -10,7 +10,6 @@ import {
   ArrowPathIcon,
   ArrowLeftIcon,
 } from '@heroicons/react/24/solid';
-import { CubeIcon } from '@heroicons/react/24/outline';
 import AdvancedAnalytics from '../dashboard/components/AdvancedAnalytics';
 import Link from 'next/link';
 
@@ -184,77 +183,6 @@ export default function AnalyticsPage() {
 
         {!error && dashboardData && (
           <>
-            {/* Kitting Status card — always visible on Insights, Trends, Forecast */}
-            {(activeTab === 'insights' || activeTab === 'trends' || activeTab === 'forecast') && (() => {
-              const ka = (dashboardData.analytics as any)?.kitting_analytics;
-              const s = ka?.summary || {};
-              const f = ka?.forecast || {};
-              const waitingJobs = (ka?.active_jobs || []).filter((j: any) => j.waiting_on_parts);
-              return (
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
-                  <div className="bg-gradient-to-r from-sky-600 via-blue-700 to-indigo-800 px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="bg-white/15 backdrop-blur-sm p-1.5 rounded-lg border border-white/20">
-                        <CubeIcon className="h-4 w-4 text-sky-300" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-sm font-bold text-white">Kitting Status</h3>
-                        <p className="text-[10px] text-sky-200/80">{s.active_jobs ?? 0} active · {s.waiting_on_parts ?? 0} waiting parts · {s.ready_to_kit ?? 0} ready</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      {[
-                        { label: '30d Hours', value: `${s.total_hours_30d ?? 0}h`, color: 'text-blue-600' },
-                        { label: 'Avg / Kit', value: `${s.avg_hours_per_kit ?? 0}h`, color: 'text-indigo-600' },
-                        { label: 'Done 30d', value: s.completed_count_30d ?? 0, color: 'text-green-600' },
-                        { label: 'Active', value: s.active_jobs ?? 0, color: 'text-sky-600' },
-                        { label: 'Ready', value: s.ready_to_kit ?? 0, color: 'text-emerald-600' },
-                        { label: 'Waiting', value: s.waiting_on_parts ?? 0, color: 'text-red-600' },
-                      ].map(item => (
-                        <div key={item.label} className="bg-gray-50 dark:bg-slate-700 rounded-lg p-1.5 text-center">
-                          <p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase">{item.label}</p>
-                          <p className={`text-base font-extrabold ${item.color} dark:opacity-80 leading-tight`}>{item.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-lg p-2">
-                        <p className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">Hrs to clear (ready)</p>
-                        <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">{f.remaining_hours_ready ?? 0}h</p>
-                        <p className="text-[9px] text-emerald-600/80">~{f.days_to_clear_one_kitter ?? 0}d @ 1 kitter</p>
-                      </div>
-                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg p-2">
-                        <p className="text-[9px] font-bold text-red-700 dark:text-red-300 uppercase">Hrs blocked (parts)</p>
-                        <p className="text-lg font-extrabold text-red-700 dark:text-red-300">{f.remaining_hours_waiting_parts ?? 0}h</p>
-                        <p className="text-[9px] text-red-600/80">unblocks when KOSH receives</p>
-                      </div>
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-lg p-2">
-                        <p className="text-[9px] font-bold text-blue-700 dark:text-blue-300 uppercase">Hrs / kit</p>
-                        <p className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{f.hours_per_kit_used ?? 0}h</p>
-                        <p className="text-[9px] text-blue-600/80">{(s.avg_hours_per_kit ?? 0) > 0 ? '30d avg' : 'estimate'}</p>
-                      </div>
-                    </div>
-                    {waitingJobs.length > 0 && (
-                      <div>
-                        <p className="text-[9px] font-bold text-red-600 dark:text-red-400 uppercase mb-1">Jobs waiting on parts</p>
-                        <div className="space-y-0.5 max-h-28 overflow-y-auto">
-                          {waitingJobs.map((j: any) => (
-                            <div key={j.traveler_id} className="flex items-center gap-2 px-2 py-1 rounded bg-red-50/50 dark:bg-red-900/10 text-[11px]">
-                              <span className="font-bold text-blue-600">{j.job_number}</span>
-                              <span className="text-gray-500 truncate flex-1">{j.customer_name}</span>
-                              <span className="font-bold text-red-600">{j.parts_short}/{j.parts_total} short</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
             {/* Insights Tab */}
             {activeTab === 'insights' && (
               <div className="space-y-4">
@@ -290,7 +218,7 @@ export default function AnalyticsPage() {
             {/* Advanced Analytics Tab */}
             {activeTab === 'advanced' && (
               <div className="space-y-4">
-                <AdvancedAnalytics />
+                <AdvancedAnalytics startDate={startDate} endDate={endDate} />
               </div>
             )}
           </>

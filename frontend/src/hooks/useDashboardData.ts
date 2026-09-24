@@ -150,9 +150,13 @@ export function useDashboardData(startDate: Date, endDate: Date) {
       if (!silent) setLoading(false);
 
       // Secondary data in parallel (cached, won't re-fetch if fresh)
+      // The range goes to insights and analytics too. Without it the Range
+      // picker only moved /dashboard/stats, so four of the five Analytics tabs
+      // ignored it — including Insights, the tab the page opens on.
+      const rangeQuery = `start_date=${startDateStr}&end_date=${endDateStr}`;
       const [insights, analytics, travelers, labor] = await Promise.all([
-        fetchWithCache(`${API_BASE_URL}/dashboard/insights`, { headers, ttl: INSIGHTS_TTL }).catch(() => null),
-        fetchWithCache(`${API_BASE_URL}/analytics/all`, { headers, ttl: ANALYTICS_TTL }).catch(() => null),
+        fetchWithCache(`${API_BASE_URL}/dashboard/insights?${rangeQuery}`, { headers, ttl: INSIGHTS_TTL }).catch(() => null),
+        fetchWithCache(`${API_BASE_URL}/analytics/all?${rangeQuery}`, { headers, ttl: ANALYTICS_TTL }).catch(() => null),
         fetchWithCache(`${API_BASE_URL}/travelers/dashboard-summary`, { headers, ttl: TRAVELERS_TTL }).catch(() => null),
         fetchWithCache(`${API_BASE_URL}/labor/`, { headers, ttl: LABOR_TTL }).catch(() => null),
       ]);

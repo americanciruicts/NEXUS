@@ -27,6 +27,8 @@ interface AdvancedData {
     weeks: { week: string; shipped: number; measurable: number; no_due_date: number; on_time: number; late: number; rate: number | null }[];
     overall_rate: number | null; total_shipped: number; total_on_time: number;
   };
+  /** Echo of the applied Range, for the cards the picker actually drives. */
+  range?: { start_date: string; end_date: string; label: string; applies_to: string[] };
   predictive_late_alerts: {
     traveler_id: number; job_number: string; part_description: string;
     customer_name: string; due_date: string; days_until_due: number;
@@ -73,9 +75,13 @@ interface AdvancedData {
 }
 
 // ─── Section wrapper ───────────────────────────────────────────────
-function Card({ icon: Icon, title, iconColor, gradient, badge, children, defaultOpen = false }: {
+function Card({ icon: Icon, title, iconColor, gradient, badge, children, defaultOpen = false, window: cardWindow }: {
   icon: React.ElementType; title: string; iconColor: string; gradient: string;
   badge?: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean;
+  /** The card's own time window. Set it on cards the Range picker does NOT
+   *  drive (12-week trends, today's scorecard, live state), so it is obvious
+   *  why changing the range leaves them unchanged. */
+  window?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -90,6 +96,11 @@ function Card({ icon: Icon, title, iconColor, gradient, badge, children, default
             <Icon className={`h-4 w-4 ${iconColor}`} />
           </div>
           <h2 className="text-xs font-bold text-white">{title}</h2>
+          {cardWindow && (
+            <span className="text-[9px] font-semibold text-white/70 bg-white/10 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+              {cardWindow}
+            </span>
+          )}
           {badge}
         </div>
         {open
@@ -112,22 +123,37 @@ function Stat({ label, value, color = 'text-gray-900', sub }: { label: string; v
 }
 
 // ─── Main component ────────────────────────────────────────────────
-export default function AdvancedAnalytics() {
+interface AdvancedAnalyticsProps {
+  /** Range picker dates. Omitted, the endpoint falls back to its own window. */
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export default function AdvancedAnalytics({ startDate, endDate }: AdvancedAnalyticsProps = {}) {
   const [data, setData] = useState<AdvancedData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Depend on the date strings, not the Date objects — a new Date instance with
+  // the same value would otherwise refetch on every render.
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const fmt = (d?: Date) => (d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : '');
+  const startStr = fmt(startDate);
+  const endStr = fmt(endDate);
+
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
         const token = localStorage.getItem('nexus_token');
-        const res = await fetch(`${API_BASE_URL}/analytics/advanced`, {
+        const query = startStr && endStr ? `?start_date=${startStr}&end_date=${endStr}` : '';
+        const res = await fetch(`${API_BASE_URL}/analytics/advanced${query}`, {
           headers: { Authorization: `Bearer ${token || ''}` },
         });
         if (res.ok) setData(await res.json());
       } catch { /* silent */ }
       setLoading(false);
     })();
-  }, []);
+  }, [startStr, endStr]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-16">
@@ -150,7 +176,7 @@ export default function AdvancedAnalytics() {
     <div className="space-y-3">
 
       {/* ═══ DAILY SCORECARD ═══ */}
-      <Card icon={ChartBarIcon} title="Daily Production Scorecard" iconColor="text-emerald-300"
+      <Card icon={ChartBarIcon} title="Daily Production Scorecard" window="today" iconColor="text-emerald-300"
         gradient="from-emerald-600 via-emerald-700 to-green-800"
         badge={<span className="text-[10px] font-bold text-emerald-200/80">{sc.date}</span>}
         defaultOpen={true}>
@@ -170,7 +196,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ ON-TIME DELIVERY ═══ */}
-      <Card icon={ClockIcon} title="On-Time Delivery" iconColor="text-blue-300"
+      <Card icon={ClockIcon} title="On-Time Delivery" window="last 12 weeks" iconColor="text-blue-300"
         gradient="from-blue-600 via-blue-700 to-indigo-800"
         badge={<span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{otd.overall_rate === null ? '—' : `${otd.overall_rate}%`}</span>}
         defaultOpen={true}>
@@ -199,7 +225,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ PREDICTIVE LATE ALERTS ═══ */}
-      <Card icon={ExclamationTriangleIcon} title="Predictive Late Alerts" iconColor="text-red-300"
+      <Card icon={ExclamationTriangleIcon} title="Predictive Late Alerts" window="open jobs now" iconColor="text-red-300"
         gradient="from-red-600 via-red-700 to-rose-800"
         badge={data.predictive_late_alerts.length > 0 ?
           <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{data.predictive_late_alerts.length} at risk</span> :
@@ -229,7 +255,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ FIRST PASS YIELD TREND ═══ */}
-      <Card icon={ArrowTrendingUpIcon} title="First Pass Yield Trend (12 weeks)" iconColor="text-emerald-300"
+      <Card icon={ArrowTrendingUpIcon} title="First Pass Yield Trend" window="last 12 weeks" iconColor="text-emerald-300"
         gradient="from-emerald-600 via-teal-700 to-cyan-800"
         badge={yieldData.length > 0 ?
           <span className="text-[10px] font-bold text-emerald-200/80">Latest: {yieldData[yieldData.length - 1]?.yield_pct ?? '-'}%</span> : null}>
@@ -248,7 +274,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ FLOOR STATUS HEATMAP ═══ */}
-      <Card icon={BuildingOfficeIcon} title="Floor Status" iconColor="text-sky-300"
+      <Card icon={BuildingOfficeIcon} title="Floor Status" window="live now" iconColor="text-sky-300"
         gradient="from-sky-600 via-blue-700 to-indigo-800"
         badge={<span className="text-[10px] font-bold text-sky-200/80">
           {data.floor_status.filter(f => f.status === 'active').length} active · {data.floor_status.filter(f => f.status === 'blocked').length} blocked · {data.floor_status.filter(f => f.status === 'idle').length} idle
@@ -278,7 +304,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ CAPACITY PLANNING ═══ */}
-      <Card icon={ChartBarIcon} title="Capacity Planning (Next 2 Weeks)" iconColor="text-violet-300"
+      <Card icon={ChartBarIcon} title="Capacity Planning" window="next 2 weeks" iconColor="text-violet-300"
         gradient="from-violet-600 via-purple-700 to-fuchsia-800">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {data.capacity_planning.weeks.map(w => {
@@ -305,7 +331,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ OPERATOR EFFICIENCY BY WC ═══ */}
-      <Card icon={UserGroupIcon} title="Operator Efficiency by Work Center" iconColor="text-cyan-300"
+      <Card icon={UserGroupIcon} title="Operator Efficiency by Work Center" window={data.range?.label} iconColor="text-cyan-300"
         gradient="from-cyan-600 via-cyan-700 to-teal-800"
         badge={<span className="text-[10px] font-bold text-cyan-200/80">{data.operator_efficiency_by_wc.length} entries (30d)</span>}>
         {data.operator_efficiency_by_wc.length === 0 ? (
@@ -343,7 +369,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ REJECTION ROOT CAUSE ═══ */}
-      <Card icon={BoltIcon} title="Rejection Root Cause" iconColor="text-rose-300"
+      <Card icon={BoltIcon} title="Rejection Root Cause" window={data.range?.label} iconColor="text-rose-300"
         gradient="from-rose-600 via-rose-700 to-pink-800"
         defaultOpen={data.rejection_root_cause.by_work_center.length > 0}>
         {data.rejection_root_cause.by_work_center.length === 0 ? (
@@ -385,7 +411,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ LABOR COST PER JOB ═══ */}
-      <Card icon={CurrencyDollarIcon} title="Labor Cost per Job" iconColor="text-emerald-300"
+      <Card icon={CurrencyDollarIcon} title="Labor Cost per Job" window={data.range?.label} iconColor="text-emerald-300"
         gradient="from-emerald-600 via-green-700 to-teal-800"
         badge={<span className="text-[10px] font-bold text-emerald-200/80">@ $35/hr estimate</span>}>
         {data.labor_costs.length === 0 ? (
@@ -425,7 +451,7 @@ export default function AdvancedAnalytics() {
       </Card>
 
       {/* ═══ PREVIOUS BUILD COMPARISON ═══ */}
-      <Card icon={ArrowPathIcon} title="Previous Build Comparison" iconColor="text-indigo-300"
+      <Card icon={ArrowPathIcon} title="Previous Build Comparison" window="open jobs now" iconColor="text-indigo-300"
         gradient="from-indigo-600 via-indigo-700 to-violet-800"
         badge={<span className="text-[10px] font-bold text-indigo-200/80">{data.build_comparisons.length} comparable jobs</span>}>
         {data.build_comparisons.length === 0 ? (
