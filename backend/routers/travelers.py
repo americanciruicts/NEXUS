@@ -2028,6 +2028,10 @@ async def update_traveler(
     # other header field) and hitting Save silently discarded the new value and
     # the old one reappeared on reload. Assign the whole block for RMA types so
     # edits — including clearing a field — actually stick.
+    # Invoice No is a header field on EVERY traveler type (Cable, PCB Assembly,
+    # Purchasing, RMA); it used to be saved only inside the RMA block below, so
+    # edits on non-RMA travelers were silently discarded and never printed.
+    traveler.invoice_number = traveler_data.invoice_number
     incoming_type = getattr(traveler_data.traveler_type, "value", traveler_data.traveler_type)
     if incoming_type in RMA_TRAVELER_TYPES:
         traveler.customer_contact = traveler_data.customer_contact
@@ -2035,7 +2039,6 @@ async def update_traveler(
         traveler.original_po_number = traveler_data.original_po_number
         traveler.return_po_number = traveler_data.return_po_number
         traveler.rma_po_number = traveler_data.rma_po_number
-        traveler.invoice_number = traveler_data.invoice_number
         traveler.customer_ncr = traveler_data.customer_ncr
         traveler.original_built_quantity = traveler_data.original_built_quantity
         traveler.units_shipped = traveler_data.units_shipped

@@ -1309,6 +1309,10 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           sub_steps: []
         })),
         manual_steps: [],
+        // Invoice No is in the header of EVERY traveler type, so it must be sent
+        // for all of them — it used to live in the RMA-only block below and was
+        // silently dropped for Cable / PCB Assembly / Purchasing travelers.
+        invoice_number: editedTraveler.invoiceNumber || '',
         // The RMA header block. Create and Save-as-draft always sent these, but
         // the edit-mode PUT only sent rma_number — so changing "Quantity RMA
         // issued for" (or any other header field) and saving silently dropped
@@ -1319,7 +1323,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
           original_po_number: editedTraveler.originalPoNumber || '',
           return_po_number: editedTraveler.returnPoNumber || '',
           rma_po_number: editedTraveler.rmaPoNumber || '',
-          invoice_number: editedTraveler.invoiceNumber || '',
           customer_ncr: editedTraveler.customerNcr || '',
           original_built_quantity: editedTraveler.originalBuiltQuantity || null,
           units_shipped: editedTraveler.unitsShipped || null,
@@ -1963,6 +1966,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         sub_steps: []
       })),
       manual_steps: [],
+      // Invoice No applies to every traveler type (header field), not just RMA.
+      invoice_number: editedTraveler.invoiceNumber || '',
       // RMA-specific fields
       ...(isRmaType(selectedType || '') ? {
         rma_number: editedTraveler.rmaNumber || '',
@@ -1971,7 +1976,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         original_po_number: editedTraveler.originalPoNumber || '',
         return_po_number: editedTraveler.returnPoNumber || '',
         rma_po_number: editedTraveler.rmaPoNumber || '',
-        invoice_number: editedTraveler.invoiceNumber || '',
         customer_ncr: editedTraveler.customerNcr || '',
         original_built_quantity: editedTraveler.originalBuiltQuantity || null,
         units_shipped: editedTraveler.unitsShipped || null,
@@ -2152,6 +2156,8 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         sub_steps: []
       })),
       manual_steps: [],
+      // Invoice No applies to every traveler type (header field), not just RMA.
+      invoice_number: editedTraveler.invoiceNumber || '',
       // RMA-specific fields for draft
       ...(isRmaType(selectedType || '') ? {
         rma_number: editedTraveler.rmaNumber || '',
@@ -2160,7 +2166,6 @@ export function TravelerDetailPage({ createMode = false }: { createMode?: boolea
         original_po_number: editedTraveler.originalPoNumber || '',
         return_po_number: editedTraveler.returnPoNumber || '',
         rma_po_number: editedTraveler.rmaPoNumber || '',
-        invoice_number: editedTraveler.invoiceNumber || '',
         customer_ncr: editedTraveler.customerNcr || '',
         original_built_quantity: editedTraveler.originalBuiltQuantity || null,
         units_shipped: editedTraveler.unitsShipped || null,
